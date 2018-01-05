@@ -1,0 +1,55 @@
+AGENDA
+
+participants: Moritz, Ivo, Youssef, Heiner, Changbin, Alessandro
+
+* greeting & welcome round (Moritz)
+
+* github/folder structure (Moritz)
+- https://github.com/nigroup/binaural_audition
+- work in python/tensorflow (only presentations in jupyter notebooks)
+
+* block-wise classification results (Ivo)
+- put slides as pdf to github or send by mail
+
+* new data situation & specification (Ivo)
+- update online text files for missing information & move into 
+
+* student cluster: Heiner, Changbin, Alessandro, (from May on also: Siddharth)
+- arrange regularly (weekly) cluster meeting, e.g. work at HiWi dungeion and meet in library
+- try to clarify all questions within cluster first
+- collect unanswered questions for next meeting with supervisors and prepare questions with precise documentation/plots/outputs
+
+* data visualization (Moritz) => Changbin/Alessandro
+
+* data format optimization (Moritz) => Heiner
+
+* meetings/presentations
+- typically: every 1-3 weeks (e.g. 2-3 on average) with prepared jupyter notebooks
+- jupyter notebook and pdf file
+
+* next date for meeting, topics: 
+- data visualization
+- optimized data format
+- journal club
+
+* next papers (suggestions): 
+ARCHITECTURE/COST FUNCTIONS
+- one multilabel classifier vs multiple binary classifiers
+BEST PRACTICE
+- dcase2016 papers and similar (convnet)
+- dcase2016 papers and similar (lstm)
+REGULARIZATION
+- dropout with lstm
+- batch normalization with mlp
+- batch normalization with lstm
+
+* GPU vs CPU timings (Heiner)
+
+* convnet for ratemaps and amplitude modulation spectra (Youssef) => optional
+
+* closure of project meeting -- journal club follows (Moritz):
+- suggestion: arrange date within student cluster, especially in beginning (data questions) important
+
+* lstm paper read (Moritz) => Florian et al holen
+
+* toy LSTM implementations (Changbin)
