@@ -1,0 +1,160 @@
+1     ratemap; 32-ch; f80; LRmean
+2     ratemap; 32-ch; f114.4976; LRmean
+3     ratemap; 32-ch; f152.8485; LRmean
+4     ratemap; 32-ch; f195.4831; LRmean
+5     ratemap; 32-ch; f242.88; LRmean
+6     ratemap; 32-ch; f295.571; LRmean
+7     ratemap; 32-ch; f354.1476; LRmean
+8     ratemap; 32-ch; f419.267; LRmean
+9     ratemap; 32-ch; f491.6602; LRmean
+10    ratemap; 32-ch; f572.1396; LRmean
+11    ratemap; 32-ch; f661.6085; LRmean
+12    ratemap; 32-ch; f761.0709; LRmean
+13    ratemap; 32-ch; f871.643; LRmean
+14    ratemap; 32-ch; f994.566; LRmean
+15    ratemap; 32-ch; f1131.2192; LRmean
+16    ratemap; 32-ch; f1283.1364; LRmean
+17    ratemap; 32-ch; f1452.0225; LRmean
+18    ratemap; 32-ch; f1639.7729; LRmean
+19    ratemap; 32-ch; f1848.4948; LRmean
+20    ratemap; 32-ch; f2080.5306; LRmean
+21    ratemap; 32-ch; f2338.4844; LRmean
+22    ratemap; 32-ch; f2625.2513; LRmean
+23    ratemap; 32-ch; f2944.0497; LRmean
+24    ratemap; 32-ch; f3298.4573; LRmean
+25    ratemap; 32-ch; f3692.4518; LRmean
+26    ratemap; 32-ch; f4130.4548; LRmean
+27    ratemap; 32-ch; f4617.3821; LRmean
+28    ratemap; 32-ch; f5158.6985; LRmean
+29    ratemap; 32-ch; f5760.4791; LRmean
+30    ratemap; 32-ch; f6429.4776; LRmean
+31    ratemap; 32-ch; f7173.2023; LRmean
+32    ratemap; 32-ch; f8000; LRmean
+33    amsFeatures; 16-ch; f80; LRmean; mf2
+34    amsFeatures; 16-ch; f155.5525; LRmean; mf2
+35    amsFeatures; 16-ch; f249.5873; LRmean; mf2
+36    amsFeatures; 16-ch; f366.6258; LRmean; mf2
+37    amsFeatures; 16-ch; f512.2952; LRmean; mf2
+38    amsFeatures; 16-ch; f693.5995; LRmean; mf2
+39    amsFeatures; 16-ch; f919.2561; LRmean; mf2
+40    amsFeatures; 16-ch; f1200.1148; LRmean; mf2
+41    amsFeatures; 16-ch; f1549.6797; LRmean; mf2
+42    amsFeatures; 16-ch; f1984.7581; LRmean; mf2
+43    amsFeatures; 16-ch; f2526.2693; LRmean; mf2
+44    amsFeatures; 16-ch; f3200.2497; LRmean; mf2
+45    amsFeatures; 16-ch; f4039.1051; LRmean; mf2
+46    amsFeatures; 16-ch; f5083.1687; LRmean; mf2
+47    amsFeatures; 16-ch; f6382.6403; LRmean; mf2
+48    amsFeatures; 16-ch; f8000; LRmean; mf2
+49    amsFeatures; 16-ch; f80; LRmean; mf4
+50    amsFeatures; 16-ch; f155.5525; LRmean; mf4
+51    amsFeatures; 16-ch; f249.5873; LRmean; mf4
+52    amsFeatures; 16-ch; f366.6258; LRmean; mf4
+53    amsFeatures; 16-ch; f512.2952; LRmean; mf4
+54    amsFeatures; 16-ch; f693.5995; LRmean; mf4
+55    amsFeatures; 16-ch; f919.2561; LRmean; mf4
+56    amsFeatures; 16-ch; f1200.1148; LRmean; mf4
+57    amsFeatures; 16-ch; f1549.6797; LRmean; mf4
+58    amsFeatures; 16-ch; f1984.7581; LRmean; mf4
+59    amsFeatures; 16-ch; f2526.2693; LRmean; mf4
+60    amsFeatures; 16-ch; f3200.2497; LRmean; mf4
+61    amsFeatures; 16-ch; f4039.1051; LRmean; mf4
+62    amsFeatures; 16-ch; f5083.1687; LRmean; mf4
+63    amsFeatures; 16-ch; f6382.6403; LRmean; mf4
+64    amsFeatures; 16-ch; f8000; LRmean; mf4
+65    amsFeatures; 16-ch; f80; LRmean; mf8
+66    amsFeatures; 16-ch; f155.5525; LRmean; mf8
+67    amsFeatures; 16-ch; f249.5873; LRmean; mf8
+68    amsFeatures; 16-ch; f366.6258; LRmean; mf8
+69    amsFeatures; 16-ch; f512.2952; LRmean; mf8
+70    amsFeatures; 16-ch; f693.5995; LRmean; mf8
+71    amsFeatures; 16-ch; f919.2561; LRmean; mf8
+72    amsFeatures; 16-ch; f1200.1148; LRmean; mf8
+73    amsFeatures; 16-ch; f1549.6797; LRmean; mf8
+74    amsFeatures; 16-ch; f1984.7581; LRmean; mf8
+75    amsFeatures; 16-ch; f2526.2693; LRmean; mf8
+76    amsFeatures; 16-ch; f3200.2497; LRmean; mf8
+77    amsFeatures; 16-ch; f4039.1051; LRmean; mf8
+78    amsFeatures; 16-ch; f5083.1687; LRmean; mf8
+79    amsFeatures; 16-ch; f6382.6403; LRmean; mf8
+80    amsFeatures; 16-ch; f8000; LRmean; mf8
+81    amsFeatures; 16-ch; f80; LRmean; mf16
+82    amsFeatures; 16-ch; f155.5525; LRmean; mf16
+83    amsFeatures; 16-ch; f249.5873; LRmean; mf16
+84    amsFeatures; 16-ch; f366.6258; LRmean; mf16
+85    amsFeatures; 16-ch; f512.2952; LRmean; mf16
+86    amsFeatures; 16-ch; f693.5995; LRmean; mf16
+87    amsFeatures; 16-ch; f919.2561; LRmean; mf16
+88    amsFeatures; 16-ch; f1200.1148; LRmean; mf16
+89    amsFeatures; 16-ch; f1549.6797; LRmean; mf16
+90    amsFeatures; 16-ch; f1984.7581; LRmean; mf16
+91    amsFeatures; 16-ch; f2526.2693; LRmean; mf16
+92    amsFeatures; 16-ch; f3200.2497; LRmean; mf16
+93    amsFeatures; 16-ch; f4039.1051; LRmean; mf16
+94    amsFeatures; 16-ch; f5083.1687; LRmean; mf16
+95    amsFeatures; 16-ch; f6382.6403; LRmean; mf16
+96    amsFeatures; 16-ch; f8000; LRmean; mf16
+97    amsFeatures; 16-ch; f80; LRmean; mf32
+98    amsFeatures; 16-ch; f155.5525; LRmean; mf32
+99    amsFeatures; 16-ch; f249.5873; LRmean; mf32
+100    amsFeatures; 16-ch; f366.6258; LRmean; mf32
+101    amsFeatures; 16-ch; f512.2952; LRmean; mf32
+102    amsFeatures; 16-ch; f693.5995; LRmean; mf32
+103    amsFeatures; 16-ch; f919.2561; LRmean; mf32
+104    amsFeatures; 16-ch; f1200.1148; LRmean; mf32
+105    amsFeatures; 16-ch; f1549.6797; LRmean; mf32
+106    amsFeatures; 16-ch; f1984.7581; LRmean; mf32
+107    amsFeatures; 16-ch; f2526.2693; LRmean; mf32
+108    amsFeatures; 16-ch; f3200.2497; LRmean; mf32
+109    amsFeatures; 16-ch; f4039.1051; LRmean; mf32
+110    amsFeatures; 16-ch; f5083.1687; LRmean; mf32
+111    amsFeatures; 16-ch; f6382.6403; LRmean; mf32
+112    amsFeatures; 16-ch; f8000; LRmean; mf32
+113    amsFeatures; 16-ch; f80; LRmean; mf64
+114    amsFeatures; 16-ch; f155.5525; LRmean; mf64
+115    amsFeatures; 16-ch; f249.5873; LRmean; mf64
+116    amsFeatures; 16-ch; f366.6258; LRmean; mf64
+117    amsFeatures; 16-ch; f512.2952; LRmean; mf64
+118    amsFeatures; 16-ch; f693.5995; LRmean; mf64
+119    amsFeatures; 16-ch; f919.2561; LRmean; mf64
+120    amsFeatures; 16-ch; f1200.1148; LRmean; mf64
+121    amsFeatures; 16-ch; f1549.6797; LRmean; mf64
+122    amsFeatures; 16-ch; f1984.7581; LRmean; mf64
+123    amsFeatures; 16-ch; f2526.2693; LRmean; mf64
+124    amsFeatures; 16-ch; f3200.2497; LRmean; mf64
+125    amsFeatures; 16-ch; f4039.1051; LRmean; mf64
+126    amsFeatures; 16-ch; f5083.1687; LRmean; mf64
+127    amsFeatures; 16-ch; f6382.6403; LRmean; mf64
+128    amsFeatures; 16-ch; f8000; LRmean; mf64
+129    amsFeatures; 16-ch; f80; LRmean; mf128
+130    amsFeatures; 16-ch; f155.5525; LRmean; mf128
+131    amsFeatures; 16-ch; f249.5873; LRmean; mf128
+132    amsFeatures; 16-ch; f366.6258; LRmean; mf128
+133    amsFeatures; 16-ch; f512.2952; LRmean; mf128
+134    amsFeatures; 16-ch; f693.5995; LRmean; mf128
+135    amsFeatures; 16-ch; f919.2561; LRmean; mf128
+136    amsFeatures; 16-ch; f1200.1148; LRmean; mf128
+137    amsFeatures; 16-ch; f1549.6797; LRmean; mf128
+138    amsFeatures; 16-ch; f1984.7581; LRmean; mf128
+139    amsFeatures; 16-ch; f2526.2693; LRmean; mf128
+140    amsFeatures; 16-ch; f3200.2497; LRmean; mf128
+141    amsFeatures; 16-ch; f4039.1051; LRmean; mf128
+142    amsFeatures; 16-ch; f5083.1687; LRmean; mf128
+143    amsFeatures; 16-ch; f6382.6403; LRmean; mf128
+144    amsFeatures; 16-ch; f8000; LRmean; mf128
+145    amsFeatures; 16-ch; f80; LRmean; mf256
+146    amsFeatures; 16-ch; f155.5525; LRmean; mf256
+147    amsFeatures; 16-ch; f249.5873; LRmean; mf256
+148    amsFeatures; 16-ch; f366.6258; LRmean; mf256
+149    amsFeatures; 16-ch; f512.2952; LRmean; mf256
+150    amsFeatures; 16-ch; f693.5995; LRmean; mf256
+151    amsFeatures; 16-ch; f919.2561; LRmean; mf256
+152    amsFeatures; 16-ch; f1200.1148; LRmean; mf256
+153    amsFeatures; 16-ch; f1549.6797; LRmean; mf256
+154    amsFeatures; 16-ch; f1984.7581; LRmean; mf256
+155    amsFeatures; 16-ch; f2526.2693; LRmean; mf256
+156    amsFeatures; 16-ch; f3200.2497; LRmean; mf256
+157    amsFeatures; 16-ch; f4039.1051; LRmean; mf256
+158    amsFeatures; 16-ch; f5083.1687; LRmean; mf256
+159    amsFeatures; 16-ch; f6382.6403; LRmean; mf256
+160    amsFeatures; 16-ch; f8000; LRmean; mf256
