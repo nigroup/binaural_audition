@@ -1,52 +1,23 @@
 Binaural Audition LSTM project data pathes
 ==========================================
 
-(pathes on Cursa)
+(pathes on cursa.ni.tu-berlin.de)
 
-
-#################
-### TRAIN SET ###
-#################
 
 --- Features ---
+/mnt/raid/data/ni/twoears/reposX/idPipeCache/FeatureSet5aRawTimeSeries/cache.binAudLSTM_<train/test>_scene<SCENEID>
 
-general scheme:
-/mnt/raid/data/ni/twoears/reposX/idPipeCache/FeatureSet5aRawTimeSeries/cache.binAudLSTM_train_scene<SCENEID>
 
-schematic exceptions (e.g.):
+--- Labels ---
+/mnt/raid/data/ni/twoears/reposX/idPipeCache/MultiEventTypeTimeSeriesLabeler(<CLASSNAME>)/cache.binAudLSTM_<train/test>_scene<SCENEID>
+
+
+--- Earsignals ---
+/mnt/raid/data/ni/twoears/reposX/idPipeCache/SceneEarSignalProc/cache.mc3_<train/test>_scene<SCENEID>
+
+
+
+There are a few schematic exceptions, like:
 8		/mnt/raid/data/ni/twoears/reposX/idPipeCache/FeatureSet5aRawTimeSeries/cache.binAudLSTM_train_scene8_test_scene125
 17		/mnt/raid/data/ni/twoears/reposX/idPipeCache/FeatureSet5aRawTimeSeries/cache.binAudLSTM_train_scene17_train_scene34_train_scene68_train_scene71
-
-
-
---- Labels ---
-
-general scheme:
-/mnt/raid/data/ni/twoears/reposX/idPipeCache/MultiEventTypeTimeSeriesLabeler(<CLASSNAME>)/cache.binAudLSTM_train_scene<SCENEID>
-
-schematic exceptions (e.g.):
-17		/mnt/raid/data/ni/twoears/reposX/idPipeCache/MultiEventTypeTimeSeriesLabeler(baby)/cache.binAudLSTM_train_scene17_train_scene34_train_scene68_train_scene71
-
-exception:
-17		/mnt/raid/data/ni/twoears/reposX/idPipeCache/MultiEventTypeTimeSeriesLabeler(alarm)/cache.binAudLSTM_train_scene34_train_scene68_train_scene71
-
-
-
-#################
-### TEST SET ###
-#################
-
---- Features ---
-
-general scheme:
-/mnt/raid/data/ni/twoears/reposX/idPipeCache/FeatureSet5aRawTimeSeries/cache.binAudLSTM_test_scene<SCENEID>
-
-exception:
-125		/mnt/raid/data/ni/twoears/reposX/idPipeCache/FeatureSet5aRawTimeSeries/cache.binAudLSTM_train_scene8_test_scene125
-
-
---- Labels ---
-
-general scheme:
-/mnt/raid/data/ni/twoears/reposX/idPipeCache/MultiEventTypeTimeSeriesLabeler(<CLASSNAME>)/cache.binAudLSTM_test_scene<SCENEID>
 
