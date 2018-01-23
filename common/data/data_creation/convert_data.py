@@ -43,8 +43,6 @@ scene_path = '/mnt/raid/data/ni/twoears/reposX/idPipeCache/FeatureSet5aRawTimeSe
 save_path = '/mnt/raid/data/ni/twoears/reposX/numpyData/'
 scene_scheme_regex = re.compile('(cache.binAudLSTM_((?:train|test)_scene[0-9]+[_/])+)')
 
-sys.exit()
-
 blacklist = ['cfg.mat', 'fdesc.mat']
 fs = [f for f in listdir(scene_path) if path.isfile(path.join(scene_path, f)) if f not in blacklist]
 
