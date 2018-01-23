@@ -1,5 +1,3 @@
-# similar problem exist as "https://github.com/tensorflow/tensorflow/issues/12414"
-# There are some batches(data) in each epoch may overlap
 import tensorflow as tf
 import numpy as np
 import os
@@ -24,12 +22,12 @@ def read_dataset(path_set,batchsize,shuffle = False):
     # shuffle path_set
     if shuffle:
         random.shuffle(path_set)
-    dataset = tf.data.Dataset.from_tensor_slices(path_set).repeat()
+    dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(lambda filename: tuple(tf.py_func(_read_py_function, [filename], [tf.float32, tf.int32,tf.int32])))
     batch = dataset.padded_batch(batchsize,padded_shapes=([None,None],[None,None],[None]))
-    iterator = batch.make_one_shot_iterator()
-    x, y,length = iterator.get_next()
-    return x,y,length
+    # iterator = batch.make_one_shot_iterator()
+    # x, y,length = iterator.get_next()
+    return batch
 
 
 
@@ -71,7 +69,7 @@ set = {'train':paths[0:num_train],
 # Training Parameters
 learning_rate = 0.001
 num_train_samples = num_train
-batch_size = 50
+batch_size = 5
 display_step = 200
 epoch = 1
 
@@ -86,9 +84,21 @@ num_classes = 13
 
 
 # tensor holder
-X, Y, seq = read_dataset(set['train'], batch_size,shuffle=True)
-# original sequence length, only used for RNN
-seq = tf.reshape(seq,[batch_size])
+train_batch = read_dataset(set['train'], batch_size)
+valid_batch = read_dataset(set['validation'], batch_size)
+test_batch = read_dataset(set['test'], batch_size)
+# A feedable iterator is defined by a handle placeholder and its structure. We
+# could use the `output_types` and `output_shapes` properties of either
+# `training_dataset` or `validation_dataset` here, because they have
+# identical structure.
+handle = tf.placeholder(tf.string,shape=[])
+iterator = tf.data.Iterator.from_string_handle(handle,train_batch.output_types,train_batch.output_shapes)
+X,Y,seq = iterator.get_next()
+seq = tf.reshape(seq,[batch_size])# original sequence length, only used for RNN
+
+train_iterator = train_batch.make_initializable_iterator()
+valid_iterator = valid_batch.make_initializable_iterator()
+test_iterator = test_batch.make_initializable_iterator()
 # Define weights
 weights = {
     # Hidden layer weights => 2*n_hidden because of forward + backward cells
@@ -102,16 +112,32 @@ logits = BiRNN(X, weights, biases,seq)
 
 # logits = tf.cast(logits,tf.int32)
 # Define loss and optimizer
+def dynamic_loss(x,z):
+    left = tf.negative(z*tf.log(x))
+    right = tf.multiply(tf.subtract(tf.ones(tf.shape(x)),z)
+                        ,tf.negative(tf.log(tf.subtract(tf.ones(tf.shape(x)),x))))
+    cross_entropy = tf.add(left,right)
+    cross_entropy = tf.reduce_sum(cross_entropy, 2)
+    mask = tf.sign(tf.reduce_max(tf.abs(z), 2))
+    cross_entropy *= mask
+    # Average over actual sequence lengths.
+    cross_entropy = tf.reduce_sum(cross_entropy, 1)
+    cross_entropy /= tf.reduce_sum(mask, 1)
+    return tf.reduce_mean(cross_entropy)
+
 with tf.variable_scope('loss'):
-    loss_op = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+    loss_op1 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
         labels=tf.cast(Y,tf.float32),
         logits=logits))
+    loss_op = dynamic_loss(tf.sigmoid(logits),tf.cast(Y,tf.float32))
 with tf.variable_scope('optimize'):
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     train_op = optimizer.minimize(loss_op)
 with tf.name_scope("accuracy"):
     # add a threshold to round the output to 0 or 1
-    ler = tf.not_equal(tf.to_int32(logits>output_threshold), Y, name='label_error_rate')
+    # sigmoid output value to [0,1]
+    slogit = tf.sigmoid(logits)
+    ler = tf.not_equal(tf.to_int32(slogit>output_threshold), Y, name='label_error_rate')
     ler = tf.reduce_sum(tf.cast(ler, tf.int32))/tf.size(logits)
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
@@ -130,27 +156,25 @@ with tf.Session() as sess:
         epoch,
         num_train_samples,
         batch_size))
-
+    train_handle = sess.run(train_iterator.string_handle())
+    valid_handle = sess.run(valid_iterator.string_handle())
+    test_handle = sess.run(test_iterator.string_handle())
     # Run the initializer
     sess.run(init)
-    # for training
+
     section = '\n{0:=^40}\n'
     logger.info(section.format('Run training epoch'))
-    # print(sess.run(tf.shape(X)))
-    # print(sess.run(tf.shape(Y)))
-    # print(sess.run(tf.shape(logits)))
-    # print(sess.run(tf.to_int32(logits[0,0,:]>0.5)))
+
     for e in range(epoch):
     # initialization for each epoch
         train_cost , train_Label_Error_Rate = 0.0, 0.0
         epoch_start = time.time()
-        n_batches_per_epoch = int(num_train_samples / batch_size)
-        for _ in range(n_batches_per_epoch):
-            try:
-                loss, _, train_ler = sess.run([loss_op,train_op,ler])
-            except tf.errors.OutOfRangeError:
-                print("End of training dataset")
 
+        sess.run(train_iterator.initializer)
+        n_batches_per_epoch = int(num_train_samples / batch_size)
+        # print(sess.run([loss_op, train_op],feed_dict={handle:train_handle}))
+        for _ in range(n_batches_per_epoch):
+            loss, _, train_ler = sess.run([loss_op, train_op, ler],feed_dict={handle:train_handle})
             logger.debug('Train cost: %.2f | Label error rate: %.2f',loss, train_ler)
             train_cost = train_cost + loss
             train_Label_Error_Rate = train_Label_Error_Rate + train_ler
@@ -165,13 +189,9 @@ with tf.Session() as sess:
         train_cost, train_Label_Error_Rate = 0.0, 0.0
         n_batches_per_epoch = int(num_dev / batch_size)
         epoch_start = time.time()
-        X, Y, seq = read_dataset(set['validation'], batch_size, shuffle=True)
-        seq = tf.reshape(seq, [batch_size])
+        sess.run(valid_iterator.initializer)
         for _ in range(n_batches_per_epoch):
-            try:
-                loss, train_ler = sess.run([loss_op, ler])
-            except tf.errors.OutOfRangeError:
-                print('End of validation dataset')
+            loss,train_ler = sess.run([loss_op,ler],feed_dict={handle:valid_handle})
             train_cost = train_cost + loss
             train_Label_Error_Rate = train_Label_Error_Rate + train_ler
         epoch_duration = time.time() - epoch_start
@@ -187,14 +207,10 @@ with tf.Session() as sess:
     train_cost, train_Label_Error_Rate = 0.0, 0.0
     n_batches_per_epoch = int(num_test/ batch_size)
     epoch_start = time.time()
-    X, Y, seq = read_dataset(set['test'], batch_size, shuffle=True)
-    seq = tf.reshape(seq, [batch_size])
+    sess.run(test_iterator.initializer)
+    logger.info(section.format('Testing data'))
     for _ in range(int(n_batches_per_epoch)):
-        logger.info(section.format('Testing data'))
-        try:
-            loss, train_ler = sess.run([loss_op, ler])
-        except tf.errors.OutOfRangeError:
-            print('End of testing dataset')
+        loss, train_ler = sess.run([loss_op, ler],feed_dict={handle:test_handle})
         logger.debug('Test train cost: %.2f | Test Label error rate: %.2f', loss, train_ler)
     epoch_duration = time.time() - epoch_start
     logger.info('''Epochs: {},Test_cost: {:.3f},Test_ler: {:.3f},time: {:.2f} sec'''
