@@ -15,6 +15,7 @@ def _read_py_function(filename):
     x = np.reshape(data['x'],[-1,160])
     # need to change for 13 classes labels. From my understanding, one-vs-all need to do 13 times for each sample.
     y = np.transpose(data['y'])
+    y[y==-1] = 0
     l = np.array([x.shape[0]])
     return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
 # return next_batch
@@ -52,7 +53,8 @@ def BiRNN(x, weights, biases,seq):
                                                                  )
         outputs = tf.concat(outputs, 2)
         outputs = tf.reshape(outputs, [-1, 2 * num_hidden])
-        top = tf.nn.relu(tf.add(tf.matmul(outputs, weights['out']), biases['out']))
+        # top = tf.nn.relu(tf.add(tf.matmul(outputs, weights['out']), biases['out']))
+        top = tf.nn.relu(tf.matmul(outputs, weights['out']))
 
     return tf.reshape(top, [batch_x_shape[0],-1, num_classes])
 # data
@@ -69,12 +71,12 @@ set = {'train':paths[0:num_train],
 # Training Parameters
 learning_rate = 0.001
 num_train_samples = num_train
-batch_size = 5
+batch_size = 20
 display_step = 200
-epoch = 1
+epoch = 2
 
 # use it to compare output and true labels
-output_threshold = 0.5
+output_threshold = 0.51
 # Network Parameters
 num_input = 0
 timesteps = 0
@@ -104,6 +106,7 @@ weights = {
     # Hidden layer weights => 2*n_hidden because of forward + backward cells
     'out': tf.Variable(tf.random_normal([2 * num_hidden, num_classes]))
 }
+# don't add this in the output layer, which will change padding value
 biases = {
     'out': tf.Variable(tf.random_normal([num_classes]))
 }
@@ -113,11 +116,14 @@ logits = BiRNN(X, weights, biases,seq)
 # logits = tf.cast(logits,tf.int32)
 # Define loss and optimizer
 def dynamic_loss(x,z):
-    left = tf.negative(z*tf.log(x))
+    #z*-log(sigmoid(x))+(1-z)*-log(1-sigmoid(x))
+    # unstable,sometime overflow.!!!!!!
+    left = tf.negative(tf.multiply(z,tf.log(x)))
     right = tf.multiply(tf.subtract(tf.ones(tf.shape(x)),z)
                         ,tf.negative(tf.log(tf.subtract(tf.ones(tf.shape(x)),x))))
     cross_entropy = tf.add(left,right)
     cross_entropy = tf.reduce_sum(cross_entropy, 2)
+    # check 2-dimension is valid or paded
     mask = tf.sign(tf.reduce_max(tf.abs(z), 2))
     cross_entropy *= mask
     # Average over actual sequence lengths.
@@ -126,9 +132,9 @@ def dynamic_loss(x,z):
     return tf.reduce_mean(cross_entropy)
 
 with tf.variable_scope('loss'):
-    loss_op1 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-        labels=tf.cast(Y,tf.float32),
-        logits=logits))
+    # loss_op1 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+    #     labels=tf.cast(Y,tf.float32),
+    #     logits=logits))
     loss_op = dynamic_loss(tf.sigmoid(logits),tf.cast(Y,tf.float32))
 with tf.variable_scope('optimize'):
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
@@ -137,8 +143,9 @@ with tf.name_scope("accuracy"):
     # add a threshold to round the output to 0 or 1
     # sigmoid output value to [0,1]
     slogit = tf.sigmoid(logits)
-    ler = tf.not_equal(tf.to_int32(slogit>output_threshold), Y, name='label_error_rate')
-    ler = tf.reduce_sum(tf.cast(ler, tf.int32))/tf.size(logits)
+    ler = tf.not_equal(tf.to_int32(logits>output_threshold), Y, name='label_error_rate')
+    ler = tf.reduce_sum(tf.cast(ler, tf.int32))/(tf.reduce_sum(seq)*num_classes)
+    # ler = tf.reduce_sum(tf.cast(ler, tf.int32))
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
 
@@ -172,7 +179,7 @@ with tf.Session() as sess:
 
         sess.run(train_iterator.initializer)
         n_batches_per_epoch = int(num_train_samples / batch_size)
-        # print(sess.run([loss_op, train_op],feed_dict={handle:train_handle}))
+        # print(sess.run([seq,weights,biases, train_op],feed_dict={handle:train_handle}))
         for _ in range(n_batches_per_epoch):
             loss, _, train_ler = sess.run([loss_op, train_op, ler],feed_dict={handle:train_handle})
             logger.debug('Train cost: %.2f | Label error rate: %.2f',loss, train_ler)
@@ -211,6 +218,8 @@ with tf.Session() as sess:
     logger.info(section.format('Testing data'))
     for _ in range(int(n_batches_per_epoch)):
         loss, train_ler = sess.run([loss_op, ler],feed_dict={handle:test_handle})
+        train_cost = train_cost + loss
+        train_Label_Error_Rate = train_Label_Error_Rate + train_ler
         logger.debug('Test train cost: %.2f | Test Label error rate: %.2f', loss, train_ler)
     epoch_duration = time.time() - epoch_start
     logger.info('''Epochs: {},Test_cost: {:.3f},Test_ler: {:.3f},time: {:.2f} sec'''
