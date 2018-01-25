@@ -54,9 +54,15 @@ def BiRNN(x, weights, biases,seq):
         outputs = tf.concat(outputs, 2)
         outputs = tf.reshape(outputs, [-1, 2 * num_hidden])
         # top = tf.nn.relu(tf.add(tf.matmul(outputs, weights['out']), biases['out']))
-        top = tf.nn.relu(tf.matmul(outputs, weights['out']))
+        # top = tf.nn.relu(tf.matmul(outputs, weights['out']))
+        top = tf.sigmoid(tf.matmul(outputs, weights['out']))
 
-    return tf.reshape(top, [batch_x_shape[0],-1, num_classes])
+        original_out = tf.reshape(top, [batch_x_shape[0],-1, num_classes])
+
+        class_weight = tf.constant([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], dtype=tf.float32)
+        weighted_top = tf.matmul(top, tf.diag(class_weight))
+        weighted_out = tf.reshape(weighted_top, [batch_x_shape[0],-1, num_classes])
+    return original_out,weighted_out
 # data
 dir = '/mnt/raid/data/ni/twoears/reposX/numpyData/train/cache.binAudLSTM_train_scene53/'
 
@@ -111,7 +117,7 @@ biases = {
     'out': tf.Variable(tf.random_normal([num_classes]))
 }
 # logits = [batch_size,time_steps,number_class]
-logits = BiRNN(X, weights, biases,seq)
+logits,weighted_logits = BiRNN(X, weights, biases,seq)
 
 # logits = tf.cast(logits,tf.int32)
 # Define loss and optimizer
@@ -135,7 +141,8 @@ with tf.variable_scope('loss'):
     # loss_op1 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
     #     labels=tf.cast(Y,tf.float32),
     #     logits=logits))
-    loss_op = dynamic_loss(tf.sigmoid(logits),tf.cast(Y,tf.float32))
+
+    loss_op = dynamic_loss(weighted_logits,tf.cast(Y,tf.float32))
 with tf.variable_scope('optimize'):
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     train_op = optimizer.minimize(loss_op)
