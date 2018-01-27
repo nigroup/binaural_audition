@@ -1,0 +1,15 @@
+Use get_lstm_cache_path in python like:
+
+>>> import matlab.engine
+>>> eng = matlab.engine.start_matlab()
+>>> path = eng.get_lstm_cache_path( 'train', 'features', 4, 80, 13 )
+>>> path
+'/mnt/raid/data/ni/twoears/reposX/idPipeCache/FeatureSet5aRawTimeSeries/cache.mc4_train__scene80_fold4'
+
+with syntax get_lstm_cache_path( <TRAINORTEST>, <STAGE>, <FOLD>, <SCENE>, <CLASS> ), where
+TRAINORTEST is 'train' or 'test'
+STAGE is 'labels', 'features', or 'earsignals'
+FOLD is between 1 and 6 for training and 7 or 8 for testing
+SCENE is between 1 and 80 for training and between 1 and 126 for testing
+CLASS is between 1 and 13 (only relevant for labels)
+
