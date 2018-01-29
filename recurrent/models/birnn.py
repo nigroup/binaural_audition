@@ -15,7 +15,7 @@ def _read_py_function(filename):
     x = np.reshape(data['x'],[-1,160])
     # need to change for 13 classes labels. From my understanding, one-vs-all need to do 13 times for each sample.
     y = np.transpose(data['y'])
-    y[y==-1] = 0
+    # y[y==-1] = 0
     l = np.array([x.shape[0]])
     return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
 # return next_batch
@@ -97,6 +97,11 @@ test_batch = read_dataset(set['test'], batch_size)
 handle = tf.placeholder(tf.string,shape=[])
 iterator = tf.data.Iterator.from_string_handle(handle,train_batch.output_types,train_batch.output_shapes)
 X,Y,seq = iterator.get_next()
+# get mask matrix for loss fuction
+mask_matrix = tf.cast(tf.not_equal(Y,0),tf.float32)
+# set label -1 to 0
+negativelabel = tf.cast(tf.not_equal(Y,-1),tf.int32)
+Y = tf.multiply(Y,negativelabel)
 seq = tf.reshape(seq,[batch_size])# original sequence length, only used for RNN
 
 train_iterator = train_batch.make_initializable_iterator()
@@ -118,7 +123,7 @@ logits = BiRNN(X, weights, biases,seq)
 # Define loss and optimizer
 positive_weight = [0.19133000362508559, 0.11815127347914234, 0.096774680791074236, 0.054850230260066322, 0.28652542259099634, 0.081933983163491361, 0.096130556786294494, 0.28604509875001677, 0.16108571313489345, 0.034942132892952567, 0.10966756622494328, 0.077427464722546691, 0.1406811804352788]
 negative_weight = [0.88975798968244724, 0.93192267985609423, 0.94423961137243873, 0.96839596751328572, 0.83490755242228865, 0.95279064001395586, 0.94461074775374487, 0.83518430915061015, 0.90718438032215176, 0.97986676996854916, 0.93681088831753956, 0.95538724087660132, 0.91894122275029266]
-def dynamic_loss(x,z):
+def dynamic_loss(x,z,mask):
     #"z*-log(sigmoid(x))+(1-z)*-log(1-sigmoid(x))"
     # change weight from "weight(left+ right) to "weight(left)+ right""
     # unstable,sometime overflow.!!!!!!
@@ -141,6 +146,8 @@ def dynamic_loss(x,z):
     right = tf.multiply(tf.subtract(tf.ones(tf.shape(x)),z)
                         ,tf.negative(tf.log(tf.subtract(tf.ones(tf.shape(x)),x))))
     cross_entropy = tf.add(left,right)
+    # eliminate padding value effect
+    cross_entropy - tf.multiply(cross_entropy,mask)
     cross_entropy = tf.reduce_sum(cross_entropy, 2)
     # check 2-dimension is valid or paded
     mask = tf.sign(tf.reduce_max(tf.abs(z), 2))
@@ -155,7 +162,7 @@ with tf.variable_scope('loss'):
     #     labels=tf.cast(Y,tf.float32),
     #     logits=logits))
 
-    loss_op = dynamic_loss(logits,tf.cast(Y,tf.float32))
+    loss_op = dynamic_loss(logits,tf.cast(Y,tf.float32),mask_matrix)
 with tf.variable_scope('optimize'):
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     train_op = optimizer.minimize(loss_op)
