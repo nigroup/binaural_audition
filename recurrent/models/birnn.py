@@ -71,9 +71,9 @@ set = {'train':paths[0:num_train],
 # Training Parameters
 learning_rate = 0.001
 num_train_samples = num_train
-batch_size = 20
+batch_size = 30
 display_step = 200
-epoch = 2
+epoch = 10
 
 # use it to compare output and true labels
 output_threshold = 0.51
@@ -83,6 +83,7 @@ timesteps = 0
 num_hidden = 128
 num_classes = 13
 
+record = []
 
 
 # tensor holder
@@ -118,28 +119,28 @@ logits = BiRNN(X, weights, biases,seq)
 positive_weight = [0.19133000362508559, 0.11815127347914234, 0.096774680791074236, 0.054850230260066322, 0.28652542259099634, 0.081933983163491361, 0.096130556786294494, 0.28604509875001677, 0.16108571313489345, 0.034942132892952567, 0.10966756622494328, 0.077427464722546691, 0.1406811804352788]
 negative_weight = [0.88975798968244724, 0.93192267985609423, 0.94423961137243873, 0.96839596751328572, 0.83490755242228865, 0.95279064001395586, 0.94461074775374487, 0.83518430915061015, 0.90718438032215176, 0.97986676996854916, 0.93681088831753956, 0.95538724087660132, 0.91894122275029266]
 def dynamic_loss(x,z):
-    #z*-log(sigmoid(x))+(1-z)*-log(1-sigmoid(x))
+    #"z*-log(sigmoid(x))+(1-z)*-log(1-sigmoid(x))"
+    # change weight from "weight(left+ right) to "weight(left)+ right""
     # unstable,sometime overflow.!!!!!!
     left = tf.negative(tf.multiply(z,tf.log(x)))
+    # --------------------------------------
+    # get boolean matrix for each class weight
+    positive = tf.cast(tf.greater(x, output_threshold), tf.float32)
+    negative = tf.cast(tf.less(x, output_threshold), tf.float32)
+    # for positive
+    numpy_positive = tf.constant(positive_weight)
+    tf_positive = positive * numpy_positive
+    p = tf.add(tf_positive, tf.multiply(tf.ones(tf.shape(tf_positive)), negative))
+    # for negative
+    numpy_negative = tf.constant(negative_weight)
+    tf_negative = negative * numpy_negative
+    n = tf.add(tf_negative, tf.multiply(tf.ones(tf.shape(tf_negative)), positive))
+    # cross_entropy* (positive * negative)---element*wise
+    left = tf.multiply(left, tf.multiply(p, n))
+    #------------------------------------------------
     right = tf.multiply(tf.subtract(tf.ones(tf.shape(x)),z)
                         ,tf.negative(tf.log(tf.subtract(tf.ones(tf.shape(x)),x))))
     cross_entropy = tf.add(left,right)
-    # # ---------------------multiply weight
-    shape = tf.shape(cross_entropy)
-
-    positive = tf.cast(tf.greater(cross_entropy,output_threshold),tf.float32)
-    negative = tf.cast(tf.less(cross_entropy,output_threshold),tf.float32)
-    # for positive
-    numpy_positive = tf.constant(positive_weight)
-    tf_positive = positive*numpy_positive
-    p = tf.add(tf_positive,tf.multiply(tf.ones(tf.shape(tf_positive)),negative))
-    # for negative
-    numpy_negative = tf.constant(negative_weight)
-    tf_negative = negative*numpy_negative
-    n = tf.add(tf_negative,tf.multiply(tf.ones(tf.shape(tf_negative)),positive))
-    # cross_entropy* (positive * negative)---element*wise
-    cross_entropy = tf.multiply(cross_entropy,tf.multiply(p,n))
-    # ---------------------
     cross_entropy = tf.reduce_sum(cross_entropy, 2)
     # check 2-dimension is valid or paded
     mask = tf.sign(tf.reduce_max(tf.abs(z), 2))
@@ -167,8 +168,10 @@ with tf.name_scope("accuracy"):
     # ler = tf.reduce_sum(tf.cast(ler, tf.int32))
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
-
+# save log file
+# logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',filename='./log.txt')
 logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+
 logger = logging.getLogger(os.path.basename(__file__))
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -205,12 +208,12 @@ with tf.Session() as sess:
             train_cost = train_cost + loss
             train_Label_Error_Rate = train_Label_Error_Rate + train_ler
 
-        epoch_duration = time.time() - epoch_start
+        epoch_duration0 = time.time() - epoch_start
         logger.info('''Epochs: {},train_cost: {:.3f},train_ler: {:.3f},time: {:.2f} sec'''
                     .format(e+1,
                             train_cost/n_batches_per_epoch,
                             train_Label_Error_Rate/n_batches_per_epoch,
-                            epoch_duration))
+                            epoch_duration0))
         # for validation
         train_cost, train_Label_Error_Rate = 0.0, 0.0
         n_batches_per_epoch = int(num_dev / batch_size)
@@ -220,12 +223,13 @@ with tf.Session() as sess:
             loss,train_ler = sess.run([loss_op,ler],feed_dict={handle:valid_handle})
             train_cost = train_cost + loss
             train_Label_Error_Rate = train_Label_Error_Rate + train_ler
-        epoch_duration = time.time() - epoch_start
+        epoch_duration1 = time.time() - epoch_start
+
         logger.info('''Epochs: {},Validation_cost: {:.3f},Validation_ler: {:.3f},time: {:.2f} sec'''
                 .format(e + 1,
                         train_cost / n_batches_per_epoch,
                         train_Label_Error_Rate / n_batches_per_epoch,
-                        epoch_duration))
+                        epoch_duration1))
 
 
     logger.info("Training finished!!!")
