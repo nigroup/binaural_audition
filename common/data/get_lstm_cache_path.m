@@ -7,7 +7,7 @@ if nargin < 1
     return;
 end
 if nargin < 2
-    fprintf( 'Second argument must be one of ''labels'', ''features'', ''afe'', ''earsignals''\n' );
+    fprintf( 'Second argument must be one of ''dnn_labels'', ''labels'', ''features'', ''afe'', ''earsignals''\n' );
     return;
 end
 if nargin < 3
@@ -32,7 +32,10 @@ else
     return;
 end
     
-if strcmpi( stage, 'labels' )
+if strcmpi( stage, 'dnn_labels' )
+    pathes = pathes_.dnnLabelCacheDirs;
+    idxs = {class, fold, scene};
+elseif strcmpi( stage, 'labels' )
     pathes = pathes_.labelCacheDirs;
     idxs = {class, fold, scene};
 elseif strcmpi( stage, 'features' )
@@ -45,7 +48,7 @@ elseif strcmpi( stage, 'earsignals' )
     pathes = pathes_.earSignalCacheDirs;
     idxs = {fold, scene};
 else
-    fprintf( 'Second argument must be one of ''labels'', ''features'', ''afe'', ''earsignals''\n' );
+    fprintf( 'Second argument must be one of ''dnn_labels'', ''labels'', ''features'', ''afe'', ''earsignals''\n' );
     return;
 end
 
