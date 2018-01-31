@@ -36,24 +36,19 @@ def BiRNN(x, weights, biases,seq):
 
     # Forward direction cell
     with tf.variable_scope('lstm'):
-        lstm_fw_cell = tf.contrib.rnn.BasicLSTMCell(num_hidden, forget_bias=1.0, state_is_tuple=True)
-        # Backward direction cell
-
-        lstm_bw_cell = tf.contrib.rnn.BasicLSTMCell(num_hidden, forget_bias=1.0, state_is_tuple=True)
-
+        lstm_ell = tf.contrib.rnn.BasicLSTMCell(num_hidden, forget_bias=1.0, state_is_tuple=True)
+        # stack = tf.contrib.rnn.MultiRNNCell([cell] * 2, state_is_tuple=True)
         batch_x_shape = tf.shape(x)
+        # Get layer activations (second output is the final state of the layer, do not need)
         layer = tf.reshape(x, [-1, batch_x_shape[0], 160])
-        outputs, output_states = tf.nn.bidirectional_dynamic_rnn(cell_fw=lstm_fw_cell,
-                                                                 cell_bw=lstm_bw_cell,
-                                                                 inputs=layer,
-                                                                 dtype=tf.float32,
-                                                                 time_major=True,
-                                                                 sequence_length=seq
-                                                                 )
-        outputs = tf.concat(outputs, 2)
-        outputs = tf.reshape(outputs, [-1, 2 * num_hidden])
-        # top = tf.nn.relu(tf.add(tf.matmul(outputs, weights['out']), biases['out']))
-        # top = tf.nn.relu(tf.matmul(outputs, weights['out']))
+        outputs, output_states = tf.nn.dynamic_rnn(cell=lstm_ell,
+                                                   inputs=layer,
+                                                   dtype=tf.float32,
+                                                   time_major=True,
+                                                   sequence_length=seq
+                                                   )
+
+        outputs = tf.reshape(outputs, [-1, num_hidden])
         top = tf.matmul(outputs, weights['out'])
         original_out = tf.reshape(top, [batch_x_shape[0],-1, num_classes])
     return original_out
@@ -110,7 +105,7 @@ test_iterator = test_batch.make_initializable_iterator()
 # Define weights
 weights = {
     # Hidden layer weights => 2*n_hidden because of forward + backward cells
-    'out': tf.Variable(tf.random_normal([2 * num_hidden, num_classes]))
+    'out': tf.Variable(tf.random_normal([num_hidden, num_classes]))
 }
 # don't add this in the output layer, which will change padding value
 biases = {
@@ -124,78 +119,15 @@ sigmoid_logits = tf.sigmoid(logits)
 # Define loss and optimizer
 negative_weight = [0.19133000362508559, 0.11815127347914234, 0.096774680791074236, 0.054850230260066322, 0.28652542259099634, 0.081933983163491361, 0.096130556786294494, 0.28604509875001677, 0.16108571313489345, 0.034942132892952567, 0.10966756622494328, 0.077427464722546691, 0.1406811804352788]
 positive_weight = [0.88975798968244724, 0.93192267985609423, 0.94423961137243873, 0.96839596751328572, 0.83490755242228865, 0.95279064001395586, 0.94461074775374487, 0.83518430915061015, 0.90718438032215176, 0.97986676996854916, 0.93681088831753956, 0.95538724087660132, 0.91894122275029266]
-def dynamic_loss(x,z,mask):
-    #"z*-log(sigmoid(x))+(1-z)*-log(1-sigmoid(x))"
-    # change weight from "weight(left+ right) to "weight(left)+ right""
-    # unstable,sometime overflow.!!!!!!
-    left = tf.negative(tf.multiply(z,tf.log(x)))
-    # --------------------------------------
-    # get boolean matrix for each class weight
-    positive = tf.cast(tf.greater(x, output_threshold), tf.float32)
-    negative = tf.cast(tf.less(x, output_threshold), tf.float32)
-    # for positive
-    numpy_positive = tf.constant(positive_weight)
-    tf_positive = positive * numpy_positive
-    p = tf.add(tf_positive, tf.multiply(tf.ones(tf.shape(tf_positive)), negative))
-    # for negative
-    numpy_negative = tf.constant(negative_weight)
-    tf_negative = negative * numpy_negative
-    n = tf.add(tf_negative, tf.multiply(tf.ones(tf.shape(tf_negative)), positive))
-    # cross_entropy* (positive * negative)---element*wise
-    left = tf.multiply(left, tf.multiply(p, n))
-    #------------------------------------------------
-    right = tf.multiply(tf.subtract(tf.ones(tf.shape(x)),z)
-                        ,tf.negative(tf.log(tf.subtract(tf.ones(tf.shape(x)),x))))
-    cross_entropy = tf.add(left,right)
-    # eliminate padding value effect
-    cross_entropy - tf.multiply(cross_entropy,mask)
-    cross_entropy = tf.reduce_sum(cross_entropy, 2)
-    # check 2-dimension is valid or paded
-    mask = tf.sign(tf.reduce_max(tf.abs(z), 2))
-    cross_entropy *= mask
-    # Average over actual sequence lengths.
-    cross_entropy = tf.reduce_sum(cross_entropy, 1)
-    cross_entropy /= tf.reduce_sum(mask, 1)
-    return tf.reduce_mean(cross_entropy)
+w = [x/y for x,y in zip(positive_weight,negative_weight)]
 
-def stable_dynamic_loss(x,z,mask):
-    matrix_shape = tf.shape(x)
-    # max(x, 0) - x * z + (1+z(w-1))*log(1 + exp(-abs(x)))
-    left = tf.negative(tf.multiply(z,tf.log(x)))
-    # --------------------------------------
-    # get boolean matrix for each class weight
-    positive = tf.cast(tf.greater(tf.sigmoid(x), output_threshold), tf.float32)
-    negative = tf.cast(tf.less(tf.sigmoid(x), output_threshold), tf.float32)
-    # for positive
-    numpy_positive = tf.constant(positive_weight)*100
-    tf_positive = positive * numpy_positive
-    p = tf.add(tf_positive, tf.multiply(tf.ones(tf.shape(tf_positive)), negative))
-    # for negative
-    numpy_negative = tf.constant(negative_weight)
-    tf_negative = negative * numpy_negative
-    n = tf.add(tf_negative, tf.multiply(tf.ones(tf.shape(tf_negative)), positive))
-    w = tf.multiply(p, n)
-    left = tf.add(tf.ones(matrix_shape),z*(tf.subtract(w,tf.ones(matrix_shape))))
-    right = tf.log(tf.add(tf.ones(matrix_shape),tf.exp(tf.negative(tf.abs(x)))))
-
-    cross_entropy = tf.maximum(x,0) - x*z + left*right
-    # eliminate padding value effect
-    cross_entropy - tf.multiply(cross_entropy,mask)
-    cross_entropy = tf.reduce_sum(cross_entropy, 2)
-    # check 2-dimension is valid or paded
-    mask = tf.sign(tf.reduce_max(tf.abs(z), 2))
-    cross_entropy *= mask
-    # Average over actual sequence lengths.
-    cross_entropy = tf.reduce_sum(cross_entropy, 1)
-    cross_entropy /= tf.reduce_sum(mask, 1)
-    return tf.reduce_mean(cross_entropy)
 with tf.variable_scope('loss'):
     # loss_op1 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
     #     labels=tf.cast(Y,tf.float32),
     #     logits=logits))
-
-    # loss_op = dynamic_loss(sigmoid_logits,tf.cast(Y,tf.float32),mask_matrix)
-    loss_op = stable_dynamic_loss(logits, tf.cast(Y, tf.float32), mask_matrix)
+    loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32),logits,tf.constant(w))
+    loss_op = tf.reduce_sum(loss_op)/tf.cast(tf.reduce_sum(seq), tf.float32)
+    # loss_op = stable_dynamic_loss(logits, tf.cast(Y, tf.float32), mask_matrix)
 with tf.variable_scope('optimize'):
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     train_op = optimizer.minimize(loss_op)
