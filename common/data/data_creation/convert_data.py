@@ -67,7 +67,7 @@ def convert(tr_or_test, fold, scene):
     :param scene: scene_number
     :return: none (creates folder)
     '''
-    if tr_or_test is not ('train' or 'test'):
+    if tr_or_test is not 'train' and not 'test':
         raise ValueError("tr_or_test: 'train' or 'test'")
 
     blacklist = ['cfg.mat', 'fdesc.mat']
@@ -119,5 +119,6 @@ def main(argv):
         sys.exit(2)
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    #main(sys.argv[1:])
+    main(['test', -1, 54])
 
