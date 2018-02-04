@@ -39,6 +39,8 @@ def convert_from_list(fplist, label_paths, save_path):
                     raise Exception("Exception for: " + load_path)
         y = np.vstack(ys[0])
         y_block = np.hstack(ys[1]).T
+        y[y == -1] = 0
+        y_block[y_block == -1] = 0
         if not path.isdir(save_path):
             os.makedirs(save_path)
         save_file_path = path.join(save_path, fn)
@@ -77,6 +79,17 @@ def convert(tr_or_test, fold, scene):
     fs = [f for f in listdir(scene_path) if path.isfile(path.join(scene_path, f)) if f not in blacklist]
 
     fold_str = 'fold' + str(fold)
+    flist_path = './NIGENS_fold_filelists/'
+    flists = [f for f in listdir(flist_path) if path.isfile(path.join(flist_path, f)) if fold_str in f]
+    if len(flists) > 1:
+        raise ValueError('matches multiple flists')
+    flist = flists[0]
+    valid_fnames = []
+    with open(path.join(flist_path, flist), 'r') as f:
+        fnames = f.read().splitlines()
+        for fname in fnames:
+            valid_fnames.append('.'.join(fname.split('/')[1:])+'.mat')
+
     scene_str = 'scene' + str(scene)
     save_path = path.join(data_root_path, tr_or_test, fold_str, scene_str)
     if path.isdir(save_path):
@@ -84,7 +97,7 @@ def convert(tr_or_test, fold, scene):
                              if f not in blacklist]
         fs = list(set(fs) - set(already_converted))
 
-    fplist = [path.join(scene_path, f) for f in fs]
+    fplist = [path.join(scene_path, f) for f in fs if f in valid_fnames]
     label_paths = [(eng.get_lstm_cache_path(tr_or_test, 'labels', fold, scene, i),
                     eng.get_lstm_cache_path(tr_or_test, 'dnn_labels', fold, scene, i)) for i in range(1, 14)]
     print('Converting: {}, Fold: {}, Scene: {}'.format(tr_or_test, fold, scene))
@@ -123,6 +136,6 @@ def main(argv):
 
 
 if __name__ == '__main__':
-    #main(sys.argv[1:])
-    main(['train', -1, -1])
+    main(sys.argv[1:])
+    #main(['train', -1, -1])
 
