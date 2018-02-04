@@ -35,6 +35,8 @@ def convert_from_list(fplist, label_paths, save_path):
                     print("HDF5 File: CHECK if dimension for block labels matches")
                     f = h5py.File(load_path)
                     ys[i].append(np.array(f['y']).T)
+                except Exception as e:
+                    raise Exception("Exception for: " + load_path)
         y = np.vstack(ys[0])
         y_block = np.hstack(ys[1]).T
         if not path.isdir(save_path):
@@ -49,9 +51,9 @@ train_valid_scene_ids = [2, 8, 17, 33, 34, 44, 68, 69, 71, 76, 79, 37, 36, 64, 6
                          57, 6, 52, 61, 4, 16, 39, 73, 59, 70, 40, 13, 27, 66, 75, 3, 62, 51, 11, 78, 46, 43, 54, 20,
                          55, 23, 14, 28, 24, 58, 5, 35, 38, 47, 32, 72, 60, 26, 67, 10, 29, 21, 63, 18, 48, 45, 50, 49,
                          22, 53, 80, 9, 74, 77, 56]
-test_valid_scene_ids = list(range(1,127))
-train_fold_ids = list(range(1,7))
-test_fold_ids = list(range(7,9))
+test_valid_scene_ids = list(range(1, 127))
+train_fold_ids = list(range(1, 7))
+test_fold_ids = list(range(7, 9))
 
 # dnn_labels are shape (blocks x 1)
 # labels are shape (1 x frames)
@@ -86,7 +88,7 @@ def convert(tr_or_test, fold, scene):
     label_paths = [(eng.get_lstm_cache_path(tr_or_test, 'labels', fold, scene, i),
                     eng.get_lstm_cache_path(tr_or_test, 'dnn_labels', fold, scene, i)) for i in range(1, 14)]
     print('Converting: {}, Fold: {}, Scene: {}'.format(tr_or_test, fold, scene))
-    convert_from_list(fplist, label_paths, save_path, )
+    convert_from_list(fplist, label_paths, save_path)
     return
 
 def main(argv):
@@ -94,23 +96,6 @@ def main(argv):
         tr_or_test_arg = argv[0]
         fold_arg = int(argv[1])
         scene_arg = int(argv[2])
-        if fold_arg == -1:
-            fold_ids = train_fold_ids if tr_or_test_arg == 'train' else test_fold_ids
-            for fold_id in fold_ids:
-                if scene_arg == -1:
-                    scene_ids = train_valid_scene_ids if tr_or_test_arg == 'train' else test_valid_scene_ids
-                    for scene_id in scene_ids:
-                        convert(tr_or_test_arg, fold_id, scene_id)
-                else:
-                    convert(tr_or_test_arg, fold_id, scene_arg)
-        else:
-            if scene_arg == -1:
-                scene_ids = train_valid_scene_ids if tr_or_test_arg == 'train' else test_valid_scene_ids
-                for scene_id in scene_ids:
-                    convert(tr_or_test_arg, fold_arg, scene_id)
-            else:
-                convert(tr_or_test_arg, fold_arg, scene_arg)
-
     except:
         print("Usage: python convert_data.py train_or_test fold_number scene_number")
         print("train_or_test: 'train' or 'test' data")
@@ -118,7 +103,26 @@ def main(argv):
         print("scene_number: valid id for 'train', 1 - 126 for 'test'")
         sys.exit(2)
 
+    if fold_arg == -1:
+        fold_ids = train_fold_ids if tr_or_test_arg == 'train' else test_fold_ids
+        for fold_id in fold_ids:
+            if scene_arg == -1:
+                scene_ids = train_valid_scene_ids if tr_or_test_arg == 'train' else test_valid_scene_ids
+                for scene_id in scene_ids:
+                    convert(tr_or_test_arg, fold_id, scene_id)
+            else:
+                convert(tr_or_test_arg, fold_id, scene_arg)
+    else:
+        if scene_arg == -1:
+            scene_ids = train_valid_scene_ids if tr_or_test_arg == 'train' else test_valid_scene_ids
+            for scene_id in scene_ids:
+                convert(tr_or_test_arg, fold_arg, scene_id)
+        else:
+            convert(tr_or_test_arg, fold_arg, scene_arg)
+
+
+
 if __name__ == '__main__':
-    main(sys.argv[1:])
-    #main(['test', -1, 54])
+    #main(sys.argv[1:])
+    main(['train', -1, -1])
 
