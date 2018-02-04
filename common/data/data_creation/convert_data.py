@@ -80,7 +80,8 @@ def convert(tr_or_test, fold, scene):
 
     fold_str = 'fold' + str(fold)
     flist_path = './NIGENS_fold_filelists/'
-    flists = [f for f in listdir(flist_path) if path.isfile(path.join(flist_path, f)) if fold_str in f]
+    flists = [f for f in listdir(flist_path) if path.isfile(path.join(flist_path, f)) if fold_str in f
+              if not f.startswith('.')]
     if len(flists) > 1:
         raise ValueError('matches multiple flists')
     flist = flists[0]
