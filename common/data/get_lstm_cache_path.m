@@ -25,7 +25,7 @@ end
 if strcmpi( trainOrTest, 'train' )
     pathes_ = load( 'mc4_lstm_train_pathes.mat' );
 elseif strcmpi( trainOrTest, 'test' )
-    pathes_ = load( 'mc4_lstm_test_pathes.mat' );
+    pathes_ = load( 'mc5_lstm_test_pathes.mat' );
     fold = fold - 6;
 else
     fprintf( 'First argument must be one of ''train'', ''test''\n' );
