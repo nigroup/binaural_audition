@@ -1,0 +1,39 @@
+AGENDA:
+
+* lead: Ivo and Moritz same responsibility for all students and theses
+
+
+* discussion speed slower (s.t. everyone can follow): please ask questions/do not interrupt (particularly Ivo/Heiner/Moritz) => efficiency/fairness
+
+
+* server availability: 1-2 titan x (first 1) on eltanin see slack; nvidia-smi for occupancy
+
+
+* current situation with data/models: 
+
+=> Heiner: data export status (where?)
+
+=> Ivo: label situation: 2 data sets, start with difficult one (instant labels), continue with easier one (block-based) for which we have a reference accuracies
+
+=> current status of each implementation
+
+=> questions/discussion?
+
+
+* initial distribution of topics, first only technical/model centered:
+
+=> Changbin hyperparameter optimization, learning and architecture [depth/hierarchical layer size/later: conv layer])
+
+=> Heiner: advanced regularization techniques: dropout/variational dropout/layer normalization/batch normalization [first implement independent from Changbin running LSTM model then sync/discuss and then explore the regularization] -- potentially later attention
+
+=> Alessandro: convnet & dropout on fc layers
+
+=> use simple data set once available
+
+=> own topics: suggests welcome!
+
+
+* Alessandro: let's meet also with Youssef? maybe he gives small presentation?
+
+
+* next meeting: Heiner two weeks gone... meet before to clarify everything (and individual meetings with Changbin or Alessandro afterwards)
