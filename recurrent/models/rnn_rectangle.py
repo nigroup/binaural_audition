@@ -7,6 +7,7 @@ import logging
 import time
 import random
 from batch_generation import get_filepaths
+from get_train_pathlength import get_indexpath
 logger = logging.getLogger(__name__)
 # parser for map function
 def _read_py_function(filename):
@@ -51,8 +52,8 @@ def RNN(x, weights, seq):
 # Training Parameters
 
 learning_rate = 0.001
-epoch = 4
-batch_size = 4
+epoch = 2
+batch_size = epoch
 output_threshold = 0.5
 num_input = 0
 timesteps = 0
@@ -63,15 +64,17 @@ num_classes = 13
 # get instance_id,instance_length,instance_path
 dir_train = 'trainpaths.npy'
 paths = np.load(dir_train)
+total_samples = len(paths)
 # number of epoch, length of timeframes, number of instances
-train_set = get_filepaths(epoch,4000,paths[:100])
+train_set = get_filepaths(epoch,4000,paths[:10])
 dir_test = '/mnt/raid/data/ni/twoears/scenes2018/test/fold7/scene1'
 path_test = glob(dir_test + '/**/**/*.npz', recursive=True)
-total_samples = len(paths)
-
-num_test = len(dir_test)
+path_test = get_indexpath(path_test)
+test_set = get_filepaths(1,4000,path_test)
+num_train = len(train_set)
+num_test = len(test_set)
 set = {'train':train_set,
-       'test':path_test}
+       'test':test_set}
 
 
 # tensor holder
@@ -165,7 +168,8 @@ with tf.Session() as sess:
         epoch_start = time.time()
 
         sess.run(train_iterator.initializer)
-        n_batches_per_epoch = 250
+        #  num_train is the total combined paths for all epchs
+        n_batches_per_epoch = int(num_train / epoch)
         # print(sess.run(seq,feed_dict={handle:train_handle}))
         for _ in range(n_batches_per_epoch):
             loss, _, se,sp,tempf1 = sess.run([loss_op, train_op,sensitivity,specificity,f1],feed_dict={handle:train_handle})
@@ -191,11 +195,11 @@ with tf.Session() as sess:
     # for testing
     train_cost, sen, spe, f  = 0.0, 0.0, 0.0, 0.0
 
-    n_batches_per_epoch = int(num_test/ batch_size)
+    n_batches_per_epoch = int(num_test/ epoch)
     epoch_start = time.time()
     sess.run(test_iterator.initializer)
     logger.info(section.format('Testing data'))
-    for _ in range(int(n_batches_per_epoch)):
+    for _ in range(n_batches_per_epoch):
         loss, se,sp,tempf1 = sess.run([loss_op,sensitivity,specificity,f1],feed_dict={handle:test_handle})
         train_cost = train_cost + loss
         sen = sen + se
