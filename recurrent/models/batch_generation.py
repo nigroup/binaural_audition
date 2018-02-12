@@ -52,9 +52,9 @@ def get_filepaths(Total_epochs, Batch_timelength,paths):
             output.append(string)
 
     return output
-# t = time.time()
-# a = get_filepaths(3,6000,paths[:100])
-#
+t = time.time()
+a = get_filepaths(1,6000,paths[:10])
+
 # fx, fy = np.array([]).reshape(0,160), np.array([]).reshape(0,13)
 # for instance in a[0].split('@'):
 #     p, start, end = instance.split('&')

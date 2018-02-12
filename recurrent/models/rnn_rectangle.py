@@ -53,7 +53,7 @@ def RNN(x, weights, seq):
 
 learning_rate = 0.001
 epoch = 2
-batch_size = epoch
+batch_size = 40
 output_threshold = 0.5
 num_input = 0
 timesteps = 0
@@ -66,8 +66,8 @@ dir_train = 'trainpaths.npy'
 paths = np.load(dir_train)
 total_samples = len(paths)
 # number of epoch, length of timeframes, number of instances
-train_set = get_filepaths(epoch,4000,paths[:10])
-dir_test = '/mnt/raid/data/ni/twoears/scenes2018/test/fold7/scene1'
+train_set = get_filepaths(epoch,4000,paths[:200])
+dir_test = '/mnt/raid/data/ni/twoears/scenes2018/test/fold7/scene10'
 path_test = glob(dir_test + '/**/**/*.npz', recursive=True)
 path_test = get_indexpath(path_test)
 test_set = get_filepaths(1,4000,path_test)
@@ -80,6 +80,7 @@ set = {'train':train_set,
 # tensor holder
 train_batch = read_dataset(set['train'], batch_size)
 test_batch = read_dataset(set['test'], batch_size)
+
 handle = tf.placeholder(tf.string,shape=[])
 iterator = tf.data.Iterator.from_string_handle(handle,train_batch.output_types,train_batch.output_shapes)
 X,Y,seq = iterator.get_next()
@@ -153,7 +154,7 @@ with tf.Session() as sess:
             Number of training samples: {}
             Batch size: {}'''.format(
         epoch,
-        1000,
+        num_train / epoch,
         batch_size))
     train_handle = sess.run(train_iterator.string_handle())
     test_handle = sess.run(test_iterator.string_handle())
@@ -161,15 +162,16 @@ with tf.Session() as sess:
 
     section = '\n{0:=^40}\n'
     logger.info(section.format('Run training epoch'))
-
+    # only initialize once
+    sess.run(train_iterator.initializer)
     for e in range(epoch):
     # initialization for each epoch
         train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0,
         epoch_start = time.time()
 
-        sess.run(train_iterator.initializer)
+
         #  num_train is the total combined paths for all epchs
-        n_batches_per_epoch = int(num_train / epoch)
+        n_batches_per_epoch = int(num_train / (batch_size*epoch))
         # print(sess.run(seq,feed_dict={handle:train_handle}))
         for _ in range(n_batches_per_epoch):
             loss, _, se,sp,tempf1 = sess.run([loss_op, train_op,sensitivity,specificity,f1],feed_dict={handle:train_handle})
@@ -193,23 +195,21 @@ with tf.Session() as sess:
     logger.info("Training finished!!!")
 
     # for testing
-    train_cost, sen, spe, f  = 0.0, 0.0, 0.0, 0.0
+    sen, spe, f  = 0.0, 0.0, 0.0
 
-    n_batches_per_epoch = int(num_test/ epoch)
+    n_batches_per_epoch = int(num_test/ batch_size)
     epoch_start = time.time()
     sess.run(test_iterator.initializer)
     logger.info(section.format('Testing data'))
     for _ in range(n_batches_per_epoch):
-        loss, se,sp,tempf1 = sess.run([loss_op,sensitivity,specificity,f1],feed_dict={handle:test_handle})
-        train_cost = train_cost + loss
+        se,sp,tempf1 = sess.run([sensitivity,specificity,f1],feed_dict={handle:test_handle})
         sen = sen + se
         spe = spe + sp
         f = f+ tempf1
-        # logger.debug('Test train cost: %.2f | Test Label error rate: %.2f', loss, train_ler)
+        logger.debug(' Balanced accuracy: %.2f',(se + sp) / 2 )
     epoch_duration = time.time() - epoch_start
-    logger.info('''Test_cost: {:.3f},Test_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
-                .format(train_cost / n_batches_per_epoch,
-                        ((sen + spe) / 2) / n_batches_per_epoch,
+    logger.info('''Test_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
+                .format(((sen + spe) / 2) / n_batches_per_epoch,
                         sen / n_batches_per_epoch,
                         spe / n_batches_per_epoch,
                         f/n_batches_per_epoch,
