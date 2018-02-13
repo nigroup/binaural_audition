@@ -57,6 +57,7 @@ path_test = glob(dir_test + '/**/**/*.npz', recursive=True)
 random.shuffle(paths)
 total_samples = len(paths)
 num_train, num_dev = int(total_samples*0.9),int(total_samples*0.1)
+num_test = len(dir_test)
 set = {'train':paths[0:num_train],
        'validation':paths[num_train:],
        'test':path_test}
@@ -115,9 +116,9 @@ sigmoid_logits = tf.sigmoid(logits)
 
 # logits = tf.cast(logits,tf.int32)
 # Define loss and optimizer
-negative_weight = [0.11024201031755272, 0.068077320143905759, 0.055760388627561254, 0.031604032486714326, 0.16509244757771138, 0.04720935998604419, 0.055389252246255079, 0.1648156908493898, 0.09281561967784821, 0.020133230031450858, 0.063189111682460428, 0.044612759123398689, 0.081058777249707281]
-positive_weight = [0.88975798968244724, 0.93192267985609423, 0.94423961137243873, 0.96839596751328572, 0.83490755242228865, 0.95279064001395586, 0.94461074775374487, 0.83518430915061015, 0.90718438032215176, 0.97986676996854916, 0.93681088831753956, 0.95538724087660132, 0.91894122275029266]
-w = [x/y for x,y in zip(positive_weight,negative_weight)]
+positive_weight = [0.11024201031755272, 0.068077320143905759, 0.055760388627561254, 0.031604032486714326, 0.16509244757771138, 0.04720935998604419, 0.055389252246255079, 0.1648156908493898, 0.09281561967784821, 0.020133230031450858, 0.063189111682460428, 0.044612759123398689, 0.081058777249707281]
+negative_weight = [0.88975798968244724, 0.93192267985609423, 0.94423961137243873, 0.96839596751328572, 0.83490755242228865, 0.95279064001395586, 0.94461074775374487, 0.83518430915061015, 0.90718438032215176, 0.97986676996854916, 0.93681088831753956, 0.95538724087660132, 0.91894122275029266]
+w = [y/x for x,y in zip(positive_weight,negative_weight)]
 
 with tf.variable_scope('loss'):
     # loss_op1 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
@@ -210,17 +211,15 @@ with tf.Session() as sess:
         epoch_start = time.time()
         sess.run(valid_iterator.initializer)
         for _ in range(n_batches_per_epoch):
-            loss,train_ler,se,sp,tempf1 = sess.run([loss_op,ler,sensitivity,specificity,f1],feed_dict={handle:valid_handle})
-            train_cost = train_cost + loss
+            train_ler,se,sp,tempf1 = sess.run([ler,sensitivity,specificity,f1],feed_dict={handle:valid_handle})
             train_Label_Error_Rate = train_Label_Error_Rate + train_ler
             sen = sen + se
             spe = spe + sp
             f = tempf1 + f
         epoch_duration1 = time.time() - epoch_start
 
-        logger.info('''Epochs: {},Validation_cost: {:.3f},Validation_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
+        logger.info('''Epochs: {},Validation_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
                 .format(e + 1,
-                        train_cost / n_batches_per_epoch,
                         ((sen + spe) / 2) / n_batches_per_epoch,
                         sen / n_batches_per_epoch,
                         spe / n_batches_per_epoch,
@@ -231,24 +230,22 @@ with tf.Session() as sess:
 
     logger.info("Training finished!!!")
     # for testing
-    train_cost, train_Label_Error_Rate,sen, spe, f  = 0.0, 0.0, 0.0, 0.0, 0.0
+    train_Label_Error_Rate,sen, spe, f  = 0.0, 0.0, 0.0, 0.0
 
     n_batches_per_epoch = int(num_test/ batch_size)
     epoch_start = time.time()
     sess.run(test_iterator.initializer)
     logger.info(section.format('Testing data'))
     for _ in range(int(n_batches_per_epoch)):
-        loss, train_ler,se,sp,tempf1 = sess.run([loss_op, ler,sensitivity,specificity,f1],feed_dict={handle:test_handle})
-        train_cost = train_cost + loss
+        train_ler,se,sp,tempf1 = sess.run([ ler,sensitivity,specificity,f1],feed_dict={handle:test_handle})
         train_Label_Error_Rate = train_Label_Error_Rate + train_ler
         sen = sen + se
         spe = spe + sp
         f = f+ tempf1
         # logger.debug('Test train cost: %.2f | Test Label error rate: %.2f', loss, train_ler)
     epoch_duration = time.time() - epoch_start
-    logger.info('''Test_cost: {:.3f},Test_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
-                .format(train_cost / n_batches_per_epoch,
-                        ((sen + spe) / 2) / n_batches_per_epoch,
+    logger.info('''Test_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
+                .format(((sen + spe) / 2) / n_batches_per_epoch,
                         sen / n_batches_per_epoch,
                         spe / n_batches_per_epoch,
                         f/n_batches_per_epoch,
