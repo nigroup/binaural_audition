@@ -7,7 +7,7 @@ if nargin < 1
     return;
 end
 if nargin < 2
-    fprintf( 'Second argument must be one of ''dnn_labels'', ''labels'', ''features'', ''afe'', ''earsignals''\n' );
+    fprintf( 'Second argument must be one of ''bi_labels'', ''labels'', ''features'', ''afe'', ''earsignals''\n' );
     return;
 end
 if nargin < 3
@@ -20,6 +20,7 @@ if nargin < 4
 end
 if nargin < 5
     fprintf( 'Fifth argument unset; using 1 for class id\n' );
+    class = 1;
 end
 
 if strcmpi( trainOrTest, 'train' )
@@ -32,8 +33,8 @@ else
     return;
 end
     
-if strcmpi( stage, 'dnn_labels' )
-    pathes = pathes_.dnnLabelCacheDirs;
+if strcmpi( stage, 'bi_labels' )
+    pathes = pathes_.biLabelCacheDirs;
     idxs = {class, fold, scene};
 elseif strcmpi( stage, 'labels' )
     pathes = pathes_.labelCacheDirs;
@@ -48,7 +49,7 @@ elseif strcmpi( stage, 'earsignals' )
     pathes = pathes_.earSignalCacheDirs;
     idxs = {fold, scene};
 else
-    fprintf( 'Second argument must be one of ''dnn_labels'', ''labels'', ''features'', ''afe'', ''earsignals''\n' );
+    fprintf( 'Second argument must be one of ''bi_labels'', ''labels'', ''features'', ''afe'', ''earsignals''\n' );
     return;
 end
 

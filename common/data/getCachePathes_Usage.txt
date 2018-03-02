@@ -8,7 +8,7 @@ Use get_lstm_cache_path in python like:
 
 with syntax get_lstm_cache_path( <TRAINORTEST>, <STAGE>, <FOLD>, <SCENE>, <CLASS> ), where
 TRAINORTEST is 'train' or 'test'
-STAGE is 'dnn_labels', 'labels', 'features', or 'earsignals'
+STAGE is 'bi_labels', 'labels', 'features', or 'earsignals'
 FOLD is between 1 and 6 for training and 7 or 8 for testing
 SCENE is between 1 and 80 for training and between 1 and 126 for testing
 CLASS is between 1 and 13 (only relevant for labels)
