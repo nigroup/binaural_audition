@@ -24,6 +24,7 @@ def convert_from_list(fplist, label_paths, save_path):
         fn = fp.split(sep='/')[-1]
         data = scipy.io.loadmat(fp)
         x = data['x']
+        x = x.astype(np.float32, copy=True)
         ys = ([], [])
         for label_path_both in label_paths:
             for i, label_path in enumerate(label_path_both):
@@ -37,27 +38,31 @@ def convert_from_list(fplist, label_paths, save_path):
                     ys[i].append(np.array(f['y']).T)
                 except Exception as e:
                     raise Exception("Exception for: " + load_path)
+
         y = np.vstack(ys[0])
         y_block = np.hstack(ys[1]).T
         y[y == -1] = 0
-        y_block[y_block == -1] = 0
+        y_block_zeroi = y_block == 0
+        y_block_minusonei = y_block == -1
+
+        # converting -1 to 0 to be binary crossentropy compatible
+        y_block[y_block_minusonei] = 0
+
+        # 0 has to be excluded from cost
+        y_block[y_block_zeroi] = -1
         if not path.isdir(save_path):
             os.makedirs(save_path)
         save_file_path = path.join(save_path, fn)
         np.savez_compressed(save_file_path, x=x, y=y, y_block=y_block)
 
 
-
 data_root_path = '/mnt/raid/data/ni/twoears/scenes2018'
-train_valid_scene_ids = [2, 8, 17, 33, 34, 44, 68, 69, 71, 76, 79, 37, 36, 64, 65, 15, 41, 42, 19, 7, 25, 31, 1, 12, 30,
-                         57, 6, 52, 61, 4, 16, 39, 73, 59, 70, 40, 13, 27, 66, 75, 3, 62, 51, 11, 78, 46, 43, 54, 20,
-                         55, 23, 14, 28, 24, 58, 5, 35, 38, 47, 32, 72, 60, 26, 67, 10, 29, 21, 63, 18, 48, 45, 50, 49,
-                         22, 53, 80, 9, 74, 77, 56]
+train_valid_scene_ids = list(range(1, 81))
 test_valid_scene_ids = list(range(1, 127))
 train_fold_ids = list(range(1, 7))
 test_fold_ids = list(range(7, 9))
 
-# dnn_labels are shape (blocks x 1)
+# bi_labels are shape (blocks x 1)
 # labels are shape (1 x frames)
 
 #
@@ -100,7 +105,7 @@ def convert(tr_or_test, fold, scene):
 
     fplist = [path.join(scene_path, f) for f in fs if f in valid_fnames]
     label_paths = [(eng.get_lstm_cache_path(tr_or_test, 'labels', fold, scene, i),
-                    eng.get_lstm_cache_path(tr_or_test, 'dnn_labels', fold, scene, i)) for i in range(1, 14)]
+                    eng.get_lstm_cache_path(tr_or_test, 'bi_labels', fold, scene, i)) for i in range(1, 14)]
     print('Converting: {}, Fold: {}, Scene: {}'.format(tr_or_test, fold, scene))
     convert_from_list(fplist, label_paths, save_path)
     return
