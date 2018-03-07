@@ -100,3 +100,4 @@ ENV/
 # mypy
 .mypy_cache/
 common/data/data_creation/.idea
+recurrent/models/.idea
