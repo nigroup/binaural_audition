@@ -5,7 +5,9 @@ import time
 import random
 dir_train = 'trainpaths.npy'
 paths = np.load(dir_train)
-def construct_rectangle(pathset,Total_epochs):
+
+
+def construct_rectangle(pathset, Total_epochs):
     current_length = [0]*Total_epochs
     index_rectangle = [[]]*Total_epochs
     for e in range(Total_epochs+1):
@@ -15,6 +17,8 @@ def construct_rectangle(pathset,Total_epochs):
             current_length[k] += int(j[1])
             index_rectangle[k] = index_rectangle[k] + [int(j[0])]
     return np.array(index_rectangle)
+
+
 def get_filepaths(Total_epochs, Batch_timelength,paths):
     output = []
     total_length = paths[:,1].astype(int).sum()

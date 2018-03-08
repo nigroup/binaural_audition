@@ -5,9 +5,26 @@ from glob import glob
 import sys
 import logging
 import time
-logger = logging.getLogger(__name__)
-# parser for map function
-count = 0
+
+
+# Data directories
+SET = {'train': '/home/changbinlu/tuberlin/thesis/Jan.15th/data/train/',
+       'validation': '/home/changbinlu/tuberlin/thesis/Jan.15th/data/validation/',
+       'test': '/home/changbinlu/tuberlin/thesis/Jan.15th/data/test/'}
+
+# Training Parameters
+LEARNING_RATE = 0.001
+NUM_SAMPLES = 250
+BATCH_SIZE = 2
+DISPLAY_STEP = 200
+N_BATCHES_PER_EPOCH = int(NUM_SAMPLES / BATCH_SIZE)
+
+# Network Parameters
+NUM_INPUT = 0
+NUM_HIDDEN = 128
+NUM_CLASSES = 2
+
+
 def _read_py_function(filename):
     filename = filename.decode(sys.getdefaultencoding())
     print(filename)
@@ -18,82 +35,57 @@ def _read_py_function(filename):
     y = data[:, 160]
     l = np.array([x.shape[0]])
     return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
-# return next_batch
-def read_dataset(dir_path,batchsize):
+
+
+def read_dataset(dir_path, batchsize):
+    """return next batch"""
+
     path_set = glob(os.path.join(dir_path, "*.npy"))
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(lambda filename: tuple(tf.py_func(_read_py_function, [filename], [tf.float32, tf.int32,tf.int32])))
-    batch = dataset.padded_batch(batchsize,padded_shapes=([None,None],[None],[None]))
+    batch = dataset.padded_batch(batchsize, padded_shapes=([None,None],[None],[None]))
     return batch
 
 
+def model(x, seq):
 
-
-def BiRNN(x, weights, biases,seq):
-
-    # Forward direction cell
-    with tf.variable_scope('lstm'):
-        lstm_fw_cell = tf.contrib.rnn.BasicLSTMCell(num_hidden, forget_bias=1.0, state_is_tuple=True)
-        # stack = tf.contrib.rnn.MultiRNNCell([cell] * 2, state_is_tuple=True)
+    with tf.variable_scope('LSTM'):
+        lstm_cell = tf.contrib.rnn.BasicLSTMCell(NUM_HIDDEN, forget_bias=1.0, state_is_tuple=True)
         batch_x_shape = tf.shape(x)
-        # Get layer activations (second output is the final state of the layer, do not need)
         layer = tf.reshape(x, [-1, batch_x_shape[0], 160])
-        outputs, output_states = tf.nn.dynamic_rnn(cell=lstm_fw_cell,
+        outputs, output_states = tf.nn.dynamic_rnn(cell=lstm_cell,
                                                    inputs=layer,
                                                    dtype=tf.float32,
                                                    time_major=True,
                                                    sequence_length=seq
                                                    )
-
-        outputs = tf.reshape(outputs, [-1, num_hidden])
-        top = tf.matmul(outputs, weights['out'])
-        original_out = tf.reshape(top, [batch_x_shape[0],-1, num_classes])
+        outputs = tf.reshape(outputs, [-1, NUM_HIDDEN])
+        w_init = tf.contrib.layers.xavier_initializer()
+        b_init = tf.initializers.random_normal
+        top = tf.layers.dense(outputs, NUM_CLASSES, kernel_initializer=w_init, bias_initializer=b_init)
+        original_out = tf.reshape(top, [batch_x_shape[0], -1, NUM_CLASSES])
     return original_out
 
-# Training Parameters
-learning_rate = 0.001
-num_samples = 250
-batch_size = 2
-display_step = 200
-epoch = 1
-n_batches_per_epoch = int(num_samples/batch_size)
-# Network Parameters
-num_input = 0
-timesteps = 0
-num_hidden = 128
-num_classes = 2
-
-# data dir
-set = {'train':'/home/changbinlu/tuberlin/thesis/Jan.15th/data/train/',
-       'validation':'/home/changbinlu/tuberlin/thesis/Jan.15th/data/validation/',
-       'test':'/home/changbinlu/tuberlin/thesis/Jan.15th/data/test/'}
 
 # tensor holder
-train_batch = read_dataset(set['train'], batch_size)
-valid_batch = read_dataset(set['validation'], batch_size)
-test_batch = read_dataset(set['test'], batch_size)
+train_batch = read_dataset(SET['train'], BATCH_SIZE)
+valid_batch = read_dataset(SET['validation'], BATCH_SIZE)
+test_batch = read_dataset(SET['test'], BATCH_SIZE)
 
-handle = tf.placeholder(tf.string,shape=[])
-iterator = tf.data.Iterator.from_string_handle(handle,train_batch.output_types,train_batch.output_shapes)
+handle = tf.placeholder(tf.string, shape=[])
+iterator = tf.data.Iterator.from_string_handle(handle, train_batch.output_types, train_batch.output_shapes)
 # iterator = iterator.make_one_shot_iterator()
-X,Y,seq = iterator.get_next()
+X, Y, seq = iterator.get_next()
 # original sequence length, only used for RNN
-seq = tf.reshape(seq,[batch_size])
+seq = tf.reshape(seq, [BATCH_SIZE])
 
 train_iterator = train_batch.make_initializable_iterator()
 valid_iterator = valid_batch.make_initializable_iterator()
 test_iterator = test_batch.make_initializable_iterator()
-# Define weights
-weights = {
-    # Hidden layer weights => 2*n_hidden because of forward + backward cells
-    'out': tf.Variable(tf.random_normal([num_hidden, num_classes]))
-}
-biases = {
-    'out': tf.Variable(tf.random_normal([num_classes]))
-}
+
 
 # logits = [batch_size,time_steps,number_class]
-logits = BiRNN(X, weights, biases,seq)
+logits = model(X, seq)
 
 def dynamic_loss(l,t):
     cross_entropy = l * tf.log(t)
@@ -114,7 +106,7 @@ with tf.variable_scope('loss'):
         logits=logits))
     # loss_op1 = dynamic_loss(Y,logits)
 with tf.variable_scope('optimize'):
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=LEARNING_RATE)
     train_op = optimizer.minimize(loss_op)
 with tf.name_scope("accuracy"):
     ler = tf.not_equal(tf.argmax(logits, 2, output_type=tf.int32), Y, name='label_error_rate')
@@ -122,13 +114,14 @@ with tf.name_scope("accuracy"):
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
 
-logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 logger = logging.getLogger(os.path.basename(__file__))
 tf.logging.set_verbosity(tf.logging.INFO)
 num = 1
 positive_weight = [0.19133000362508559, 0.11815127347914234, 0.096774680791074236, 0.054850230260066322, 0.28652542259099634, 0.081933983163491361, 0.096130556786294494, 0.28604509875001677, 0.16108571313489345, 0.034942132892952567, 0.10966756622494328, 0.077427464722546691, 0.1406811804352788]
 
 # Start training
+epoch = 1
 with tf.Session() as sess:
     train_handle = sess.run(train_iterator.string_handle())
     valid_handle = sess.run(valid_iterator.string_handle())
@@ -138,8 +131,8 @@ with tf.Session() as sess:
             Batch size: {}
             Batches per epoch: {}'''.format(
         epoch,
-        batch_size,
-        n_batches_per_epoch))
+        BATCH_SIZE,
+        N_BATCHES_PER_EPOCH))
 
     # Run the initializer
     sess.run(init)
@@ -153,7 +146,7 @@ with tf.Session() as sess:
         sess.run(train_iterator.initializer)
 
 
-        for _ in range(n_batches_per_epoch):
+        for _ in range(N_BATCHES_PER_EPOCH):
             loss, _, train_ler = sess.run([loss_op, train_op, ler],feed_dict={handle:train_handle})
             logger.debug('Train cost: %.2f | Label error rate: %.2f',loss, train_ler)
             print(num)
@@ -163,9 +156,9 @@ with tf.Session() as sess:
 
         epoch_duration = time.time() - epoch_start
         logger.info('''Epochs: {},train_cost: {:.3f},train_ler: {:.3f},time: {:.2f} sec'''
-                    .format(e+1,
-                            train_cost/n_batches_per_epoch,
-                            train_Label_Error_Rate/n_batches_per_epoch,
+                    .format(e + 1,
+                            train_cost / N_BATCHES_PER_EPOCH,
+                            train_Label_Error_Rate / N_BATCHES_PER_EPOCH,
                             epoch_duration))
         # for validation
         sess.run(valid_iterator.initializer)
