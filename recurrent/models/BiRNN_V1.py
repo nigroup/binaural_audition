@@ -31,7 +31,7 @@ def _read_py_function(filename):
     data = np.load(filename)
 
     x = data[:, :160]
-    # need to change for 13 classes labels. From my understanding, one-vs-all need to do 13 times for each sample. 
+    # need to change for 13 classes labels. From my understanding, one-vs-all need to do 13 times for each sample.
     y = data[:, 160]
     l = np.array([x.shape[0]])
     return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)

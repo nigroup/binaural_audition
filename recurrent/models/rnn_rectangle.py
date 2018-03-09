@@ -7,8 +7,8 @@ import logging
 import time
 from batch_generation import get_filepaths
 from get_train_pathlength import get_indexpath
-
-
+os.environ["CUDA_DEVICE_ORDER"]="00000000:0A:00.0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 # Training Parameters
 LEARNING_RATE = 0.001
 BATCH_SIZE = 40

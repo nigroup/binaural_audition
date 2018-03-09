@@ -6,6 +6,8 @@ import sys
 import logging
 import time
 import random
+os.environ["CUDA_DEVICE_ORDER"]="00000000:0A:00.0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 logger = logging.getLogger(__name__)
 # parser for map function
 def _read_py_function(filename):
@@ -50,8 +52,8 @@ def BiRNN(x, weights, biases,seq):
         original_out = tf.reshape(top, [batch_x_shape[0],-1, num_classes])
     return original_out
 # data
-dir_train = '/mnt/raid/data/ni/twoears/scenes2018/train/'
-dir_test = '/mnt/raid/data/ni/twoears/scenes2018/test/'
+dir_train = '/mnt/raid/data/ni/twoears/scenes2018/train/fold1/scene1'
+dir_test = '/mnt/raid/data/ni/twoears/scenes2018/test//fold1/scene2'
 paths = glob(dir_train + '/**/**/*.npz', recursive=True)
 path_test = glob(dir_test + '/**/**/*.npz', recursive=True)
 random.shuffle(paths)
