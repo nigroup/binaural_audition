@@ -7,9 +7,15 @@ import sys
 import time
 import random
 from batch_generation import get_filepaths
+'''
+this script is used for obtain length for each sequence in advance.
+Especially for training on whole train scenes, thus here introduce thread pool
 
-# dir_train = '/mnt/raid/data/ni/twoears/scenes2018/train/'
-# paths = glob(dir_train + '/**/**/*.npz',recursive=True)
+
+return: [instance_id,instance_length,instance_path]
+'''
+dir_train = '/mnt/raid/data/ni/twoears/scenes2018/train/'
+paths = glob(dir_train + '/**/**/*.npz',recursive=True)
 # # index_path
 
 def load(p):

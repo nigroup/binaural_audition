@@ -6,7 +6,19 @@ import sys
 import logging
 import time
 import random
-os.environ["CUDA_DEVICE_ORDER"]="00000000:0A:00.0"
+'''
+Padding is faster for debugging and testing,because costruting rectangle takes time
+This script is used for block_interprete-labels
+
++1: ON
+-1(0):active only on the master source during the last 500 ms to an extent below 75%.
+0(-1):OFF
+NaN:active on at least one source different than the master source during the last 500 ms
+
+Recommendation: treat NaN as +1 in training, assign NaN frames zero cost in testing 
+                Assign 0 frames zero cost in training and testing
+'''
+# os.environ["CUDA_DEVICE_ORDER"]="00000000:0A:00.0"
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 logger = logging.getLogger(__name__)
 # parser for map function
@@ -15,8 +27,8 @@ def _read_py_function(filename):
     data = np.load(filename)
     x = np.reshape(data['x'],[-1,160])
     y = np.transpose(data['y'])
-    # since now the negative label is 0, need individual padding value 0, for the round thresold!
-    y[y==0] = -1
+    y[y==0] = 2
+    y[np.isnan(y)] = 3
     l = np.array([x.shape[0]])
     if l >=4000:
         x = x[:4000,:]
@@ -35,11 +47,14 @@ def read_dataset(path_set,batchsize,shuffle = False):
 def BiRNN(x, weights, biases,seq):
 
     # Forward direction cell
-    with tf.variable_scope('lstm'):
-        lstm_ell = tf.contrib.rnn.BasicLSTMCell(num_hidden, forget_bias=1.0, state_is_tuple=True)
+    # orthogonal_initializer
+    with tf.variable_scope('lstm',initializer=tf.orthogonal_initializer()):
+        lstm_ell = tf.contrib.rnn.BasicLSTMCell(num_hidden, forget_bias=1)
         # stack = tf.contrib.rnn.MultiRNNCell([cell] * 2, state_is_tuple=True)
         batch_x_shape = tf.shape(x)
         layer = tf.reshape(x, [ batch_x_shape[0],-1, 160])
+        # defining initial state
+        # initial_state = rnn_cell.zero_state(batch_size, dtype=tf.float32)
         outputs, output_states = tf.nn.dynamic_rnn(cell=lstm_ell,
                                                    inputs=layer,
                                                    dtype=tf.float32,
@@ -52,14 +67,17 @@ def BiRNN(x, weights, biases,seq):
         original_out = tf.reshape(top, [batch_x_shape[0],-1, num_classes])
     return original_out
 # data
-dir_train = '/mnt/raid/data/ni/twoears/scenes2018/train/fold1/scene1'
-dir_test = '/mnt/raid/data/ni/twoears/scenes2018/test//fold1/scene2'
-paths = glob(dir_train + '/**/**/*.npz', recursive=True)
-path_test = glob(dir_test + '/**/**/*.npz', recursive=True)
+dir_test = '/mnt/raid/data/ni/twoears/scenes2018/train/fold1/scene10'
+paths = []
+for f in range(1,7):
+    p = '/mnt/raid/data/ni/twoears/scenes2018/train/fold' + str(f) +'/scene1'
+    path = glob(p + '/**/**/*.npz', recursive=True)
+    paths += path
+path_test = glob(dir_test + '/*.npz', recursive=True)
 random.shuffle(paths)
 total_samples = len(paths)
 num_train, num_dev = int(total_samples*0.9),int(total_samples*0.1)
-num_test = len(dir_test)
+num_test = len(path_test)
 set = {'train':paths[0:num_train],
        'validation':paths[num_train:],
        'test':path_test}
@@ -69,17 +87,13 @@ set = {'train':paths[0:num_train],
 learning_rate = 0.001
 num_train_samples = num_train
 batch_size = 60
-epoch = 10
+epoch = 30
 
 # use it to compare output and true labels
-output_threshold = 0.51
+output_threshold = 0.5
 # Network Parameters
-num_input = 0
-timesteps = 0
 num_hidden = 1024
 num_classes = 13
-
-record = []
 
 
 # tensor holder
@@ -94,10 +108,10 @@ handle = tf.placeholder(tf.string,shape=[])
 iterator = tf.data.Iterator.from_string_handle(handle,train_batch.output_types,train_batch.output_shapes)
 X,Y,seq = iterator.get_next()
 # get mask matrix for loss fuction, will be used after round output
-mask_matrix = tf.cast(tf.not_equal(Y,0),tf.float32)
-# set label -1 to 0
-negativelabel = tf.cast(tf.not_equal(Y,-1),tf.int32)
-Y = tf.multiply(Y,negativelabel)
+mask_padding = tf.cast(tf.not_equal(Y,0),tf.int32)
+mask_negative = tf.cast(tf.not_equal(Y,2),tf.int32)
+mask_zero_frames = tf.cast(tf.not_equal(Y,-1),tf.int32)
+mask_nan = tf.cast(tf.not_equal(Y,3),tf.int32)
 seq = tf.reshape(seq,[batch_size])# original sequence length, only used for RNN
 
 train_iterator = train_batch.make_initializable_iterator()
@@ -114,35 +128,44 @@ biases = {
 }
 # logits = [batch_size,time_steps,number_class]
 logits = BiRNN(X, weights, biases,seq)
-sigmoid_logits = tf.sigmoid(logits)
 
-# logits = tf.cast(logits,tf.int32)
 # Define loss and optimizer
-positive_weight = [0.11024201031755272, 0.068077320143905759, 0.055760388627561254, 0.031604032486714326, 0.16509244757771138, 0.04720935998604419, 0.055389252246255079, 0.1648156908493898, 0.09281561967784821, 0.020133230031450858, 0.063189111682460428, 0.044612759123398689, 0.081058777249707281]
-negative_weight = [0.88975798968244724, 0.93192267985609423, 0.94423961137243873, 0.96839596751328572, 0.83490755242228865, 0.95279064001395586, 0.94461074775374487, 0.83518430915061015, 0.90718438032215176, 0.97986676996854916, 0.93681088831753956, 0.95538724087660132, 0.91894122275029266]
+positive_weight = [0.093718168209890373, 0.063907567921264216, 0.067798105106531739, 0.18291906814983463, 0.060061489920493351, 0.0300554843451682, 0.14020777497915976, 0.098981561987397257, 0.02414707385064941, 0.032517232415765082, 0.07860240402283912, 0.073578874716527881, 0.053505194374478995]
+
+negative_weight = [0.90628183179010957, 0.93609243207873583, 0.93220189489346827, 0.81708093185016539, 0.93993851007950668, 0.96994451565483175, 0.8597922250208403, 0.90101843801260273, 0.9758529261493506, 0.9674827675842349, 0.92139759597716087, 0.92642112528347209, 0.94649480562552102]
+
+
 w = [y/x for x,y in zip(positive_weight,negative_weight)]
 
 with tf.variable_scope('loss'):
-    # loss_op1 = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-    #     labels=tf.cast(Y,tf.float32),
-    #     logits=logits))
-    loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32),logits,tf.constant(w))
-    loss_op = tf.reduce_sum(loss_op)/tf.cast(tf.reduce_sum(seq), tf.float32)
-    # loss_op = stable_dynamic_loss(logits, tf.cast(Y, tf.float32), mask_matrix)
+    # convert 2(-1) to 0
+    mask_Y = Y * mask_negative
+    # convert nan to +1
+    add_nan_one = tf.ones(tf.shape(mask_nan),dtype=tf.int32) - mask_nan
+    mask_Y = tf.add(mask_Y*mask_nan,add_nan_one)
+
+    # assign 0 frames zero cost
+    number_zero_frame = tf.reduce_sum(tf.cast(tf.equal(Y,-1),tf.int32))
+    # mask_Y = mask_Y*mask_zero_frames
+    # mask_logits = logits*tf.cast(mask_zero_frames,tf.float32)
+    # treat NaN as +1 in training, assign NaN frames zero cost in testing
+    loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(mask_Y, tf.float32),logits,tf.constant(w ))
+    # number of frames without zero_frame
+    total = tf.cast(tf.reduce_sum(seq)-number_zero_frame, tf.float32)
+    # eliminate zero_frame loss
+    loss_op = tf.reduce_sum(loss_op*tf.cast(mask_zero_frames,tf.float32))/total
 with tf.variable_scope('optimize'):
-    optimizer = tf.train.AdamOptimizer()
+    optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate)
     train_op = optimizer.minimize(loss_op)
 with tf.name_scope("accuracy"):
     # add a threshold to round the output to 0 or 1
     # logits is already being sigmoid
-    predicted = tf.to_int32(sigmoid_logits>output_threshold)
-    ler = tf.not_equal(predicted, Y, name='label_error_rate')
-    ler = tf.reduce_sum(tf.cast(ler, tf.int32))/(tf.reduce_sum(seq)*num_classes)
-    TP = tf.count_nonzero(predicted*Y)
-    # mask padding value
-    TN = tf.count_nonzero((predicted - 1) * (Y - 1)*negativelabel)
-    FP = tf.count_nonzero(predicted*(Y-1))
-    FN = tf.count_nonzero((predicted-1)*Y)
+    predicted = tf.to_int32(tf.sigmoid(logits)>output_threshold)
+    TP = tf.count_nonzero(predicted*mask_Y*mask_padding*mask_zero_frames)
+    # mask padding, zero_frame,
+    TN = tf.count_nonzero((predicted - 1) * (mask_Y - 1)*mask_padding*mask_zero_frames)
+    FP = tf.count_nonzero(predicted*(mask_Y-1)*mask_padding*mask_zero_frames)
+    FN = tf.count_nonzero((predicted-1)*mask_Y*mask_padding*mask_zero_frames)
     precision = TP/(TP+FP)
     recall = TP/(TP+FN)
     f1 = 2*precision*recall/(precision+recall)
@@ -182,7 +205,7 @@ with tf.Session() as sess:
 
     for e in range(epoch):
     # initialization for each epoch
-        train_cost, train_Label_Error_Rate, sen, spe, f = 0.0, 0.0, 0.0, 0.0, 0.0
+        train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
 
         epoch_start = time.time()
 
@@ -190,10 +213,9 @@ with tf.Session() as sess:
         n_batches_per_epoch = int(num_train_samples / batch_size)
         # print(sess.run([seq, train_op],feed_dict={handle:train_handle}))
         for _ in range(n_batches_per_epoch):
-            loss, _, train_ler,se,sp,tempf1 = sess.run([loss_op, train_op, ler,sensitivity,specificity,f1],feed_dict={handle:train_handle})
+            loss, _,se,sp,tempf1 = sess.run([loss_op, train_op,sensitivity,specificity,f1],feed_dict={handle:train_handle})
             logger.debug('Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',loss, (se+sp)/2,se,sp,tempf1)
             train_cost = train_cost + loss
-            train_Label_Error_Rate = train_Label_Error_Rate + train_ler
             sen = sen + se
             spe = spe + sp
             f = tempf1 + f
@@ -208,13 +230,12 @@ with tf.Session() as sess:
                             f/n_batches_per_epoch,
                             epoch_duration0))
         # for validation
-        train_cost, train_Label_Error_Rate, sen, spe, f = 0.0, 0.0, 0.0, 0.0, 0.0
+        train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
         n_batches_per_epoch = int(num_dev / batch_size)
         epoch_start = time.time()
         sess.run(valid_iterator.initializer)
         for _ in range(n_batches_per_epoch):
-            train_ler,se,sp,tempf1 = sess.run([ler,sensitivity,specificity,f1],feed_dict={handle:valid_handle})
-            train_Label_Error_Rate = train_Label_Error_Rate + train_ler
+            se,sp,tempf1 = sess.run([sensitivity,specificity,f1],feed_dict={handle:valid_handle})
             sen = sen + se
             spe = spe + sp
             f = tempf1 + f
@@ -239,12 +260,10 @@ with tf.Session() as sess:
     sess.run(test_iterator.initializer)
     logger.info(section.format('Testing data'))
     for _ in range(int(n_batches_per_epoch)):
-        train_ler,se,sp,tempf1 = sess.run([ ler,sensitivity,specificity,f1],feed_dict={handle:test_handle})
-        train_Label_Error_Rate = train_Label_Error_Rate + train_ler
+        se,sp,tempf1 = sess.run([sensitivity,specificity,f1],feed_dict={handle:test_handle})
         sen = sen + se
         spe = spe + sp
         f = f+ tempf1
-        # logger.debug('Test train cost: %.2f | Test Label error rate: %.2f', loss, train_ler)
     epoch_duration = time.time() - epoch_start
     logger.info('''Test_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
                 .format(((sen + spe) / 2) / n_batches_per_epoch,
