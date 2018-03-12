@@ -47,8 +47,9 @@ def read_dataset(path_set,batchsize,shuffle = False):
 def BiRNN(x, weights, biases,seq):
 
     # Forward direction cell
-    with tf.variable_scope('lstm'):
-        lstm_ell = tf.contrib.rnn.BasicLSTMCell(num_hidden, forget_bias=0.8)
+    # orthogonal_initializer
+    with tf.variable_scope('lstm',initializer=tf.orthogonal_initializer()):
+        lstm_ell = tf.contrib.rnn.BasicLSTMCell(num_hidden, forget_bias=1)
         # stack = tf.contrib.rnn.MultiRNNCell([cell] * 2, state_is_tuple=True)
         batch_x_shape = tf.shape(x)
         layer = tf.reshape(x, [ batch_x_shape[0],-1, 160])
@@ -72,11 +73,11 @@ for f in range(1,7):
     p = '/mnt/raid/data/ni/twoears/scenes2018/train/fold' + str(f) +'/scene1'
     path = glob(p + '/**/**/*.npz', recursive=True)
     paths += path
-path_test = glob(dir_test + '/**/**/*.npz', recursive=True)
+path_test = glob(dir_test + '/*.npz', recursive=True)
 random.shuffle(paths)
 total_samples = len(paths)
-num_train, num_dev = int(total_samples*0.8),int(total_samples*0.2)
-num_test = len(dir_test)
+num_train, num_dev = int(total_samples*0.9),int(total_samples*0.1)
+num_test = len(path_test)
 set = {'train':paths[0:num_train],
        'validation':paths[num_train:],
        'test':path_test}
@@ -86,10 +87,10 @@ set = {'train':paths[0:num_train],
 learning_rate = 0.001
 num_train_samples = num_train
 batch_size = 60
-epoch = 20
+epoch = 30
 
 # use it to compare output and true labels
-output_threshold = 0.4
+output_threshold = 0.5
 # Network Parameters
 num_hidden = 1024
 num_classes = 13
@@ -129,8 +130,10 @@ biases = {
 logits = BiRNN(X, weights, biases,seq)
 
 # Define loss and optimizer
-positive_weight = [0.11804470813698595, 0.066557780982258882, 0.050740603921759823, 0.19694682540724309, 0.048239108462517888, 0.01808239933543479, 0.15807613622086666, 0.078714598870014127, 0.017956762007271962, 0.024021107071131354, 0.11430934160414491, 0.064450074163527299, 0.043860553816843277]
-negative_weight = [0.88195529186301402, 0.93344221901774116, 0.94925939607824017, 0.80305317459275694, 0.95176089153748211, 0.98191760066456524, 0.84192386377913331, 0.92128540112998591, 0.98204323799272808, 0.97597889292886864, 0.88569065839585503, 0.93554992583647267, 0.95613944618315672]
+positive_weight = [0.093718168209890373, 0.063907567921264216, 0.067798105106531739, 0.18291906814983463, 0.060061489920493351, 0.0300554843451682, 0.14020777497915976, 0.098981561987397257, 0.02414707385064941, 0.032517232415765082, 0.07860240402283912, 0.073578874716527881, 0.053505194374478995]
+
+negative_weight = [0.90628183179010957, 0.93609243207873583, 0.93220189489346827, 0.81708093185016539, 0.93993851007950668, 0.96994451565483175, 0.8597922250208403, 0.90101843801260273, 0.9758529261493506, 0.9674827675842349, 0.92139759597716087, 0.92642112528347209, 0.94649480562552102]
+
 
 w = [y/x for x,y in zip(positive_weight,negative_weight)]
 
