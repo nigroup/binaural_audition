@@ -1,19 +1,19 @@
 "a more polished example of using hyperband"
 "includes displaying best results and saving to a file"
-
+import tensorflow as tf
 import sys
 import pickle
 from pprint import pprint
 from hyperband.hyperband import Hyperband
 from hyperband.common_defs import *
-from modelrnn_rectangle import hyperparameters
+from modelrnn import hyperparameters
 
 space = {
     # 'LEARNING_RATE': hp.uniform('LEARNING_RATE', np.log(1e-5), np.log(1)),
     'NUM_HIDDEN': hp.quniform('NUM_HIDDEN', 512, 2048, 1),
-    # 'OUTPUT_THRESHOLD': hp.uniform('OUTPUT_THRESHOLD', 0, 1),
+    'OUTPUT_THRESHOLD': hp.uniform('OUTPUT_THRESHOLD', 0.4, 0.6),
     'BATCH_SIZE': hp.quniform('BATCH_SIZE', 10, 30, 1),
-    'EPOCHS': hp.quniform('EPOCHS', 1, 10, 1),
+    # 'EPOCHS': hp.quniform('EPOCHS', 1, 3, 1),
 }
 def get_params():
     params = sample(space)
@@ -26,8 +26,9 @@ def try_params(n_iterations, params):
         if int(value) == value:
             value = int(value)
         setattr(hyperparameters, key, value)
-    train, test = hyperparameters.main()
-    return {'Train_acc': train, 'Test_acc': test}
+    with tf.Graph().as_default():
+        acc, loss = hyperparameters.main()
+    return {'loss': loss}
 
 try:
     output_file = sys.argv[1]

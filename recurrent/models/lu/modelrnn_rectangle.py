@@ -13,7 +13,7 @@ from hyperband.common_defs import *
 For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 class HyperParameters:
