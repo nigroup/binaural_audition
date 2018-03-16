@@ -8,9 +8,9 @@ import pickle
 
 # The key in the space must match a variable name in HyperParameters
 space = {
-    'LEARNING_RATE': hp.uniform('LEARNING_RATE', np.log(1e-5), np.log(1)),
+    # 'LEARNING_RATE': hp.uniform('LEARNING_RATE', np.log(1e-5), np.log(1)),
     'NUM_HIDDEN': hp.quniform('NUM_HIDDEN', 512, 2048, 1),
-    'OUTPUT_THRESHOLD': hp.uniform('OUTPUT_THRESHOLD', 0,1),
+    # 'OUTPUT_THRESHOLD': hp.uniform('OUTPUT_THRESHOLD', 0,1),
     'BATCH_SIZE': hp.quniform('BATCH_SIZE', 30, 60, 1),
     'EPOCHS': hp.quniform('EPOCHS', 10, 50, 1),
 }

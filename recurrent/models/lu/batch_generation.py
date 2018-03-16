@@ -2,8 +2,7 @@ import numpy as np
 import math
 import time
 import random
-# dir_train = 'trainpaths.npy'
-# paths = np.load(dir_train)
+
 def construct_rectangle(pathset,Total_epochs):
     current_length = [0]*Total_epochs
     index_rectangle = [[]]*Total_epochs
@@ -51,8 +50,12 @@ def get_filepaths(Total_epochs, Batch_timelength,paths):
             output.append(string)
 
     return output
+# dir_train = 'trainpaths.npy'
+# paths = np.load(dir_train)
 # t = time.time()
-# a = get_filepaths(1,6000,paths[:10])
+# a = get_filepaths(1,6000,paths)
+# print(time.time()-t)
+
 
 # fx, fy = np.array([]).reshape(0,160), np.array([]).reshape(0,13)
 # for instance in a[0].split('@'):

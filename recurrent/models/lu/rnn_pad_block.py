@@ -87,7 +87,7 @@ set = {'train':paths[0:num_train],
 learning_rate = 0.001
 num_train_samples = num_train
 batch_size = 60
-epoch = 30
+epoch = 50
 
 # use it to compare output and true labels
 output_threshold = 0.5
@@ -178,8 +178,8 @@ with tf.name_scope("accuracy"):
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
 # save log file
-# logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',filename='./log.txt')
-logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',filename='./log-3-13.txt')
+# logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 
 logger = logging.getLogger(os.path.basename(__file__))
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -214,7 +214,7 @@ with tf.Session() as sess:
         # print(sess.run([seq, train_op],feed_dict={handle:train_handle}))
         for _ in range(n_batches_per_epoch):
             loss, _,se,sp,tempf1 = sess.run([loss_op, train_op,sensitivity,specificity,f1],feed_dict={handle:train_handle})
-            logger.debug('Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',loss, (se+sp)/2,se,sp,tempf1)
+            # logger.debug('Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',loss, (se+sp)/2,se,sp,tempf1)
             train_cost = train_cost + loss
             sen = sen + se
             spe = spe + sp

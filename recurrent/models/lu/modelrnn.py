@@ -198,9 +198,9 @@ class HyperParameters:
                 for _ in range(n_batches_per_epoch):
                     loss, _, se, sp, tempf1 = sess.run([loss_op, train_op, sensitivity, specificity, f1],
                                                        feed_dict={handle: train_handle})
-                    # logger.debug(
-                    #     'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
-                    #     loss, (se + sp) / 2, se, sp, tempf1)
+                    logger.debug(
+                        'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
+                        loss, (se + sp) / 2, se, sp, tempf1)
                     train_cost = train_cost + loss
                     sen = sen + se
                     spe = spe + sp

@@ -6,8 +6,8 @@ import sys
 import logging
 import time
 import random
-os.environ["CUDA_DEVICE_ORDER"]="00000000:0A:00.0"
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_DEVICE_ORDER"]="00000000:0A:00.0"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 logger = logging.getLogger(__name__)
 # parser for map function
 def _read_py_function(filename):
@@ -52,13 +52,13 @@ def BiRNN(x, weights, biases,seq):
         original_out = tf.reshape(top, [batch_x_shape[0],-1, num_classes])
     return original_out
 # data
-dir_train = '/mnt/raid/data/ni/twoears/scenes2018/train/fold1/scene1'
-dir_test = '/mnt/raid/data/ni/twoears/scenes2018/test//fold1/scene2'
+dir_train = '/mnt/raid/data/ni/twoears/scenes2018/train/fold1'
+dir_test = '/mnt/raid/data/ni/twoears/scenes2018/train/fold1/scene10'
 paths = glob(dir_train + '/**/**/*.npz', recursive=True)
 path_test = glob(dir_test + '/**/**/*.npz', recursive=True)
 random.shuffle(paths)
 total_samples = len(paths)
-num_train, num_dev = int(total_samples*0.9),int(total_samples*0.1)
+num_train, num_dev = int(total_samples*0.8),int(total_samples*0.2)
 num_test = len(dir_test)
 set = {'train':paths[0:num_train],
        'validation':paths[num_train:],
@@ -118,8 +118,9 @@ sigmoid_logits = tf.sigmoid(logits)
 
 # logits = tf.cast(logits,tf.int32)
 # Define loss and optimizer
-positive_weight = [0.11024201031755272, 0.068077320143905759, 0.055760388627561254, 0.031604032486714326, 0.16509244757771138, 0.04720935998604419, 0.055389252246255079, 0.1648156908493898, 0.09281561967784821, 0.020133230031450858, 0.063189111682460428, 0.044612759123398689, 0.081058777249707281]
-negative_weight = [0.88975798968244724, 0.93192267985609423, 0.94423961137243873, 0.96839596751328572, 0.83490755242228865, 0.95279064001395586, 0.94461074775374487, 0.83518430915061015, 0.90718438032215176, 0.97986676996854916, 0.93681088831753956, 0.95538724087660132, 0.91894122275029266]
+positive_weight = [0.11804470813698595, 0.066557780982258882, 0.050740603921759823, 0.19694682540724309, 0.048239108462517888, 0.01808239933543479, 0.15807613622086666, 0.078714598870014127, 0.017956762007271962, 0.024021107071131354, 0.11430934160414491, 0.064450074163527299, 0.043860553816843277]
+negative_weight = [0.88195529186301402, 0.93344221901774116, 0.94925939607824017, 0.80305317459275694, 0.95176089153748211, 0.98191760066456524, 0.84192386377913331, 0.92128540112998591, 0.98204323799272808, 0.97597889292886864, 0.88569065839585503, 0.93554992583647267, 0.95613944618315672]
+
 w = [y/x for x,y in zip(positive_weight,negative_weight)]
 
 with tf.variable_scope('loss'):
@@ -140,7 +141,7 @@ with tf.name_scope("accuracy"):
     ler = tf.reduce_sum(tf.cast(ler, tf.int32))/(tf.reduce_sum(seq)*num_classes)
     TP = tf.count_nonzero(predicted*Y)
     # mask padding value
-    TN = tf.count_nonzero((predicted - 1) * (Y - 1)*negativelabel)
+    TN = tf.count_nonzero((predicted - 1) * (Y - 1))
     FP = tf.count_nonzero(predicted*(Y-1))
     FN = tf.count_nonzero((predicted-1)*Y)
     precision = TP/(TP+FP)

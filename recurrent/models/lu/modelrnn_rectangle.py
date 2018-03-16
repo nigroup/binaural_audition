@@ -4,42 +4,53 @@ import os
 from glob import glob
 import sys
 import logging
+
 import time
-import random
 from batch_generation import get_filepaths
 from get_train_pathlength import get_indexpath
+from hyperband.common_defs import *
 '''
 For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+
+
 class HyperParameters:
     def __init__(self):
         self.LEARNING_RATE = 0.001
         self.NUM_HIDDEN = 1024
         self.OUTPUT_THRESHOLD = 0.5
         self.BATCH_SIZE = 60
-        self.EPOCHS = 10
+        self.EPOCHS = 30
 
         self.NUM_CLASSES = 13
-        self.DIR_TEST = '/mnt/raid/data/ni/twoears/scenes2018/train/fold1/scene10'
+
+        self.TRAIN_SET = self.get_train_rectangle()
+        self.TEST_SET = self.get_test_rectangle()
+
+        self.TOTAL_SAMPLES = len(self.PATHS)
+        self.NUM_TRAIN = len(self.TRAIN_SET)
+        self.NUM_TEST = len(self.TEST_SET)
+        self.SET = {'train': self.TRAIN_SET,
+               'test': self.TEST_SET}
+
+    def get_train_rectangle(self):
+        tt = time.time()
         self.PATHS = []
         for f in range(1, 7):
             p = '/mnt/raid/data/ni/twoears/scenes2018/train/fold' + str(f) + '/scene1'
             path = glob(p + '/**/**/*.npz', recursive=True)
             self.PATHS += path
         INDEX_PATH = get_indexpath(self.PATHS)
-        self.TRAIN_SET = get_filepaths(self.EPOCHS,4000,INDEX_PATH)
-
+        out = get_filepaths(self.EPOCHS, 4000, INDEX_PATH)
+        print("Construt rectangel time:",time.time()-tt)
+        return out
+    def get_test_rectangle(self):
+        self.DIR_TEST = '/mnt/raid/data/ni/twoears/scenes2018/train/fold1/scene10'
         PATH_TEST = glob(self.DIR_TEST + '/*.npz', recursive=True)
         INDEX_PATH_TEST = get_indexpath(PATH_TEST)
-        self.TEST_SET = get_filepaths(1,4000,INDEX_PATH_TEST)
-        print("Construct rectangle finished")
-        self.TOTAL_SAMPLES = len(self.PATHS)
-        self.NUM_TRAIN = len(self.TRAIN_SET)
-        self.NUM_TEST = len(self.TEST_SET)
-        self.SET = {'train': self.TRAIN_SET,
-               'test': self.TEST_SET}
+        return get_filepaths(1, 4000, INDEX_PATH_TEST)
 
     def _read_py_function(self,filename):
         filename = filename.decode(sys.getdefaultencoding())
@@ -87,6 +98,9 @@ class HyperParameters:
             top = tf.matmul(outputs, weights['out'])
             original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
         return original_out
+
+
+
 
     def main(self):
         # tensor holder
@@ -166,16 +180,24 @@ class HyperParameters:
         # Initialize the variables (i.e. assign their default value)
         init = tf.global_variables_initializer()
         logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+        # logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',filename='./log3-14-rectangle.txt')
 
         logger = logging.getLogger(os.path.basename(__file__))
         tf.logging.set_verbosity(tf.logging.INFO)
 
         # Start training
         with tf.Session() as sess:
+            # logger.info('''
+            #             Epochs: {}
+            #             Number of hidden neuron: {}
+            #             Batch size: {}'''.format(
+            #     self.EPOCHS,
+            #     self.NUM_HIDDEN,
+            #     self.BATCH_SIZE))
             logger.info('''
-                        Epochs: {}
-                        Number of hidden neuron: {}
-                        Batch size: {}'''.format(
+                                    Epochs: {}
+                                    Number of hidden neuron: {}
+                                    Batch size: {}'''.format(
                 self.EPOCHS,
                 self.NUM_HIDDEN,
                 self.BATCH_SIZE))
@@ -187,63 +209,71 @@ class HyperParameters:
             section = '\n{0:=^40}\n'
             logger.info(section.format('Run training epoch'))
             # final_average_loss = 0.0
+
+
             ee = 1
-            for e in range(1):
-                # initialization for each epoch
-                train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
+            # initialization for each epoch
+            final_train, final_test = 0.0, 0.0
+            train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
 
-                epoch_start = time.time()
+            epoch_start = time.time()
 
-                sess.run(train_iterator.initializer)
-                n_batches_per_epoch = int(self.NUM_TRAIN / self.BATCH_SIZE)
-                batch_per_epoch = int(n_batches_per_epoch/self.EPOCHS)
-                # print(sess.run([seq, train_op],feed_dict={handle:train_handle}))
-                for num in range(1,n_batches_per_epoch+1):
-                    loss, _, se, sp, tempf1 = sess.run([loss_op, train_op, sensitivity, specificity, f1],
-                                                       feed_dict={handle: train_handle})
-                    logger.debug(
-                        'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
-                        loss, (se + sp) / 2, se, sp, tempf1)
-                    train_cost = train_cost + loss
-                    sen = sen + se
-                    spe = spe + sp
-                    f = tempf1 + f
-            #     final_average_loss = train_cost / n_batches_per_epoch
-            # return final_average_loss
-                    if(num % batch_per_epoch == 0):
-                        epoch_duration0 = time.time() - epoch_start
-                        logger.info(
-                            '''Epochs: {},train_cost: {:.3f},Train_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
-                                .format(e + 1,
-                                        train_cost / batch_per_epoch,
-                                        ((sen + spe) / 2) / batch_per_epoch,
-                                        sen / batch_per_epoch,
-                                        spe / batch_per_epoch,
-                                        f / batch_per_epoch,
-                                        epoch_duration0))
-                        # for validation
-                        train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
-                        v_batches_per_epoch = int(self.NUM_TEST / self.BATCH_SIZE)
-                        epoch_start = time.time()
-                        sess.run(test_iterator.initializer)
-                        for _ in range(v_batches_per_epoch):
-                            se, sp, tempf1 = sess.run([sensitivity, specificity, f1], feed_dict={handle: test_handle})
-                            sen = sen + se
-                            spe = spe + sp
-                            f = tempf1 + f
-                        epoch_duration1 = time.time() - epoch_start
+            sess.run(train_iterator.initializer)
+            n_batches = int(self.NUM_TRAIN / self.BATCH_SIZE)
+            batch_per_epoch = int(n_batches / self.EPOCHS)
+            # print(sess.run([seq, train_op],feed_dict={handle:train_handle}))
+            for num in range(1, n_batches + 1):
+                loss, _, se, sp, tempf1 = sess.run([loss_op, train_op, sensitivity, specificity, f1],
+                                                   feed_dict={handle: train_handle})
+                logger.debug(
+                    'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
+                    loss, (se + sp) / 2, se, sp, tempf1)
+                train_cost = train_cost + loss
+                sen = sen + se
+                spe = spe + sp
+                f = tempf1 + f
+                #     final_average_loss = train_cost / n_batches
+                # return final_average_loss
+                if (num % batch_per_epoch == 0):
+                    epoch_duration0 = time.time() - epoch_start
+                    logger.info(
+                        '''Epochs: {},train_cost: {:.3f},Train_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
+                            .format(ee + 1,
+                                    train_cost / batch_per_epoch,
+                                    ((sen + spe) / 2) / batch_per_epoch,
+                                    sen / batch_per_epoch,
+                                    spe / batch_per_epoch,
+                                    f / batch_per_epoch,
+                                    epoch_duration0))
+                    final_train = ((sen + spe) / 2) / batch_per_epoch
+                    # for validation
+                    train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
+                    v_batches_per_epoch = int(self.NUM_TEST / self.BATCH_SIZE)
+                    epoch_start = time.time()
+                    sess.run(test_iterator.initializer)
+                    for _ in range(v_batches_per_epoch):
+                        se, sp, tempf1 = sess.run([sensitivity, specificity, f1], feed_dict={handle: test_handle})
+                        sen = sen + se
+                        spe = spe + sp
+                        f = tempf1 + f
+                    epoch_duration1 = time.time() - epoch_start
 
-                        logger.info(
-                            '''Epochs: {},Validation_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
-                                .format(e + 1,
-                                        ((sen + spe) / 2) / v_batches_per_epoch,
-                                        sen / v_batches_per_epoch,
-                                        spe / v_batches_per_epoch,
-                                        f / v_batches_per_epoch,
-                                        epoch_duration1))
-                        print(ee)
-                        ee += 1
-                        train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
+                    logger.info(
+                        '''Epochs: {},Validation_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
+                            .format(ee + 1,
+                                    ((sen + spe) / 2) / v_batches_per_epoch,
+                                    sen / v_batches_per_epoch,
+                                    spe / v_batches_per_epoch,
+                                    f / v_batches_per_epoch,
+                                    epoch_duration1))
+                    print(ee)
+                    ee += 1
+                    final_test = ((sen + spe) / 2) / v_batches_per_epoch
+                    train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
+                # after training, return accuracy of validation set
+            return final_train, final_test
+
+
 
 
 
@@ -251,11 +281,11 @@ class HyperParameters:
             # for testing
             # train_Label_Error_Rate, sen, spe, f = 0.0, 0.0, 0.0, 0.0
             #
-            # n_batches_per_epoch = int(self.NUM_TEST / self.BATCH_SIZE)
+            # n_batches = int(self.NUM_TEST / self.BATCH_SIZE)
             # epoch_start = time.time()
             # sess.run(test_iterator.initializer)
             # # logger.info(section.format('Testing data'))
-            # for _ in range(int(n_batches_per_epoch)):
+            # for _ in range(int(n_batches)):
             #     se, sp, tempf1 = sess.run([sensitivity, specificity, f1], feed_dict={handle: test_handle})
             #     sen = sen + se
             #     spe = spe + sp
@@ -263,10 +293,10 @@ class HyperParameters:
             # # epoch_duration = time.time() - epoch_start
             # # logger.info(
             # #     '''Test_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
-            # #     .format(((sen + spe) / 2) / n_batches_per_epoch,
-            # #             sen / n_batches_per_epoch,
-            # #             spe / n_batches_per_epoch,
-            # #             f / n_batches_per_epoch,
+            # #     .format(((sen + spe) / 2) / n_batches,
+            # #             sen / n_batches,
+            # #             spe / n_batches,
+            # #             f / n_batches,
             # #             epoch_duration))
 
 
