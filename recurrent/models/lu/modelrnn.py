@@ -10,13 +10,13 @@ import random
 logger = logging.getLogger(__name__)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 class HyperParameters:
     def __init__(self):
         self.LEARNING_RATE = 0.001
         self.NUM_HIDDEN = 1024
         self.OUTPUT_THRESHOLD = 0.5
-        self.BATCH_SIZE = 60
+        self.BATCH_SIZE = 30
         self.EPOCHS = 1
 
         self.NUM_CLASSES = 13
@@ -175,10 +175,10 @@ class HyperParameters:
             logger.info('''
                         Epochs: {}
                         Number of hidden neuron: {}
-                        Batch size: {}'''.format(
+                        LEARNING_RATE: {}'''.format(
                 self.EPOCHS,
                 self.NUM_HIDDEN,
-                self.BATCH_SIZE))
+                self.LEARNING_RATE))
             train_handle = sess.run(train_iterator.string_handle())
             valid_handle = sess.run(valid_iterator.string_handle())
             test_handle = sess.run(test_iterator.string_handle())
@@ -187,7 +187,7 @@ class HyperParameters:
 
             # section = '\n{0:=^40}\n'
             # logger.info(section.format('Run training epoch'))
-            final_test = 0.0
+
             for e in range(self.EPOCHS):
                 # initialization for each epoch
                 train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
@@ -210,18 +210,22 @@ class HyperParameters:
 
             # for testing
             sen, spe, f = 0.0, 0.0, 0.0
-
+            final_test = 0.0
             n_batches_per_epoch = int(self.NUM_TEST / self.BATCH_SIZE)
             epoch_start = time.time()
             sess.run(test_iterator.initializer)
             # logger.info(section.format('Testing data'))
             for _ in range(int(n_batches_per_epoch)):
-                final_loss,se, sp, tempf1 = sess.run([loss_op,sensitivity, specificity, f1], feed_dict={handle: test_handle})
+                loss,se, sp, tempf1 = sess.run([loss_op,sensitivity, specificity, f1], feed_dict={handle: test_handle})
+                final_test = final_test + loss
                 sen = sen + se
                 spe = spe + sp
                 f = f + tempf1
-
-            return final_test,final_loss
+            final_loss = final_test/n_batches_per_epoch
+            final_acc = ((sen + spe) / 2) / n_batches_per_epoch
+            logger.debug(
+                'Test loss: %.2f | Accuracy: %.2f ',final_loss,final_acc)
+            return final_loss,final_acc
                 # epoch_duration0 = time.time() - epoch_start
                 # logger.info(
                 #     '''Epochs: {},train_cost: {:.3f},Train_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''

@@ -9,10 +9,10 @@ from hyperband.common_defs import *
 from modelrnn import hyperparameters
 
 space = {
-    # 'LEARNING_RATE': hp.uniform('LEARNING_RATE', np.log(1e-5), np.log(1)),
+    'LEARNING_RATE': hp.uniform('LEARNING_RATE', 0.0001, 0.01),
     'NUM_HIDDEN': hp.quniform('NUM_HIDDEN', 512, 2048, 1),
-    'OUTPUT_THRESHOLD': hp.uniform('OUTPUT_THRESHOLD', 0.4, 0.6),
-    'BATCH_SIZE': hp.quniform('BATCH_SIZE', 10, 30, 1),
+    'OUTPUT_THRESHOLD': hp.uniform('OUTPUT_THRESHOLD', 0.3, 0.7),
+    # 'BATCH_SIZE': hp.quniform('BATCH_SIZE', 10, 30, 1),
     # 'EPOCHS': hp.quniform('EPOCHS', 1, 3, 1),
 }
 def get_params():
@@ -22,6 +22,7 @@ def get_params():
 
 def try_params(n_iterations, params):
     print("iterations:", n_iterations)
+    params['EPOCHS'] = n_iterations
     for key, value in params.items():
         if int(value) == value:
             value = int(value)
