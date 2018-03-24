@@ -59,6 +59,7 @@ class Dataloader:
         for row_ind in range(self.batchsize):
             if self.row_lengths[row_ind] == self.buffer_size:
                 continue
+            self.buffer_x[row_ind, self.row_lengths[row_ind] : ] = new_complete_sequence
         pass
 
     def next_batch(self):
