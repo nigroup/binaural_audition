@@ -66,13 +66,13 @@ class HyperParameters:
         return lstm_cell
     def MultiRNN(self,x,weights,seq):
         with tf.variable_scope('lstm', initializer=tf.orthogonal_initializer()):
-            mlstm_cell = tf.contrib.rnn.MultiRNNCell([self.unit_lstm() for i in range(3)], state_is_tuple=True)
+            mlstm_cell = tf.contrib.rnn.MultiRNNCell([self.unit_lstm() for _ in range(3)], state_is_tuple=True)
             batch_x_shape = tf.shape(x)
             layer = tf.reshape(x, [batch_x_shape[0], -1, 160])
-            init_state = mlstm_cell.zero_state(self.BATCH_SIZE, dtype=tf.float32)
-            outputs, state = tf.nn.dynamic_rnn(mlstm_cell,
+            # init_state = mlstm_cell.zero_state(self.BATCH_SIZE, dtype=tf.float32)
+            outputs, state = tf.nn.dynamic_rnn(cell=mlstm_cell,
                                                inputs=layer,
-                                               initial_state= init_state,
+                                               dtype=tf.float32,
                                                time_major=False,
                                                sequence_length=seq)
             outputs = tf.reshape(outputs, [-1, self.NUM_HIDDEN])
