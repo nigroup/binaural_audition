@@ -1,0 +1,3 @@
+[submodule "recurrent/models/lu/hyperband"]
+	path = recurrent/models/lu/hyperband
+	url = https://github.com/zygmuntz/hyperband.git

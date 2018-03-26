@@ -1,12 +1,7 @@
 import numpy as np
-import os
 from multiprocessing import Pool
 from collections import deque
-from glob import glob
-import sys
-import time
-import random
-from batch_generation import get_filepaths
+
 '''
 this script is used for obtain length for each sequence in advance.
 Especially for training on whole train scenes, thus here introduce thread pool

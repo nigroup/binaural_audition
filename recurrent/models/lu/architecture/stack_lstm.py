@@ -10,15 +10,16 @@ import random
 logger = logging.getLogger(__name__)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 class HyperParameters:
     def __init__(self):
         self.LEARNING_RATE = 0.001
-        self.NUM_HIDDEN = 1024
-        self.OUTPUT_THRESHOLD = 0.5
+        self.NUM_HIDDEN = 512
+        self.OUTPUT_THRESHOLD = 0.54
+        self.OUTPUT_KEEP_PROB =0.9
         self.BATCH_SIZE = 30
-        self.EPOCHS = 1
-
+        self.EPOCHS = 50
+        self.FORGET_BIAS = 0.9
         self.NUM_CLASSES = 13
         self.DIR_TEST = '/mnt/raid/data/ni/twoears/scenes2018/train/fold1/scene10'
         self.PATHS = []
@@ -59,13 +60,31 @@ class HyperParameters:
             lambda filename: tuple(tf.py_func(self._read_py_function, [filename], [tf.float32, tf.int32, tf.int32])))
         batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
         return batch
-
-    def BiRNN(self,x, weights, seq):
+    def unit_lstm(self):
+        lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.NUM_HIDDEN, forget_bias=self.FORGET_BIAS)
+        lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell, input_keep_prob=1.0, output_keep_prob=self.OUTPUT_KEEP_PROB)
+        return lstm_cell
+    def MultiRNN(self,x,weights,seq):
+        with tf.variable_scope('lstm', initializer=tf.orthogonal_initializer()):
+            mlstm_cell = tf.contrib.rnn.MultiRNNCell([self.unit_lstm() for _ in range(3)], state_is_tuple=True)
+            batch_x_shape = tf.shape(x)
+            layer = tf.reshape(x, [batch_x_shape[0], -1, 160])
+            # init_state = mlstm_cell.zero_state(self.BATCH_SIZE, dtype=tf.float32)
+            outputs, state = tf.nn.dynamic_rnn(cell=mlstm_cell,
+                                               inputs=layer,
+                                               dtype=tf.float32,
+                                               time_major=False,
+                                               sequence_length=seq)
+            outputs = tf.reshape(outputs, [-1, self.NUM_HIDDEN])
+            top = tf.matmul(outputs, weights['out'])
+            original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
+        return original_out
+    def BasicRNN(self,x, weights, seq):
 
         # Forward direction cell
         # orthogonal_initializer
         with tf.variable_scope('lstm', initializer=tf.orthogonal_initializer()):
-            lstm_ell = tf.contrib.rnn.BasicLSTMCell(self.NUM_HIDDEN, forget_bias=1)
+            lstm_ell = tf.contrib.rnn.BasicLSTMCell(self.NUM_HIDDEN, forget_bias=self.FORGET_BIAS)
             # stack = tf.contrib.rnn.MultiRNNCell([cell] * 2, state_is_tuple=True)
             batch_x_shape = tf.shape(x)
             layer = tf.reshape(x, [batch_x_shape[0], -1, 160])
@@ -112,7 +131,7 @@ class HyperParameters:
             'out': tf.Variable(tf.random_normal([self.NUM_CLASSES]))
         }
         # logits = [batch_size,time_steps,number_class]
-        logits = self.BiRNN(X, weights, seq)
+        logits = self.MultiRNN(X, weights, seq)
 
         # Define loss and optimizer
         positive_weight = [0.093718168209890373, 0.063907567921264216, 0.067798105106531739, 0.18291906814983463,
@@ -166,6 +185,8 @@ class HyperParameters:
         # Initialize the variables (i.e. assign their default value)
         init = tf.global_variables_initializer()
         logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+        # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        #                     filename='./log3.24-blockpadding.txt')
 
         logger = logging.getLogger(os.path.basename(__file__))
         # tf.logging.set_verbosity(tf.logging.WARN)
@@ -175,10 +196,12 @@ class HyperParameters:
             logger.info('''
                         Epochs: {}
                         Number of hidden neuron: {}
-                        LEARNING_RATE: {}'''.format(
+                        LEARNING_RATE: {}
+                        FORGET_BIAS:{}'''.format(
                 self.EPOCHS,
                 self.NUM_HIDDEN,
-                self.LEARNING_RATE))
+                self.LEARNING_RATE,
+                self.FORGET_BIAS))
             train_handle = sess.run(train_iterator.string_handle())
             valid_handle = sess.run(valid_iterator.string_handle())
             test_handle = sess.run(test_iterator.string_handle())
@@ -200,85 +223,65 @@ class HyperParameters:
                 for _ in range(n_batches_per_epoch):
                     loss, _, se, sp, tempf1 = sess.run([loss_op, train_op, sensitivity, specificity, f1],
                                                        feed_dict={handle: train_handle})
-                    # logger.debug(
-                    #     'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
-                    #     loss, (se + sp) / 2, se, sp, tempf1)
+                    logger.debug('Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',loss, (se+sp)/2,se,sp,tempf1)
                     train_cost = train_cost + loss
                     sen = sen + se
                     spe = spe + sp
                     f = tempf1 + f
 
+                epoch_duration0 = time.time() - epoch_start
+                logger.info(
+                    '''Epochs: {},train_cost: {:.3f},Train_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
+                    .format(e + 1,
+                            train_cost / n_batches_per_epoch,
+                            ((sen + spe) / 2) / n_batches_per_epoch,
+                            sen / n_batches_per_epoch,
+                            spe / n_batches_per_epoch,
+                            f / n_batches_per_epoch,
+                            epoch_duration0))
+                # for validation
+                train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
+                n_batches_per_epoch = int(self.NUM_DEV / self.BATCH_SIZE)
+                epoch_start = time.time()
+                sess.run(valid_iterator.initializer)
+                for _ in range(n_batches_per_epoch):
+                    se, sp, tempf1 = sess.run([sensitivity, specificity, f1], feed_dict={handle: valid_handle})
+                    sen = sen + se
+                    spe = spe + sp
+                    f = tempf1 + f
+                epoch_duration1 = time.time() - epoch_start
+
+                logger.info(
+                    '''Epochs: {},Validation_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
+                    .format(e + 1,
+                            ((sen + spe) / 2) / n_batches_per_epoch,
+                            sen / n_batches_per_epoch,
+                            spe / n_batches_per_epoch,
+                            f / n_batches_per_epoch,
+                            epoch_duration1))
+                print(e)
+
+            logger.info("Training finished!!!")
             # for testing
-            sen, spe, f = 0.0, 0.0, 0.0
-            final_test = 0.0
+            train_Label_Error_Rate, sen, spe, f = 0.0, 0.0, 0.0, 0.0
+
             n_batches_per_epoch = int(self.NUM_TEST / self.BATCH_SIZE)
             epoch_start = time.time()
             sess.run(test_iterator.initializer)
-            # logger.info(section.format('Testing data'))
+
             for _ in range(int(n_batches_per_epoch)):
-                loss,se, sp, tempf1 = sess.run([loss_op,sensitivity, specificity, f1], feed_dict={handle: test_handle})
-                final_test = final_test + loss
+                se, sp, tempf1 = sess.run([sensitivity, specificity, f1], feed_dict={handle: test_handle})
                 sen = sen + se
                 spe = spe + sp
                 f = f + tempf1
-            final_loss = final_test/n_batches_per_epoch
-            final_acc = ((sen + spe) / 2) / n_batches_per_epoch
-            logger.debug(
-                'Test loss: %.2f | Accuracy: %.2f ',final_loss,final_acc)
-            return final_loss,final_acc
-                # epoch_duration0 = time.time() - epoch_start
-                # logger.info(
-                #     '''Epochs: {},train_cost: {:.3f},Train_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
-                #     .format(e + 1,
-                #             train_cost / n_batches_per_epoch,
-                #             ((sen + spe) / 2) / n_batches_per_epoch,
-                #             sen / n_batches_per_epoch,
-                #             spe / n_batches_per_epoch,
-                #             f / n_batches_per_epoch,
-                #             epoch_duration0))
-            #     # for validation
-            #     train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
-            #     n_batches_per_epoch = int(self.NUM_DEV / self.BATCH_SIZE)
-            #     epoch_start = time.time()
-            #     sess.run(valid_iterator.initializer)
-            #     for _ in range(n_batches_per_epoch):
-            #         se, sp, tempf1 = sess.run([sensitivity, specificity, f1], feed_dict={handle: valid_handle})
-            #         sen = sen + se
-            #         spe = spe + sp
-            #         f = tempf1 + f
-            #     # epoch_duration1 = time.time() - epoch_start
-            #     #
-            #     # logger.info(
-            #     #     '''Epochs: {},Validation_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
-            #     #     .format(e + 1,
-            #     #             ((sen + spe) / 2) / n_batches_per_epoch,
-            #     #             sen / n_batches_per_epoch,
-            #     #             spe / n_batches_per_epoch,
-            #     #             f / n_batches_per_epoch,
-            #     #             epoch_duration1))
-            #     # print(e)
-            #
-            # # logger.info("Training finished!!!")
-            # # for testing
-            # train_Label_Error_Rate, sen, spe, f = 0.0, 0.0, 0.0, 0.0
-            #
-            # n_batches_per_epoch = int(self.NUM_TEST / self.BATCH_SIZE)
-            # epoch_start = time.time()
-            # sess.run(test_iterator.initializer)
-            # # logger.info(section.format('Testing data'))
-            # for _ in range(int(n_batches_per_epoch)):
-            #     se, sp, tempf1 = sess.run([sensitivity, specificity, f1], feed_dict={handle: test_handle})
-            #     sen = sen + se
-            #     spe = spe + sp
-            #     f = f + tempf1
-            # # epoch_duration = time.time() - epoch_start
-            # # logger.info(
-            # #     '''Test_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
-            # #     .format(((sen + spe) / 2) / n_batches_per_epoch,
-            # #             sen / n_batches_per_epoch,
-            # #             spe / n_batches_per_epoch,
-            # #             f / n_batches_per_epoch,
-            # #             epoch_duration))
+            epoch_duration = time.time() - epoch_start
+            logger.info(
+                '''Test_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
+                .format(((sen + spe) / 2) / n_batches_per_epoch,
+                        sen / n_batches_per_epoch,
+                        spe / n_batches_per_epoch,
+                        f / n_batches_per_epoch,
+                        epoch_duration))
 
 
 hyperparameters = HyperParameters()

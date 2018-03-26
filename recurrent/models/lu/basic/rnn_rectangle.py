@@ -5,8 +5,7 @@ from glob import glob
 import sys
 import logging
 import time
-import random
-from batch_generation import get_filepaths
+from basic.batch_generation import get_filepaths
 from get_train_pathlength import get_indexpath
 # os.environ["CUDA_DEVICE_ORDER"]="00000000:0A:00.0"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "3"
