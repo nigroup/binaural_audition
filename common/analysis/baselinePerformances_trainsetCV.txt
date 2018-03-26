@@ -1,27 +1,28 @@
-trainset CV glmnet performance
-==============================
+baseline trainset CV performance
+================================
 
-model	                  perf
-------------------------------
-'alarm'                   0.66
-'baby'                    0.76
-'crash'                   0.72
-'dog'                     0.81
-'engine'                  0.80
-'femaleScreammaleScream'  0.80
-'femaleSpeech'            0.85
-'fire'                    0.81
-'footsteps'               0.78
-'knock'                   0.83
-'maleSpeech'              0.88
-'phone'                   0.73
-'piano'                   0.83
+model	                  glmnet
+--------------------------------
+'alarm'                   0.66  
+'baby'                    0.76  
+'crash'                   0.72  
+'dog'                     0.81  
+'engine'                  0.80  
+'femaleScreammaleScream'  0.80  
+'femaleSpeech'            0.85  
+'fire'                    0.81  
+'footsteps'               0.78  
+'knock'                   0.83  
+'maleSpeech'              0.88  
+'phone'                   0.73  
+'piano'                   0.83  
 
 
 
 Performance explanation: 
- - weighted BAC2, averaged over all training scenes (1-80) and all CV folds (1-6)
+ - BlockInterprete Labels
+ - BAC2 measure, weighted average over all training scenes (1-80) and all CV folds (1-6)
 	-> BAC2 := 1 - (((1 - sensitivity)^2 + (1 - specificity)^2) / 2)^0.5;
- - weighted wrt to number of samples in scenes with 1,2,3,4 sources, such that:
-   iw_1src * nSamples_1src = iw_2src * nSamples_2src = iw_3src * nSamples_3src = iw_4src * nSamples_4src
+ - weighted w.r.t. to scenes with 1,2,3,4 sources, such that:
+   w_1src * nScenes_1src = w_2src * nScenes_2src = w_3src * nScenes_3src = w_4src * nScenes_4src
 
