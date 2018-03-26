@@ -5,30 +5,36 @@ from collections import deque
 from random import shuffle
 
 
-class Dataloader:
+class DataLoader:
 
     def __init__(self, mode, label_mode, fold_nbs, scene_nbs, batchsize, timesteps, epochs,
-                 buffer=10, features=160, classes=13, path_pattern = '/mnt/raid/data/ni/twoears/scenes2018/'):
+                 buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
+                 filenames=None):
 
-        if not (mode == 'train' or mode == 'test'):
-            raise ValueError("mode has to be 'train' or 'test'")
-        path_pattern = path.join(path_pattern, mode)
+        if filenames is None:
+            if not (mode == 'train' or mode == 'test'):
+                raise ValueError("mode has to be 'train' or 'test'")
+            path_pattern = path.join(path_pattern, mode)
 
-        if not (type(fold_nbs) is list or type(fold_nbs) is int):
-            raise TypeError('fold_nbs has to be a list of ints or -1')
-        if fold_nbs == -1:
-            path_pattern = path.join(path_pattern, 'fold*')
-        else:
-            path_pattern = path.join(path_pattern, 'fold'+str(fold_nbs))
+            if not (type(fold_nbs) is list or type(fold_nbs) is int):
+                raise TypeError('fold_nbs has to be a list of ints or -1')
+            if fold_nbs == -1:
+                path_pattern = path.join(path_pattern, 'fold*')
+            else:
+                path_pattern = path.join(path_pattern, 'fold'+str(fold_nbs))
 
-        if not (type(scene_nbs) is list or type(scene_nbs) is int):
-            raise TypeError('scene_nbs has to be a list of ints or -1')
-        if scene_nbs == -1:
-            path_pattern = path.join(path_pattern, 'scene*')
-        else:
-            path_pattern = path.join(path_pattern, 'scene'+str(scene_nbs))
+            if not (type(scene_nbs) is list or type(scene_nbs) is int):
+                raise TypeError('scene_nbs has to be a list of ints or -1')
+            if scene_nbs == -1:
+                path_pattern = path.join(path_pattern, 'scene*')
+            else:
+                path_pattern = path.join(path_pattern, 'scene'+str(scene_nbs))
 
-        path_pattern = path.join(path_pattern, '*.npz')
+            path_pattern = path.join(path_pattern, '*.npz')
+
+            self.filenames = glob.glob(path_pattern)
+        else: # for testing the code
+            self.filenames = filenames
 
         if not (label_mode is 'instant' or label_mode is 'blockbased'):
             raise ValueError("label_mode has to be 'instant' or 'blockbased'")
@@ -40,7 +46,6 @@ class Dataloader:
             raise NotImplementedError("'blockbased' labels not yet implemented. "
                                       "timesteps for labels have to be adapted")
 
-        self.filenames = glob.glob(path_pattern)
         self.batchsize = batchsize
         self.timesteps = timesteps
         self.epochs = epochs
@@ -121,3 +126,20 @@ class Dataloader:
             self.fill_buffer()
             return self.next_batch()
 
+
+# test
+import tempfile
+tmp_dir = tempfile.mkdtemp()
+factors = [2, 3, 4, 5, 6, 7, 8, 9, 10]
+length = 20
+multiples = np.array(list(range(length)))
+for factor in factors:
+    x = factor * multiples
+    y = np.array([factor] * length)
+    # assume for now
+    y_block = y
+    name = 'factor' + str(factor) + '.npz'
+    np.savez(name, x=x, y=y, y_block=y_block)
+path_pattern = tmp_dir + '/*.npz'
+dloader = DataLoader('', '', '', '', 3, 10, 3, 2, features=1, classes=1, path_pattern='',
+                     filenames=glob.glob(path_pattern))
