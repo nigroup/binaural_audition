@@ -33,7 +33,7 @@ class DataLoaderTester(DataLoader):
 import tempfile
 tmp_dir = tempfile.mkdtemp()
 factors = [2, 3, 4, 5, 6, 7, 8, 9, 10]
-length = 20
+length = 40
 multiples = np.array(list(range(length))) + 1
 for factor in factors:
     x = factor * multiples
@@ -49,8 +49,16 @@ for factor in factors:
     np.savez(save_path, x=x, y=y, y_block=y_block)
 path_pattern = tmp_dir + '/*.npz'
 filenames = glob.glob(path_pattern)
-dloader = DataLoaderTester('test', filenames, batchsize=3, timesteps=10, epochs=5, buffer=2,
+dloader = DataLoaderTester('train', filenames, batchsize=3, timesteps=10, epochs=5, buffer=2,
                            features=1, classes=1, path_pattern='')
+
+
+def create_generator(dloader):
+    while True:
+        b_x, b_y = dloader.next_batch()
+        if b_x is None or b_y is None:
+            return
+        yield b_x, b_y
 
 
 def factors_in_queue():
