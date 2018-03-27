@@ -10,10 +10,11 @@ class DataLoader:
     def __init__(self, mode, label_mode, fold_nbs, scene_nbs, batchsize=50, timesteps=4000, epochs=10,
                  buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/'):
 
+        self.mode = mode
 
-        if not (mode == 'train' or mode == 'test'):
+        if not (self.mode == 'train' or self.mode == 'test'):
             raise ValueError("mode has to be 'train' or 'test'")
-        path_pattern = path.join(path_pattern, mode)
+        path_pattern = path.join(path_pattern, self.mode)
 
         if not (type(fold_nbs) is list or type(fold_nbs) is int):
             raise TypeError('fold_nbs has to be a list of ints or -1')
@@ -41,15 +42,17 @@ class DataLoader:
         if label_mode is 'blockbased':
             self.instant_mode = False
 
-        self.batchsize = batchsize
-        self.timesteps = timesteps
-        self.epochs = epochs
-        self.act_epoch = 1
-        self.buffer_size = buffer * timesteps
-        self.features = features
-        self.classes = classes
-
-        self._init_buffers()
+        if self.mode == 'train':
+            self.batchsize = batchsize
+            self.timesteps = timesteps
+            self.epochs = epochs
+            self.act_epoch = 1
+            self.buffer_size = buffer * timesteps
+            self.features = features
+            self.classes = classes
+            self._init_buffers()
+        else:
+            self.filenames = deque(self.filenames)
 
     def _init_buffers(self):
         inds = list(range(len(self.filenames)))
@@ -72,6 +75,8 @@ class DataLoader:
                 self._fill_in_divided_sequence(row_ind)
             else:
                 self._fill_in_new_sequence(row_ind)
+        if self.mode == 'train':
+            self.buffer_y[self.buffer_y == np.nan] = 1
 
     def _fill_in_new_sequence(self, row_ind):
         if len(self.file_ind_queue) == 0:
@@ -86,19 +91,19 @@ class DataLoader:
         self._parse_sequence(row_ind, act_file_ind, start_in_sequence)
 
     def _parse_sequence(self, row_ind, act_file_ind, start_in_sequence):
-        data = np.load(self.filenames[act_file_ind])
-        sequence = data['x']
-        labels = data['y'] if self.instant_mode else data['y_block']
-        sequence_length = sequence.shape[1]
-        start = self.row_lengths[row_ind]
-        end = start + sequence_length - start_in_sequence
-        if end > self.buffer_size:
-            end = self.buffer_size
-            # important: set it again to zero after reading it
-            self.row_leftover[row_ind] = [act_file_ind, start_in_sequence + end - start]
-        self.buffer_x[row_ind, start:end, :] = sequence[:, start_in_sequence:(end - start), :]
-        self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:(end - start), :]
-        self.row_lengths[row_ind] = end
+        with np.load(self.filenames[act_file_ind]) as data:
+            sequence = data['x']
+            labels = data['y'] if self.instant_mode else data['y_block']
+            sequence_length = sequence.shape[1]
+            start = self.row_lengths[row_ind]
+            end = start + sequence_length - start_in_sequence
+            if end > self.buffer_size:
+                end = self.buffer_size
+                # important: set it again to zero after reading it
+                self.row_leftover[row_ind] = [act_file_ind, start_in_sequence + end - start]
+            self.buffer_x[row_ind, start:end, :] = sequence[:, start_in_sequence:(end - start), :]
+            self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:(end - start), :]
+            self.row_lengths[row_ind] = end
 
     def _nothing_left(self):
         queue_empty = len(self.file_ind_queue) == 0
@@ -117,6 +122,13 @@ class DataLoader:
         return abort
 
     def next_batch(self):
+        if self.mode == 'train':
+            b_x, b_y = self._next_batch_train()
+        else:
+            b_x, b_y = self._next_batch_test()
+        return b_x, b_y
+
+    def _next_batch_train(self):
         if np.all((self.row_lengths - self.row_start) >= self.timesteps):
             x = self.buffer_x[:, self.row_start:self.row_start+self.timesteps, :].copy()
             y = self.buffer_y[:, self.row_start:self.row_start+self.timesteps, :].copy()
@@ -127,5 +139,14 @@ class DataLoader:
                 if self.next_epoch():
                     return None, None
             self.fill_buffer()
-            return self.next_batch()
+            return self._next_batch_train()
+
+    def _next_batch_test(self):
+        if len(self.filenames) > 0:
+            with np.load(self.filenames.pop()) as data:
+                sequence = data['x']
+                labels = data['y'] if self.instant_mode else data['y_block']
+                return sequence, labels
+        else:
+            return None, None
 
