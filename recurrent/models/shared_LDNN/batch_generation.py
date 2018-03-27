@@ -2,16 +2,25 @@ import numpy as np
 import math
 import time
 import random
-# dir_train = 'trainpaths.npy'
-# paths = np.load(dir_train)
+import heapq
+'''
+Adapt minimal heap to lower the time complexity to bath*log(batch)*files
+'''
 def construct_rectangle(pathset,Total_epochs):
-    current_length = [0]*Total_epochs
+    # current_length = [0]*Total_epochs
     index_rectangle = [[]]*Total_epochs
+    data = [(0,x) for x in range(Total_epochs)]
     for e in range(Total_epochs+1):
         random.shuffle(pathset)
+
         for j in pathset:
-            k = current_length.index(min(current_length))
-            current_length[k] += int(j[1])
+            heapq.heapify(data)
+            minimal = heapq.heappop(data)
+            k = minimal[1]
+            val = minimal[0] + int(j[1])
+            heapq.heappush(data,(val,k))
+            # k = current_length.index(min(current_length))
+            # current_length[k] += int(j[1])
             index_rectangle[k] = index_rectangle[k] + [int(j[0])]
     return np.array(index_rectangle)
 def get_filepaths(Total_epochs, Batch_timelength,paths):
@@ -51,8 +60,12 @@ def get_filepaths(Total_epochs, Batch_timelength,paths):
             output.append(string)
 
     return output
+# dir_train = 'trainpaths.npy'
+# paths = np.load(dir_train)
 # t = time.time()
-# a = get_filepaths(1,6000,paths[:10])
+# a = get_filepaths(1,6000,paths)
+# print(time.time()-t)
+
 
 # fx, fy = np.array([]).reshape(0,160), np.array([]).reshape(0,13)
 # for instance in a[0].split('@'):
