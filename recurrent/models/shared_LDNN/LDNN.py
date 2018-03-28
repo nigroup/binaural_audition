@@ -26,8 +26,8 @@ class HyperParameters:
         self.OUTPUT_THRESHOLD = 0.5
         self.OUTPUT_KEEP_PROB = 0.9
         self.BATCH_SIZE = 30
-        self.EPOCHS = 50
-        self.FORGET_BIAS = 1.0
+        self.EPOCHS = 2
+        self.FORGET_BIAS = 1
         self.TIMELENGTH = 3000
         self.NUM_CLASSES = 13
         self.CV_ID = CV
@@ -80,6 +80,21 @@ class HyperParameters:
         # batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
         batch = dataset.batch(batchsize)
         return batch
+    def get_weight(self,scene_list):
+        weight_dir = '/mnt/raid/data/ni/twoears/trainweight.npy'
+        #  folder, scene, w_postive, w_negative
+        w = np.load(weight_dir)
+        count_pos = count_neg = [0] * 13
+        for i in scene_list:
+            for j in w:
+                if j[0] == str(self.CV_ID) and j[1] == i:
+                    count_pos = [x + int(y) for x, y in zip(count_pos, j[2:15])]
+                    count_neg = [x + int(y) for x, y in zip(count_neg, j[15:28])]
+                    break
+        total = (sum(count_pos) + sum(count_neg))
+        pos = [x / total for x in count_pos]
+        neg = [x / total for x in count_neg]
+        return [y / x for x, y in zip(pos, neg)]
 
     def unit_lstm(self):
         lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.NUM_HIDDEN, forget_bias=self.FORGET_BIAS)
@@ -137,17 +152,7 @@ class HyperParameters:
         logits = self.MultiRNN(X, weights, seq)
 
         # Define loss and optimizer
-        positive_weight = [0.093718168209890373, 0.063907567921264216, 0.067798105106531739, 0.18291906814983463,
-                           0.060061489920493351, 0.0300554843451682, 0.14020777497915976, 0.098981561987397257,
-                           0.02414707385064941, 0.032517232415765082, 0.07860240402283912, 0.073578874716527881,
-                           0.053505194374478995]
-
-        negative_weight = [0.90628183179010957, 0.93609243207873583, 0.93220189489346827, 0.81708093185016539,
-                           0.93993851007950668, 0.96994451565483175, 0.8597922250208403, 0.90101843801260273,
-                           0.9758529261493506, 0.9674827675842349, 0.92139759597716087, 0.92642112528347209,
-                           0.94649480562552102]
-
-        w = [y / x for x, y in zip(positive_weight, negative_weight)]
+        w = self.get_weight(['scene1'])
 
         with tf.variable_scope('loss'):
             # convert nan to +1
