@@ -26,7 +26,7 @@ class HyperParameters:
         self.OUTPUT_THRESHOLD = 0.5
         self.OUTPUT_KEEP_PROB = 0.9
         self.BATCH_SIZE = 30
-        self.EPOCHS = 10
+        self.EPOCHS = 50
         self.FORGET_BIAS = 1.0
         self.TIMELENGTH = 3000
         self.NUM_CLASSES = 13
@@ -184,9 +184,10 @@ class HyperParameters:
         init = tf.global_variables_initializer()
         # logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
         # logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',filename='./log327.txt')
-        self.setup_logger('log1',log_file='./log327/'+str(self.CV_ID)+'.txt')
+        log_name = 'log' + str(self.CV_ID)
+        self.setup_logger(log_name,log_file='./log328/'+str(self.CV_ID)+'.txt')
 
-        logger = logging.getLogger('log1')
+        logger = logging.getLogger(log_name)
         tf.logging.set_verbosity(tf.logging.INFO)
 
         # Start training
@@ -224,9 +225,9 @@ class HyperParameters:
             for num in range(1, n_batches + 1):
                 loss, _, se, sp, tempf1 = sess.run([loss_op, train_op, sensitivity, specificity, f1],
                                                    feed_dict={handle: train_handle})
-                logger.debug(
-                    'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
-                    loss, (se + sp) / 2, se, sp, tempf1)
+                # logger.debug(
+                #     'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
+                #     loss, (se + sp) / 2, se, sp, tempf1)
                 train_cost = train_cost + loss
                 sen = sen + se
                 spe = spe + sp
@@ -237,7 +238,7 @@ class HyperParameters:
                     epoch_duration0 = time.time() - epoch_start
                     logger.info(
                         '''Epochs: {},train_cost: {:.3f},Train_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
-                            .format(ee + 1,
+                            .format(ee ,
                                     train_cost / batch_per_epoch,
                                     ((sen + spe) / 2) / batch_per_epoch,
                                     sen / batch_per_epoch,
@@ -259,7 +260,7 @@ class HyperParameters:
 
                     logger.info(
                         '''Epochs: {},Validation_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
-                            .format(ee + 1,
+                            .format(ee,
                                     ((sen + spe) / 2) / v_batches_per_epoch,
                                     sen / v_batches_per_epoch,
                                     spe / v_batches_per_epoch,
@@ -268,6 +269,7 @@ class HyperParameters:
                     print(ee)
                     ee += 1
                     train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
+                    epoch_start = time.time()
 
 
 
