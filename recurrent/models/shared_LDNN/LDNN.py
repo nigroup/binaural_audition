@@ -14,21 +14,22 @@ import numpy as np
 For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
 class HyperParameters:
     def __init__(self,CV):
         self.LEARNING_RATE = 0.001
-        self.NUM_HIDDEN = 512
-        self.NUM_LSTM = 3
+        self.NUM_HIDDEN = 1024
+        self.NUM_LSTM = 1
         self.OUTPUT_THRESHOLD = 0.5
         self.OUTPUT_KEEP_PROB = 0.9
-        self.BATCH_SIZE = 30
-        self.EPOCHS = 2
+        self.BATCH_SIZE = 40
+        self.EPOCHS = 100
         self.FORGET_BIAS = 1
         self.TIMELENGTH = 3000
+        self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
         self.CV_ID = CV
         self.TRAIN_SET = self.get_train_rectangle()
@@ -112,7 +113,7 @@ class HyperParameters:
                                                time_major=False,
                                                sequence_length=seq)
             outputs = tf.reshape(outputs, [-1, self.NUM_HIDDEN])
-            top = tf.matmul(outputs, weights['out'])
+            top = tf.nn.dropout(tf.matmul(outputs, weights['out']),keep_prob=self.OUTPUT_KEEP_PROB)
             original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
         return original_out
 
@@ -168,7 +169,10 @@ class HyperParameters:
             loss_op = tf.reduce_sum(loss_op * tf.cast(mask_zero_frames, tf.float32)) / total
         with tf.variable_scope('optimize'):
             optimizer = tf.train.AdamOptimizer(learning_rate=self.LEARNING_RATE)
-            train_op = optimizer.minimize(loss_op)
+            # train_op = optimizer.minimize(loss_op)
+            gradients, variables = zip(*optimizer.compute_gradients(loss_op))
+            gradients, _ = tf.clip_by_global_norm(gradients, self.MAX_GRAD_NORM)
+            train_op = optimizer.apply_gradients(zip(gradients, variables))
         with tf.name_scope("accuracy"):
             # add a threshold to round the output to 0 or 1
             # logits is already being sigmoid
@@ -190,7 +194,7 @@ class HyperParameters:
         # logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
         # logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',filename='./log327.txt')
         log_name = 'log' + str(self.CV_ID)
-        self.setup_logger(log_name,log_file='./log328/'+str(self.CV_ID)+'.txt')
+        self.setup_logger(log_name,log_file='./log330/'+str(self.CV_ID)+'.txt')
 
         logger = logging.getLogger(log_name)
         tf.logging.set_verbosity(tf.logging.INFO)
