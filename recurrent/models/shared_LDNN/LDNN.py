@@ -1,29 +1,32 @@
 import tensorflow as tf
-import os
 from glob import glob
 import sys
-# sys.path.insert(0, '/home/changbinli/script/rnn/')
 import logging
-
 import time
-from batch_generation import get_filepaths
-from get_train_pathlength import get_indexpath
+from shared_LDNN.batch_generation import get_filepaths
+from shared_LDNN.get_train_pathlength import get_indexpath
 import numpy as np
-# from hyperband.common_defs import *
+import os
+
 '''
-For block_intepreter with rectangle 
+For blockbased labels with generated batch rectangle
 '''
+
 logger = logging.getLogger(__name__)
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
 class HyperParameters:
-    def __init__(self,CV):
+    def __init__(self, VAL_FOLD):
+        # training
         self.LEARNING_RATE = 0.001
         self.NUM_HIDDEN = 1024
         self.NUM_LSTM = 1
         self.OUTPUT_THRESHOLD = 0.5
+
+        # dropout
+        self.INPUT_KEEP_PROB = 1.0
         self.OUTPUT_KEEP_PROB = 0.9
         self.BATCH_SIZE = 40
         self.EPOCHS = 100
@@ -31,7 +34,9 @@ class HyperParameters:
         self.TIMELENGTH = 3000
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
-        self.CV_ID = CV
+
+        # further parameters
+        self.VAL_FOLD = VAL_FOLD
         self.TRAIN_SET = self.get_train_rectangle()
         self.TEST_SET = self.get_valid_rectangle()
 
@@ -45,7 +50,7 @@ class HyperParameters:
         tt = time.time()
         self.PATHS = []
         for f in range(1, 7):
-            if f == self.CV_ID: continue
+            if f == self.VAL_FOLD: continue
             p = '/mnt/raid/data/ni/twoears/scenes2018/train/fold' + str(f) + '/scene1'
             path = glob(p + '/**/**/*.npz', recursive=True)
             self.PATHS += path
@@ -54,7 +59,7 @@ class HyperParameters:
         print("Construt rectangel time:",time.time()-tt)
         return out
     def get_valid_rectangle(self):
-        self.DIR_TEST = '/mnt/raid/data/ni/twoears/scenes2018/train/fold'+ str(self.CV_ID)+'/scene1'
+        self.DIR_TEST = '/mnt/raid/data/ni/twoears/scenes2018/train/fold'+ str(self.VAL_FOLD)+'/scene1'
         PATH_TEST = glob(self.DIR_TEST + '/*.npz', recursive=True)
         INDEX_PATH_TEST = get_indexpath(PATH_TEST)
         return get_filepaths(1, self.TIMELENGTH, INDEX_PATH_TEST)
@@ -88,7 +93,7 @@ class HyperParameters:
         count_pos = count_neg = [0] * 13
         for i in scene_list:
             for j in w:
-                if j[0] == str(self.CV_ID) and j[1] == i:
+                if j[0] == str(self.VAL_FOLD) and j[1] == i:
                     count_pos = [x + int(y) for x, y in zip(count_pos, j[2:15])]
                     count_neg = [x + int(y) for x, y in zip(count_neg, j[15:28])]
                     break
@@ -99,7 +104,8 @@ class HyperParameters:
 
     def unit_lstm(self):
         lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.NUM_HIDDEN, forget_bias=self.FORGET_BIAS)
-        lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell, input_keep_prob=1.0, output_keep_prob=self.OUTPUT_KEEP_PROB)
+        lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell, input_keep_prob=self.INPUT_KEEP_PROB,
+                                                  output_keep_prob=self.OUTPUT_KEEP_PROB)
         return lstm_cell
     def MultiRNN(self,x,weights,seq):
         with tf.variable_scope('lstm', initializer=tf.orthogonal_initializer()):
@@ -206,7 +212,7 @@ class HyperParameters:
                                     Epochs: {}
                                     Number of hidden neuron: {}
                                     Batch size: {}'''.format(
-                self.CV_ID,
+                self.VAL_FOLD,
                 self.EPOCHS,
                 self.NUM_HIDDEN,
                 self.BATCH_SIZE))
@@ -287,5 +293,5 @@ class HyperParameters:
 if __name__ == "__main__":
     for i in range(1,7):
         with tf.Graph().as_default():
-            hyperparameters = HyperParameters(CV=i)
+            hyperparameters = HyperParameters(VAL_FOLD=i)
             hyperparameters.main()

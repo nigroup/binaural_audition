@@ -5,7 +5,7 @@ from random import seed
 from heiner.dataloader import DataLoader
 from random import shuffle
 from collections import deque
-seed(42)
+#seed(42)
 
 
 class DataLoaderTester(DataLoader):
@@ -14,6 +14,8 @@ class DataLoaderTester(DataLoader):
         super().__init__(mode, 'blockbased', 1, 1, batchsize=batchsize, timesteps=timesteps, epochs=epochs,
                          buffer=buffer, features=features, classes=classes, path_pattern=path_pattern)
         self.filenames = filenames
+        self.path_pattern = path.join(path_pattern, '*.npz')
+        self.pickle_path = path_pattern
 
         if mode == 'train':
             inds = list(range(len(self.filenames)))
@@ -49,17 +51,30 @@ for factor in factors:
     np.savez(save_path, x=x, y=y, y_block=y_block)
 path_pattern = tmp_dir + '/*.npz'
 filenames = glob.glob(path_pattern)
-dloader = DataLoaderTester('train', filenames, batchsize=3, timesteps=10, epochs=5, buffer=2,
-                           features=1, classes=1, path_pattern='')
-
+dloader = DataLoaderTester('train', filenames, batchsize=3, timesteps=7, epochs=7, buffer=5,
+                           features=1, classes=1, path_pattern=tmp_dir)
 
 def create_generator(dloader):
+    act_epoch = dloader.act_epoch
+
+    def log_epoch():
+        print('Epoch: ' + str(act_epoch))
+
+    log_epoch()
     while True:
+        if dloader.act_epoch != act_epoch:
+            act_epoch = dloader.act_epoch
+            log_epoch()
         b_x, b_y = dloader.next_batch()
         if b_x is None or b_y is None:
             return
         yield b_x, b_y
 
+g = create_generator(dloader)
+
+i = 0
+for _ in g:
+    i += 1
 
 def factors_in_queue():
     if dloader.mode == 'train':

@@ -2,37 +2,39 @@ import numpy as np
 import glob
 from os import path
 from collections import deque
-from random import shuffle
+import random
+import pickle
 
 
 class DataLoader:
 
     def __init__(self, mode, label_mode, fold_nbs, scene_nbs, batchsize=50, timesteps=4000, epochs=10,
-                 buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/'):
+                 buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
+                 seed=1, seed_by_epoch=True):
 
         self.mode = mode
+        self.path_pattern = path_pattern
 
         if not (self.mode == 'train' or self.mode == 'test'):
             raise ValueError("mode has to be 'train' or 'test'")
-        path_pattern = path.join(path_pattern, self.mode)
+        self.path_pattern = path.join(self.path_pattern, self.mode)
+        self.pickle_path = self.path_pattern
 
         if not (type(fold_nbs) is list or type(fold_nbs) is int):
             raise TypeError('fold_nbs has to be a list of ints or -1')
         if fold_nbs == -1:
-            path_pattern = path.join(path_pattern, 'fold*')
+            self.path_pattern = path.join(self.path_pattern, 'fold*')
         else:
-            path_pattern = path.join(path_pattern, 'fold'+str(fold_nbs))
+            self.path_pattern = path.join(self.path_pattern, 'fold'+str(fold_nbs))
 
         if not (type(scene_nbs) is list or type(scene_nbs) is int):
             raise TypeError('scene_nbs has to be a list of ints or -1')
         if scene_nbs == -1:
-            path_pattern = path.join(path_pattern, 'scene*')
+            self.path_pattern = path.join(self.path_pattern, 'scene*')
         else:
-            path_pattern = path.join(path_pattern, 'scene'+str(scene_nbs))
+            self.path_pattern = path.join(self.path_pattern, 'scene'+str(scene_nbs))
 
-        path_pattern = path.join(path_pattern, '*.npz')
-
-        self.filenames = glob.glob(path_pattern)
+        self.path_pattern = path.join(self.path_pattern, '*.npz')
 
         if not (label_mode is 'instant' or label_mode is 'blockbased'):
             raise ValueError("label_mode has to be 'instant' or 'blockbased'")
@@ -43,21 +45,41 @@ class DataLoader:
             self.instant_mode = False
 
         if self.mode == 'train':
+            self.filenames = glob.glob(self.path_pattern)
+            self.seed = seed
+            self.seed_by_epoch = seed_by_epoch
+
             self.batchsize = batchsize
             self.timesteps = timesteps
             self.epochs = epochs
             self.act_epoch = 1
+            self._seed()
             self.buffer_size = buffer * timesteps
             self.features = features
             self.classes = classes
             self._init_buffers()
+
+            self.length = None
         else:
             self.filenames = deque(self.filenames)
+            self.length = len(self.filenames)
+
+    def _seed(self, epoch=None):
+        if epoch is None:
+            s = self.seed * self.act_epoch
+        else:
+            s = self.seed * epoch
+        if not self.seed_by_epoch:
+            s = self.seed
+        random.seed(s)
+
+    def _create_deque(self):
+        inds = list(range(len(self.filenames)))
+        random.shuffle(inds)
+        return deque(inds)
 
     def _init_buffers(self):
-        inds = list(range(len(self.filenames)))
-        shuffle(inds)
-        self.file_ind_queue = deque(inds)
+        self.file_ind_queue = self._create_deque()
         self.buffer_x = np.zeros((self.batchsize, self.buffer_size, self.features), np.float32)
         self.buffer_y = np.zeros((self.batchsize, self.buffer_size, self.classes), np.float32)
         self.row_start = 0
@@ -66,6 +88,17 @@ class DataLoader:
         # first value: file_index which is not fully included in row
         # second value: how much of the file is already included in row
         self.row_leftover = -np.ones((self.batchsize, 2), np.int32)
+
+    def _reset_buffers(self):
+        self.file_ind_queue = self._create_deque()
+        self.row_leftover[:] = -1
+        self._clear_buffers()
+
+    def _clear_buffers(self):
+        self.buffer_x[:] = 0
+        self.buffer_y[:] = 0
+        self.row_start = 0
+        self.row_lengths[:] = 0
 
     def fill_buffer(self):
         for row_ind in range(self.batchsize):
@@ -101,8 +134,8 @@ class DataLoader:
                 end = self.buffer_size
                 # important: set it again to zero after reading it
                 self.row_leftover[row_ind] = [act_file_ind, start_in_sequence + end - start]
-            self.buffer_x[row_ind, start:end, :] = sequence[:, start_in_sequence:(end - start), :]
-            self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:(end - start), :]
+            self.buffer_x[row_ind, start:end, :] = sequence[:, start_in_sequence:start_in_sequence+(end - start), :]
+            self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:start_in_sequence+(end - start), :]
             self.row_lengths[row_ind] = end
 
     def _nothing_left(self):
@@ -115,10 +148,11 @@ class DataLoader:
     def next_epoch(self):
         abort = False
         self.act_epoch += 1
+        self._seed()
         if self.act_epoch > self.epochs:
             abort = True
             return abort
-        self._init_buffers()
+        self._reset_buffers()
         return abort
 
     def next_batch(self):
@@ -129,6 +163,8 @@ class DataLoader:
         return b_x, b_y
 
     def _next_batch_train(self):
+        if self.row_start == self.buffer_size:
+            self._clear_buffers()
         if np.all((self.row_lengths - self.row_start) >= self.timesteps):
             x = self.buffer_x[:, self.row_start:self.row_start+self.timesteps, :].copy()
             y = self.buffer_y[:, self.row_start:self.row_start+self.timesteps, :].copy()
@@ -150,3 +186,74 @@ class DataLoader:
         else:
             return None, None
 
+    def len(self):
+        if self.length is None:
+            self._calculate_length()
+        return self.length
+
+
+    def _calculate_length(self):
+
+        def nothing_left_length(dq, left_lengths, sim_lengths):
+            queue_empty = len(dq) == 0
+            no_leftover_rows = left_lengths == 0
+            no_leftover_rows[sim_lengths == self.buffer_size] = True
+            no_leftover = np.all(no_leftover_rows)
+            return queue_empty and no_leftover
+
+        def add_to_length_until_buffersize(l, row):
+            sim_lengths[row] += l
+            leftover = sim_lengths[row] - self.buffer_size
+            if leftover > 0:
+                sim_lengths[row] = self.buffer_size
+                return leftover
+            else:
+                return 0
+
+        self.length = []
+        length_dict = self._length_dict()
+        for epoch in range(1, self.epochs+1):
+            length = 0
+            self._seed(epoch)
+            dq = self._create_deque()
+            sim_lengths = np.zeros(self.batchsize, dtype=np.int32)
+            left_lengths = np.zeros(self.batchsize, dtype=np.int32)
+
+            while not nothing_left_length(dq, left_lengths, sim_lengths):
+                filled = True
+                for row in range(0, self.batchsize):
+                    if sim_lengths[row] == self.buffer_size:
+                        continue
+                    filled = False
+                    if left_lengths[row] > 0:
+                        sim_lengths[row] += left_lengths[row]
+                        left_lengths[row] = 0
+                    elif len(dq) > 0:
+                        curr_ind = dq.pop()
+                        l = length_dict[self.filenames[curr_ind]]
+                        leftover = add_to_length_until_buffersize(l, row)
+                        left_lengths[row] = leftover
+                if filled:
+                    length += self.buffer_size // self.timesteps
+                    sim_lengths[:] = 0
+            shortest_row = np.min(sim_lengths)
+            length += shortest_row // self.timesteps
+            self.length.append(length)
+
+    def _length_dict(self):
+        pickle_path = path.join(self.pickle_path, 'file_lengths.pickle')
+        if not path.exists(pickle_path):
+            self._create_length_dict()
+        with open(pickle_path, 'rb') as handle:
+            return pickle.load(handle)
+
+    def _create_length_dict(self):
+        all_existing_files = glob.glob(self.path_pattern)
+
+        def get_length(file):
+            with np.load(file) as data:
+                return data['x'].shape[1]
+
+        d = {file: get_length(file) for file in all_existing_files}
+        with open(path.join(self.pickle_path, 'file_lengths.pickle'), 'wb') as handle:
+            pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
