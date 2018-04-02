@@ -103,9 +103,10 @@ class HyperParameters:
         return [y / x for x, y in zip(pos, neg)]
 
     def unit_lstm(self):
-        lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.NUM_HIDDEN, forget_bias=self.FORGET_BIAS)
-        lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell, input_keep_prob=self.INPUT_KEEP_PROB,
-                                                  output_keep_prob=self.OUTPUT_KEEP_PROB)
+        # Resume state from last batch
+        with tf.variable_scope("resume_state",reuse=tf.AUTO_REUSE):
+            lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.NUM_HIDDEN, forget_bias=self.FORGET_BIAS)
+            lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell, input_keep_prob=1.0, output_keep_prob=self.OUTPUT_KEEP_PROB)
         return lstm_cell
     def MultiRNN(self,x,weights,seq):
         with tf.variable_scope('lstm', initializer=tf.orthogonal_initializer()):
