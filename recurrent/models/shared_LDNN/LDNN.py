@@ -7,13 +7,14 @@ from shared_LDNN.batch_generation import get_filepaths
 from shared_LDNN.get_train_pathlength import get_indexpath
 import numpy as np
 import os
+#  you may need your own path for save log file
+# sys.path.insert(0, '/home/changbinli/script/rnn/')
 
 '''
 For blockbased labels with generated batch rectangle
 '''
-
 logger = logging.getLogger(__name__)
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -105,21 +106,53 @@ class HyperParameters:
         lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.NUM_HIDDEN, forget_bias=self.FORGET_BIAS)
         lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell, input_keep_prob=1.0, output_keep_prob=self.OUTPUT_KEEP_PROB)
         return lstm_cell
+
+    def get_state_variables(self,cell):
+        # For each layer, get the initial state and make a variable out of it
+        # to enable updating its value.
+        state_variables = []
+        for state_c, state_h in cell.zero_state(self.BATCH_SIZE, tf.float32):
+            state_variables.append(tf.contrib.rnn.LSTMStateTuple(
+                tf.Variable(state_c, trainable=False),
+                tf.Variable(state_h, trainable=False)))
+        # Return as a tuple, so that it can be fed to dynamic_rnn as an initial state
+        return tuple(state_variables)
+
+    def get_state_update_op(self,state_variables, new_states):
+        # Add an operation to update the train states with the last state tensors
+        update_ops = []
+        for state_variable, new_state in zip(state_variables, new_states):
+            # Assign the new state to the state variables on this layer
+            update_ops.extend([state_variable[0].assign(new_state[0]),
+                               state_variable[1].assign(new_state[1])])
+        # Return a tuple in order to combine all update_ops into a single operation.
+        # The tuple's actual value should not be used.
+        return tf.tuple(update_ops)
+
+    def get_state_reset_op(self,state_variables, cell):
+        # Return an operation to set each variable in a list of LSTMStateTuples to zero
+        zero_states = cell.zero_state(self.BATCH_SIZE, tf.float32)
+        return self.get_state_update_op(state_variables, zero_states)
+
     def MultiRNN(self,x,weights,seq):
         with tf.variable_scope('lstm', initializer=tf.orthogonal_initializer()):
             mlstm_cell = tf.contrib.rnn.MultiRNNCell([self.unit_lstm() for _ in range(self.NUM_LSTM)], state_is_tuple=True)
+            states = self.get_state_variables(mlstm_cell)
             batch_x_shape = tf.shape(x)
             layer = tf.reshape(x, [batch_x_shape[0], -1, 160])
             # init_state = mlstm_cell.zero_state(self.BATCH_SIZE, dtype=tf.float32)
-            outputs, state = tf.nn.dynamic_rnn(cell=mlstm_cell,
+            outputs, new_states = tf.nn.dynamic_rnn(cell=mlstm_cell,
                                                inputs=layer,
+                                               initial_state= states,
                                                dtype=tf.float32,
                                                time_major=False,
                                                sequence_length=seq)
+            update_op = self.get_state_update_op(states, new_states)
+
             outputs = tf.reshape(outputs, [-1, self.NUM_HIDDEN])
             top = tf.nn.dropout(tf.matmul(outputs, weights['out']),keep_prob=self.OUTPUT_KEEP_PROB)
             original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
-        return original_out
+        return original_out, update_op
 
     def setup_logger(self,logger_name, log_file, level=logging.DEBUG):
         l = logging.getLogger(logger_name)
@@ -154,7 +187,7 @@ class HyperParameters:
         }
 
         # logits = [batch_size,time_steps,number_class]
-        logits = self.MultiRNN(X, weights, seq)
+        logits, update_op = self.MultiRNN(X, weights, seq)
 
         # Define loss and optimizer
         w = self.get_weight(['scene1'])
@@ -197,8 +230,8 @@ class HyperParameters:
         init = tf.global_variables_initializer()
         # logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
         # logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',filename='./log327.txt')
-        log_name = 'log' + str(self.CV_ID)
-        self.setup_logger(log_name,log_file='./log330/'+str(self.CV_ID)+'.txt')
+        log_name = 'log' + str(self.VAL_FOLD)
+        self.setup_logger(log_name,log_file='./log330/'+str(self.VAL_FOLD)+'.txt')
 
         logger = logging.getLogger(log_name)
         tf.logging.set_verbosity(tf.logging.INFO)
@@ -226,7 +259,6 @@ class HyperParameters:
 
             ee = 1
             # initialization for each epoch
-            final_train, final_test = 0.0, 0.0
             train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
 
             epoch_start = time.time()
@@ -236,11 +268,13 @@ class HyperParameters:
             batch_per_epoch = int(n_batches / self.EPOCHS)
             # print(sess.run([seq, train_op],feed_dict={handle:train_handle}))
             for num in range(1, n_batches + 1):
-                loss, _, se, sp, tempf1 = sess.run([loss_op, train_op, sensitivity, specificity, f1],
+
+                loss, _, se, sp, tempf1, _ = sess.run([loss_op, train_op, sensitivity, specificity, f1,update_op],
                                                    feed_dict={handle: train_handle})
-                # logger.debug(
-                #     'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
-                #     loss, (se + sp) / 2, se, sp, tempf1)
+
+                logger.debug(
+                    'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
+                    loss, (se + sp) / 2, se, sp, tempf1)
                 train_cost = train_cost + loss
                 sen = sen + se
                 spe = spe + sp
