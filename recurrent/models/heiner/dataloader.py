@@ -15,9 +15,12 @@ class DataLoader:
         self.mode = mode
         self.path_pattern = path_pattern
 
-        if not (self.mode == 'train' or self.mode == 'test'):
-            raise ValueError("mode has to be 'train' or 'test'")
-        self.path_pattern = path.join(self.path_pattern, self.mode)
+        if not (self.mode == 'train' or self.mode == 'test' or self.mode == 'val'):
+            raise ValueError("mode has to be 'train' or 'val' or 'test'")
+        if self.mode == 'train' or self.mode == 'val':
+            self.path_pattern = path.join(self.path_pattern, 'train')
+        else:
+            self.path_pattern = path.join(self.path_pattern, 'test')
         self.pickle_path = self.path_pattern
 
         if not (type(fold_nbs) is list or type(fold_nbs) is int):
@@ -44,8 +47,9 @@ class DataLoader:
         if label_mode is 'blockbased':
             self.instant_mode = False
 
+        self.filenames = glob.glob(self.path_pattern)
+
         if self.mode == 'train':
-            self.filenames = glob.glob(self.path_pattern)
             self.seed = seed
             self.seed_by_epoch = seed_by_epoch
 
@@ -135,7 +139,18 @@ class DataLoader:
                 # important: set it again to zero after reading it
                 self.row_leftover[row_ind] = [act_file_ind, start_in_sequence + end - start]
             self.buffer_x[row_ind, start:end, :] = sequence[:, start_in_sequence:start_in_sequence+(end - start), :]
-            self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:start_in_sequence+(end - start), :]
+
+            bs, _, ncl = labels.shape
+            if bs == 1 and ncl == self.classes:
+                self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:start_in_sequence+(end - start), :]
+            else:
+                if self.instant_mode:
+                    self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:start_in_sequence + (end - start)]
+                else:
+                    flat_steps, _ = labels.shape
+                    labels = labels.reshape((self.classes, flat_steps // self.classes))
+                    self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:start_in_sequence + (end - start)]
+
             self.row_lengths[row_ind] = end
 
     def _nothing_left(self):
@@ -190,7 +205,6 @@ class DataLoader:
         if self.length is None:
             self._calculate_length()
         return self.length
-
 
     def _calculate_length(self):
 

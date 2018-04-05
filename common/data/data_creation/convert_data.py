@@ -36,12 +36,14 @@ def convert_from_list(fplist, label_paths, save_path):
                     print("HDF5 File: CHECK if dimension for block labels matches")
                     f = h5py.File(load_path)
                     ys[i].append(np.array(f['y']).T)
-                except Exception as e:
+                except Exception:
                     raise Exception("Exception for: " + load_path)
 
-        y = np.vstack(ys[0])
-        y_block = np.hstack(ys[1]).T
+        y = np.vstack(ys[0]).T
+        y_block = np.vstack(ys[1]).T
         y[y == -1] = 0
+        y = y[np.newaxis, :, :]
+
         y_block_zeroi = y_block == 0
         y_block_minusonei = y_block == -1
 
@@ -50,6 +52,15 @@ def convert_from_list(fplist, label_paths, save_path):
 
         # 0 has to be excluded from cost
         y_block[y_block_zeroi] = -1
+        y_block = y[np.newaxis, :, :]
+
+        bs_y, _, ncl_y = y.shape
+        bs_y_bl, _, ncl_y_bl = y_block.shape
+        if bs_y != 1 or ncl_y != len(label_paths):
+            raise ValueError('y shape is not correct.')
+        if bs_y_bl != 1 or ncl_y_bl != len(label_paths):
+            raise ValueError('y_block shape is not correct.')
+
         if not path.isdir(save_path):
             os.makedirs(save_path)
         save_file_path = path.join(save_path, fn)
