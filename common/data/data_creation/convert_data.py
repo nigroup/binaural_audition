@@ -19,7 +19,7 @@ def get_label_paths():
     return [label_path.format(event) for event in events]
 
 
-def convert_from_list(fplist, label_paths, save_path):
+def convert_from_list(fplist, label_paths, save_path, is_train):
     for fp in tqdm(fplist):
         fn = fp.split(sep='/')[-1]
         data = scipy.io.loadmat(fp)
@@ -52,7 +52,10 @@ def convert_from_list(fplist, label_paths, save_path):
 
         # 0 has to be excluded from cost
         y_block[y_block_zeroi] = -1
-        y_block = y[np.newaxis, :, :]
+        y_block = y_block[np.newaxis, :, :]
+
+        y[y == np.nan] = 1 if is_train else -1
+        y_block[y_block == np.nan] = 1 if is_train else -1
 
         bs_y, _, ncl_y = y.shape
         bs_y_bl, _, ncl_y_bl = y_block.shape
@@ -81,7 +84,6 @@ test_fold_ids = list(range(7, 9))
 eng = matlab.engine.start_matlab()
 def convert(tr_or_test, fold, scene):
     '''
-
     :param tr_or_test: 'train' or 'test' data
     :param fold: fold_number
     :param scene: scene_number
@@ -118,7 +120,8 @@ def convert(tr_or_test, fold, scene):
     label_paths = [(eng.get_lstm_cache_path(tr_or_test, 'labels', fold, scene, i),
                     eng.get_lstm_cache_path(tr_or_test, 'bi_labels', fold, scene, i)) for i in range(1, 14)]
     print('Converting: {}, Fold: {}, Scene: {}'.format(tr_or_test, fold, scene))
-    convert_from_list(fplist, label_paths, save_path)
+    is_train = tr_or_test == 'train'
+    convert_from_list(fplist, label_paths, save_path, is_train)
     return
 
 def main(argv):

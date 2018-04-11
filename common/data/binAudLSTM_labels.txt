@@ -6,22 +6,30 @@
 There exist two variants of labels; cf. label_methods.jpg. Both provide one label for each frame of each scene-instance for each class.
 
 
+Heiner: added in brackets the respective labels after conversion (changed due to easier computation of binary cross entropy)
+
  Instant-labels
 ----------------
-+1: the respective sound event is active only on the master source in this frame.
--1: the respective sound event is not active on any source in this frame.
++1 (+1): the respective sound event is active only on the master source in this frame.
+-1 (0): the respective sound event is not active on any source in this frame.
 NaN: the respective sound event is active on at least one source different than the master source in this frame.
 
 Recommendation: treat NaN as +1 in training, and assign NaN frames zero cost in testing (for easier acoustic interpretation of the results).
 
+Heiner: to fulfill recommendation:
+change nan to +1 in train and to -1 in testing
+
  BlockInterprete-labels
 ------------------------
-+1: the respective sound event has been active only on the master source during the last 500 ms to an extent of at least 75%.
--1: the respective sound event has not been active on any source during the last 500 ms.
-0: the respective sound event has been active only on the master source during the last 500 ms to an extent below 75%.
++1 (+1): the respective sound event has been active only on the master source during the last 500 ms to an extent of at least 75%.
+-1 (0): the respective sound event has not been active on any source during the last 500 ms.
+0 (-1): the respective sound event has been active only on the master source during the last 500 ms to an extent below 75%.
 NaN: the respective sound event has been active on at least one source different than the master source during the last 500 ms.
 
-Recommendation: treat NaN as +1 in training, and assign NaN frames zero cost in testing (for easier acoustic interpretation of the results). Assign 0 frames zero cost in training and testing (ground truth is unclear).
+Recommendation: treat NaN as +1 in training, and assign NaN frames zero cost in testing (for easier acoustic interpretation of the results). Assign 0 (-1) frames zero cost in training and testing (ground truth is unclear).
+
+Heiner: to fulfill recommendation:
+change nan to +1 in train and to -1 in testing
 
 If the recommendation is met, the blockinterprete-label results will be completely comparable to the block-based logistic regression (or svm) models' results.
 
