@@ -71,10 +71,10 @@ def create_generator(dloader):
         yield b_x, b_y
 
 g = create_generator(dloader)
-
-i = 0
-for _ in g:
-    i += 1
+#next(g)
+# i = 0
+# for _ in g:
+#     i += 1
 
 def factors_in_queue():
     if dloader.mode == 'train':

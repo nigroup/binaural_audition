@@ -4,13 +4,14 @@ from os import path
 from collections import deque
 import random
 import pickle
+import heapq
 
 
 class DataLoader:
 
     def __init__(self, mode, label_mode, fold_nbs, scene_nbs, batchsize=50, timesteps=4000, epochs=10,
                  buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
-                 seed=1, seed_by_epoch=True):
+                 seed=1, seed_by_epoch=True, priority_queue=True):
 
         self.mode = mode
         self.path_pattern = path_pattern
@@ -64,9 +65,32 @@ class DataLoader:
             self._init_buffers()
 
             self.length = None
+            self._data_efficiency = None
         else:
             self.filenames = deque(self.filenames)
             self.length = len(self.filenames)
+            self._data_efficiency = 1.0
+
+        if priority_queue:
+            self.fill_buffer = self.fill_buffer_priority
+            lengths = (self.row_lengths.tolist())
+            self.heap = [(length, i) for i, length in enumerate(lengths)]
+            heapq.heapify(self.heap)
+        else:
+            self.fill_buffer = self.fill_buffer_non_priority
+
+    def data_efficiency(self):
+        if self._data_efficiency is not None:
+            return self._data_efficiency
+        else:
+            used_labels = np.array(self.len())
+            used_labels *= self.batchsize * self.timesteps
+            available_labels = 0
+            length_dict = self._length_dict()
+            for filename in self.filenames:
+                available_labels += length_dict[filename]
+            self._data_efficiency = used_labels / available_labels
+            return self._data_efficiency
 
     def _seed(self, epoch=None):
         if epoch is None:
@@ -104,7 +128,7 @@ class DataLoader:
         self.row_start = 0
         self.row_lengths[:] = 0
 
-    def fill_buffer(self):
+    def fill_buffer_non_priority(self):
         for row_ind in range(self.batchsize):
             if self.row_lengths[row_ind] == self.buffer_size:
                 continue
@@ -112,8 +136,22 @@ class DataLoader:
                 self._fill_in_divided_sequence(row_ind)
             else:
                 self._fill_in_new_sequence(row_ind)
-        if self.mode == 'train':
-            self.buffer_y[self.buffer_y == np.nan] = 1
+        #if self.mode == 'train':
+        #    self.buffer_y[self.buffer_y == np.nan] = 1
+
+    def fill_buffer_priority(self):
+        for _ in range(len(self.heap)):
+            _, shortest_row_ind = heapq.heappop(self.heap)
+            if self.row_lengths[shortest_row_ind] == self.buffer_size:
+                heapq.heappush(self.heap, (self.row_lengths[shortest_row_ind], shortest_row_ind))
+                continue
+            if self.row_leftover[shortest_row_ind, 0] != -1:
+                self._fill_in_divided_sequence(shortest_row_ind)
+            else:
+                self._fill_in_new_sequence(shortest_row_ind)
+            heapq.heappush(self.heap, (self.row_lengths[shortest_row_ind], shortest_row_ind))
+        #if self.mode == 'train':
+        #    self.buffer_y[self.buffer_y == np.nan] = 1
 
     def _fill_in_new_sequence(self, row_ind):
         if len(self.file_ind_queue) == 0:
@@ -140,16 +178,19 @@ class DataLoader:
                 self.row_leftover[row_ind] = [act_file_ind, start_in_sequence + end - start]
             self.buffer_x[row_ind, start:end, :] = sequence[:, start_in_sequence:start_in_sequence+(end - start), :]
 
-            bs, _, ncl = labels.shape
-            if bs == 1 and ncl == self.classes:
-                self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:start_in_sequence+(end - start), :]
+            if len(labels.shape) == 3:
+                bs, _, ncl = labels.shape
+                if bs == 1 and ncl == self.classes:
+                    self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:start_in_sequence+(end - start), :]
             else:
                 if self.instant_mode:
-                    self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:start_in_sequence + (end - start)]
+                    self.buffer_y[row_ind, start:end, :] = \
+                        labels[:, start_in_sequence:start_in_sequence + (end - start)].T
                 else:
                     flat_steps, _ = labels.shape
                     labels = labels.reshape((self.classes, flat_steps // self.classes))
-                    self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:start_in_sequence + (end - start)]
+                    self.buffer_y[row_ind, start:end, :] = \
+                        labels[:, start_in_sequence:start_in_sequence + (end - start)].T
 
             self.row_lengths[row_ind] = end
 
