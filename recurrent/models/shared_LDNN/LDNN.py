@@ -72,8 +72,8 @@ class HyperParameters:
         for instance in filename.split('@'):
             p, start, end = instance.split('&')
             data = np.load(p)
-            x = np.reshape(data['x'], [-1, 160])
-            y = np.transpose(data['y'])
+            x = data['x'][0]
+            y = data['y'][0]
             fx = np.concatenate((fx, x[int(start):int(end)]), axis=0)
             fy = np.concatenate((fy, y[int(start):int(end)]), axis=0)
         l = np.array([fx.shape[0]])
