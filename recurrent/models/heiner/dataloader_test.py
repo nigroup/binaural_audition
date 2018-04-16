@@ -10,11 +10,16 @@ from collections import deque
 
 class DataLoaderTester(DataLoader):
     def __init__(self, mode, filenames, batchsize=50, timesteps=4000, epochs=10,
-                 buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/'):
+                 buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
+                 seed_by_epoch=True,
+                 priority_queue=True, use_every_timestep=False):
         super().__init__(mode, 'blockbased', 1, 1, batchsize=batchsize, timesteps=timesteps, epochs=epochs,
-                         buffer=buffer, features=features, classes=classes, path_pattern=path_pattern)
+                         buffer=buffer, features=features, classes=classes, path_pattern=path_pattern,
+                         seed_by_epoch=seed_by_epoch,
+                         priority_queue=priority_queue, use_every_timestep=use_every_timestep)
         self.filenames = filenames
         self.path_pattern = path.join(path_pattern, '*.npz')
+        self.pickle_path_pattern = path.join(path_pattern, '*.npz')
         self.pickle_path = path_pattern
 
         if mode == 'train':
@@ -52,7 +57,7 @@ for factor in factors:
 path_pattern = tmp_dir + '/*.npz'
 filenames = glob.glob(path_pattern)
 dloader = DataLoaderTester('train', filenames, batchsize=3, timesteps=7, epochs=7, buffer=5,
-                           features=1, classes=1, path_pattern=tmp_dir)
+                           features=1, classes=1, path_pattern=tmp_dir, seed_by_epoch=False, use_every_timestep=True)
 
 def create_generator(dloader):
     act_epoch = dloader.act_epoch
@@ -72,9 +77,9 @@ def create_generator(dloader):
 
 g = create_generator(dloader)
 #next(g)
-# i = 0
-# for _ in g:
-#     i += 1
+i = 0
+for _ in g:
+    i += 1
 
 def factors_in_queue():
     if dloader.mode == 'train':
