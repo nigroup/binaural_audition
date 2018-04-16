@@ -72,7 +72,7 @@ def convert_from_list(fplist, label_paths, save_path, is_train):
 
 data_root_path = '/mnt/raid/data/ni/twoears/scenes2018'
 train_valid_scene_ids = list(range(1, 81))
-test_valid_scene_ids = list(range(1, 127))
+test_valid_scene_ids = list(range(1, 169))
 train_fold_ids = list(range(1, 7))
 test_fold_ids = list(range(7, 9))
 
