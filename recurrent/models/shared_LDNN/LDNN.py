@@ -1,17 +1,15 @@
 import tensorflow as tf
+import os
 from glob import glob
 import sys
+sys.path.insert(0, '/home/changbinli/script/rnn/')
 import logging
 import time
-from shared_LDNN.batch_generation import get_filepaths
-from shared_LDNN.get_train_pathlength import get_indexpath
+from dataloader import get_train_data, get_valid_data, get_scenes_weight
 import numpy as np
-import os
-#  you may need your own path for save log file
-# sys.path.insert(0, '/home/changbinli/script/rnn/')
-
+# from hyperband.common_defs import *
 '''
-For blockbased labels with generated batch rectangle
+For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
@@ -20,49 +18,32 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 class HyperParameters:
     def __init__(self, VAL_FOLD):
+        self.LOG_FLODER = './log418/'
         # training
         self.LEARNING_RATE = 0.001
-        self.NUM_HIDDEN = 1024
-        self.NUM_LSTM = 1
+        self.NUM_HIDDEN = 512
+        self.NUM_LSTM = 3
         self.OUTPUT_THRESHOLD = 0.5
-
+        self.SCENES = ['scene66']
         # dropout
         self.INPUT_KEEP_PROB = 1.0
-        self.OUTPUT_KEEP_PROB = 0.9
-        self.BATCH_SIZE = 40
-        self.EPOCHS = 100
-        self.FORGET_BIAS = 1
-        self.TIMELENGTH = 3000
+        self.OUTPUT_KEEP_PROB = 0.5
+        self.BATCH_SIZE = 60
+        self.EPOCHS = 300
+        self.FORGET_BIAS = 0.9
+        self.TIMELENGTH = 2000
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
 
         # further parameters
         self.VAL_FOLD = VAL_FOLD
-        self.TRAIN_SET = self.get_train_rectangle()
-        self.TEST_SET = self.get_valid_rectangle()
+        self.TRAIN_SET, self.PATHS = get_train_data(self.VAL_FOLD,self.SCENES,self.EPOCHS,self.TIMELENGTH)
+        self.VALID_SET = get_valid_data(self.VAL_FOLD,self.SCENES, 1, self.TIMELENGTH)
         self.TOTAL_SAMPLES = len(self.PATHS)
         self.NUM_TRAIN = len(self.TRAIN_SET)
-        self.NUM_TEST = len(self.TEST_SET)
+        self.NUM_TEST = len(self.VALID_SET)
         self.SET = {'train': self.TRAIN_SET,
-               'test': self.TEST_SET}
-
-    def get_train_rectangle(self):
-        tt = time.time()
-        self.PATHS = []
-        for f in range(1, 7):
-            if f == self.VAL_FOLD: continue
-            p = '/mnt/raid/data/ni/twoears/scenes2018/train/fold' + str(f) + '/scene1'
-            path = glob(p + '/**/**/*.npz', recursive=True)
-            self.PATHS += path
-        INDEX_PATH = get_indexpath(self.PATHS)
-        out = get_filepaths(self.EPOCHS, self.TIMELENGTH, INDEX_PATH)
-        print("Construt rectangel time:",time.time()-tt)
-        return out
-    def get_valid_rectangle(self):
-        self.DIR_TEST = '/mnt/raid/data/ni/twoears/scenes2018/train/fold'+ str(self.VAL_FOLD)+'/scene1'
-        PATH_TEST = glob(self.DIR_TEST + '/*.npz', recursive=True)
-        INDEX_PATH_TEST = get_indexpath(PATH_TEST)
-        return get_filepaths(1, self.TIMELENGTH, INDEX_PATH_TEST)
+               'test': self.VALID_SET}
 
     def _read_py_function(self,filename):
         filename = filename.decode(sys.getdefaultencoding())
@@ -86,21 +67,7 @@ class HyperParameters:
         # batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
         batch = dataset.batch(batchsize)
         return batch
-    def get_weight(self,scene_list):
-        weight_dir = '/mnt/raid/data/ni/twoears/trainweight.npy'
-        #  folder, scene, w_postive, w_negative
-        w = np.load(weight_dir)
-        count_pos = count_neg = [0] * 13
-        for i in scene_list:
-            for j in w:
-                if j[0] == str(self.VAL_FOLD) and j[1] == i:
-                    count_pos = [x + int(y) for x, y in zip(count_pos, j[2:15])]
-                    count_neg = [x + int(y) for x, y in zip(count_neg, j[15:28])]
-                    break
-        total = (sum(count_pos) + sum(count_neg))
-        pos = [x / total for x in count_pos]
-        neg = [x / total for x in count_neg]
-        return [y / x for x, y in zip(pos, neg)]
+
 
     def unit_lstm(self):
         lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.NUM_HIDDEN, forget_bias=self.FORGET_BIAS)
@@ -182,7 +149,6 @@ class HyperParameters:
         test_iterator = test_batch.make_initializable_iterator()
         # Define weights
         weights = {
-            # Hidden layer weights => 2*n_hidden because of forward + backward cells
             'out': tf.Variable(tf.random_normal([self.NUM_HIDDEN, self.NUM_CLASSES]))
         }
 
@@ -190,7 +156,7 @@ class HyperParameters:
         logits, update_op = self.MultiRNN(X, weights, seq)
 
         # Define loss and optimizer
-        w = self.get_weight(['scene1'])
+        w = get_scenes_weight(self.SCENES,self.VAL_FOLD)
 
         with tf.variable_scope('loss'):
             # convert nan to +1
@@ -228,10 +194,8 @@ class HyperParameters:
 
         # Initialize the variables (i.e. assign their default value)
         init = tf.global_variables_initializer()
-        # logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
-        # logging.basicConfig(level=logging.DEBUG,format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',filename='./log327.txt')
         log_name = 'log' + str(self.VAL_FOLD)
-        self.setup_logger(log_name,log_file='./log330/'+str(self.VAL_FOLD)+'.txt')
+        self.setup_logger(log_name,log_file= self.LOG_FLODER + str(self.VAL_FOLD)+'.txt')
 
         logger = logging.getLogger(log_name)
         tf.logging.set_verbosity(tf.logging.INFO)
@@ -242,11 +206,19 @@ class HyperParameters:
                                     K_folder:{}
                                     Epochs: {}
                                     Number of hidden neuron: {}
-                                    Batch size: {}'''.format(
+                                    Batch size: {}
+                                    FORGET_BIAS: {}
+                                    TIMELENGTH: {}
+                                    Dropout: {}
+                                    Scenes:{}'''.format(
                 self.VAL_FOLD,
                 self.EPOCHS,
                 self.NUM_HIDDEN,
-                self.BATCH_SIZE))
+                self.BATCH_SIZE,
+                self.FORGET_BIAS,
+                self.TIMELENGTH,
+                self.OUTPUT_KEEP_PROB,
+                self.SCENES))
             train_handle = sess.run(train_iterator.string_handle())
             test_handle = sess.run(test_iterator.string_handle())
             # Run the initializer
@@ -272,9 +244,9 @@ class HyperParameters:
                 loss, _, se, sp, tempf1, _ = sess.run([loss_op, train_op, sensitivity, specificity, f1,update_op],
                                                    feed_dict={handle: train_handle})
 
-                logger.debug(
-                    'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
-                    loss, (se + sp) / 2, se, sp, tempf1)
+                # logger.debug(
+                #     'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
+                #     loss, (se + sp) / 2, se, sp, tempf1)
                 train_cost = train_cost + loss
                 sen = sen + se
                 spe = spe + sp
