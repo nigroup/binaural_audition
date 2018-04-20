@@ -12,23 +12,23 @@ import numpy as np
 For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
 class HyperParameters:
     def __init__(self, VAL_FOLD):
-        self.LOG_FLODER = './log418/'
+        self.LOG_FLODER = './log420/'
         # training
         self.LEARNING_RATE = 0.001
         self.NUM_HIDDEN = 512
         self.NUM_LSTM = 3
         self.OUTPUT_THRESHOLD = 0.5
-        self.SCENES = ['scene66']
+        self.SCENES = ['scene1']
         # dropout
         self.INPUT_KEEP_PROB = 1.0
-        self.OUTPUT_KEEP_PROB = 0.5
-        self.BATCH_SIZE = 60
+        self.OUTPUT_KEEP_PROB = 0.9
+        self.BATCH_SIZE = 70
         self.EPOCHS = 300
         self.FORGET_BIAS = 0.9
         self.TIMELENGTH = 2000
@@ -71,7 +71,15 @@ class HyperParameters:
 
     def unit_lstm(self):
         lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.NUM_HIDDEN, forget_bias=self.FORGET_BIAS)
-        lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell, input_keep_prob=1.0, output_keep_prob=self.OUTPUT_KEEP_PROB)
+        lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell,
+                                                  input_keep_prob=self.INPUT_KEEP_PROB,
+                                                  output_keep_prob=self.OUTPUT_KEEP_PROB,
+                                                  variational_recurrent=True,
+                                                  dtype= tf.float32)
+        # lstm_cell = tf.contrib.rnn.LayerNormBasicLSTMCell(num_units = self.NUM_HIDDEN,
+        #                                                   layer_norm = True,
+        #                                                   forget_bias=self.FORGET_BIAS,
+        #                                                   dropout_keep_prob= self.OUTPUT_KEEP_PROB)
         return lstm_cell
 
     def get_state_variables(self,cell):
@@ -117,7 +125,7 @@ class HyperParameters:
             update_op = self.get_state_update_op(states, new_states)
 
             outputs = tf.reshape(outputs, [-1, self.NUM_HIDDEN])
-            top = tf.nn.dropout(tf.matmul(outputs, weights['out']),keep_prob=self.OUTPUT_KEEP_PROB)
+            top = tf.nn.dropout(tf.matmul(outputs, weights),keep_prob=self.OUTPUT_KEEP_PROB)
             original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
         return original_out, update_op
 
@@ -148,11 +156,11 @@ class HyperParameters:
         train_iterator = train_batch.make_initializable_iterator()
         test_iterator = test_batch.make_initializable_iterator()
         # Define weights
-        weights = {
-            'out': tf.Variable(tf.random_normal([self.NUM_HIDDEN, self.NUM_CLASSES]))
-        }
-
-        # logits = [batch_size,time_steps,number_class]
+        weights = tf.get_variable('out',shape=[self.NUM_HIDDEN, self.NUM_CLASSES],
+                                  initializer=tf.contrib.layers.xavier_initializer())
+        # weights = {
+        #     'out': tf.Variable(tf.random_normal([self.NUM_HIDDEN, self.NUM_CLASSES]))
+        # }
         logits, update_op = self.MultiRNN(X, weights, seq)
 
         # Define loss and optimizer
