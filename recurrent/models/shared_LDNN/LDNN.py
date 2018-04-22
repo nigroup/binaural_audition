@@ -1,13 +1,12 @@
 import tensorflow as tf
 import os
-from glob import glob
 import sys
 sys.path.insert(0, '/home/changbinli/script/rnn/')
 import logging
 import time
+import datetime
 from dataloader import get_train_data, get_valid_data, get_scenes_weight
 import numpy as np
-# from hyperband.common_defs import *
 '''
 For block_intepreter with rectangle 
 '''
@@ -18,7 +17,23 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 class HyperParameters:
     def __init__(self, VAL_FOLD):
-        self.LOG_FLODER = './log420/'
+        self.RESTORE = True
+        self.OLD_EPOCH = 0
+        if not self.RESTORE:
+            # Set up log directory
+            self.LOG_FOLDER = './log/' + datetime.datetime.now().strftime("%Y%m%d") + '/'
+            if not os.path.exists(self.LOG_FOLDER):
+                os.makedirs(self.LOG_FOLDER)
+            # Set up model directory individually
+            self.SESSION_DIR = self.LOG_FOLDER + str(VAL_FOLD) + '/'
+            if not os.path.exists(self.SESSION_DIR):
+                os.makedirs(self.SESSION_DIR)
+        else:
+            self.RESTORE_DATE = '20180422'
+            self.OLD_EPOCH = 2
+            self.LOG_FOLDER = './log/' + self.RESTORE_DATE + '/'
+            self.SESSION_DIR = self.LOG_FOLDER + str(VAL_FOLD) + '/'
+
         # training
         self.LEARNING_RATE = 0.001
         self.NUM_HIDDEN = 512
@@ -29,13 +44,13 @@ class HyperParameters:
         self.INPUT_KEEP_PROB = 1.0
         self.OUTPUT_KEEP_PROB = 0.9
         self.BATCH_SIZE = 70
-        self.EPOCHS = 300
+        self.EPOCHS = 1
         self.FORGET_BIAS = 0.9
         self.TIMELENGTH = 2000
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
 
-        # further parameters
+        # Get rectangle
         self.VAL_FOLD = VAL_FOLD
         self.TRAIN_SET, self.PATHS = get_train_data(self.VAL_FOLD,self.SCENES,self.EPOCHS,self.TIMELENGTH)
         self.VALID_SET = get_valid_data(self.VAL_FOLD,self.SCENES, 1, self.TIMELENGTH)
@@ -202,8 +217,13 @@ class HyperParameters:
 
         # Initialize the variables (i.e. assign their default value)
         init = tf.global_variables_initializer()
+        saver = tf.train.Saver()
         log_name = 'log' + str(self.VAL_FOLD)
-        self.setup_logger(log_name,log_file= self.LOG_FLODER + str(self.VAL_FOLD)+'.txt')
+        if not self.RESTORE:
+            log_dir = self.LOG_FOLDER + str(self.VAL_FOLD)+'.txt'
+        else:
+            log_dir = self.LOG_FOLDER + 'new' + str(self.VAL_FOLD) + '.txt'
+        self.setup_logger(log_name,log_file= log_dir)
 
         logger = logging.getLogger(log_name)
         tf.logging.set_verbosity(tf.logging.INFO)
@@ -220,7 +240,7 @@ class HyperParameters:
                                     Dropout: {}
                                     Scenes:{}'''.format(
                 self.VAL_FOLD,
-                self.EPOCHS,
+                self.EPOCHS + self.OLD_EPOCH,
                 self.NUM_HIDDEN,
                 self.BATCH_SIZE,
                 self.FORGET_BIAS,
@@ -229,15 +249,18 @@ class HyperParameters:
                 self.SCENES))
             train_handle = sess.run(train_iterator.string_handle())
             test_handle = sess.run(test_iterator.string_handle())
-            # Run the initializer
-            sess.run(init)
-
+            # Run the initializer if restore == False
+            if not self.RESTORE:
+                sess.run(init)
+            else:
+                saver.restore(sess,self.SESSION_DIR + 'model.ckpt')
+                print("Model restored.")
             section = '\n{0:=^40}\n'
             logger.info(section.format('Run training epoch'))
             # final_average_loss = 0.0
 
-
-            ee = 1
+            # add previous epoch if restore the model
+            ee = 1 + + self.OLD_EPOCH
             # initialization for each epoch
             train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
 
@@ -259,8 +282,7 @@ class HyperParameters:
                 sen = sen + se
                 spe = spe + sp
                 f = tempf1 + f
-                #     final_average_loss = train_cost / n_batches
-                # return final_average_loss
+
                 if (num % batch_per_epoch == 0):
                     epoch_duration0 = time.time() - epoch_start
                     logger.info(
@@ -297,7 +319,8 @@ class HyperParameters:
                     ee += 1
                     train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
                     epoch_start = time.time()
-
+            save_path = saver.save(sess, self.SESSION_DIR + 'model.ckpt')
+            print("Model saved in path: %s" % save_path)
 
 
 
