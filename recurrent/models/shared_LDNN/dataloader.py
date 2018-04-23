@@ -94,10 +94,10 @@ def get_scenes_weight(scene_list,cv_id):
     count_pos = count_neg = [0] * 13
     for i in scene_list:
         for j in w:
-            if j[0] == str(cv_id) and j[1] == i:
+            if j[0] != str(cv_id) and j[1] == i:
                 count_pos = [x + int(y) for x, y in zip(count_pos, j[2:15])]
                 count_neg = [x + int(y) for x, y in zip(count_neg, j[15:28])]
-                break
+                
     total = (sum(count_pos) + sum(count_neg))
     pos = [x / total for x in count_pos]
     neg = [x / total for x in count_neg]
