@@ -16,12 +16,13 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
 class HyperParameters:
-    def __init__(self, VAL_FOLD):
-        self.RESTORE = True
+    def __init__(self, VAL_FOLD, FOLD_NAME):
+        self.MODEL_SAVE = False
+        self.RESTORE = False
         self.OLD_EPOCH = 0
         if not self.RESTORE:
             # Set up log directory
-            self.LOG_FOLDER = './log/' + datetime.datetime.now().strftime("%Y%m%d") + '/'
+            self.LOG_FOLDER = './log/' + FOLD_NAME + '/'
             if not os.path.exists(self.LOG_FOLDER):
                 os.makedirs(self.LOG_FOLDER)
             # Set up model directory individually
@@ -36,17 +37,22 @@ class HyperParameters:
 
         # training
         self.LEARNING_RATE = 0.001
+        self.SCENES = ['scene1']
+        # LSTM
         self.NUM_HIDDEN = 512
         self.NUM_LSTM = 3
-        self.OUTPUT_THRESHOLD = 0.5
-        self.SCENES = ['scene1']
+        # MLP
+        self.NUM_NEURON = 256
+        self.NUM_MLP = 3
+
         # dropout
+        self.OUTPUT_THRESHOLD = 0.5
         self.INPUT_KEEP_PROB = 1.0
         self.OUTPUT_KEEP_PROB = 0.9
         self.BATCH_SIZE = 70
-        self.EPOCHS = 1
+        self.EPOCHS = 300
         self.FORGET_BIAS = 0.9
-        self.TIMELENGTH = 2000
+        self.TIMELENGTH = 1000
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
 
@@ -124,7 +130,7 @@ class HyperParameters:
         zero_states = cell.zero_state(self.BATCH_SIZE, tf.float32)
         return self.get_state_update_op(state_variables, zero_states)
 
-    def MultiRNN(self,x,weights,seq):
+    def MultiRNN(self, x, weights, bias, seq):
         with tf.variable_scope('lstm', initializer=tf.orthogonal_initializer()):
             mlstm_cell = tf.contrib.rnn.MultiRNNCell([self.unit_lstm() for _ in range(self.NUM_LSTM)], state_is_tuple=True)
             states = self.get_state_variables(mlstm_cell)
@@ -138,11 +144,40 @@ class HyperParameters:
                                                time_major=False,
                                                sequence_length=seq)
             update_op = self.get_state_update_op(states, new_states)
-
             outputs = tf.reshape(outputs, [-1, self.NUM_HIDDEN])
-            top = tf.nn.dropout(tf.matmul(outputs, weights),keep_prob=self.OUTPUT_KEEP_PROB)
-            original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
-        return original_out, update_op
+        with tf.variable_scope('mlp'):
+            if self.NUM_MLP == 0:
+                top = tf.nn.dropout(tf.add(tf.matmul(outputs, weights['out']), bias['out']),
+                                    keep_prob=self.OUTPUT_KEEP_PROB)
+                original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
+                return original_out, update_op
+            elif self.NUM_MLP == 1:
+                l1 = tf.nn.dropout(tf.add(tf.matmul(outputs, weights['h1']), bias['h1']),
+                                    keep_prob=self.OUTPUT_KEEP_PROB)
+                top = tf.nn.dropout(tf.add(tf.matmul(l1, weights['mlpout']), bias['out']),
+                                    keep_prob=self.OUTPUT_KEEP_PROB)
+                original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
+                return original_out, update_op
+            elif self.NUM_MLP == 2:
+                l1 = tf.nn.dropout(tf.add(tf.matmul(outputs, weights['h1']), bias['h1']),
+                                   keep_prob=self.OUTPUT_KEEP_PROB)
+                l2 = tf.nn.dropout(tf.add(tf.matmul(l1, weights['h2']), bias['h2']),
+                                   keep_prob=self.OUTPUT_KEEP_PROB)
+                top = tf.nn.dropout(tf.add(tf.matmul(l2, weights['mlpout']), bias['out']),
+                                    keep_prob=self.OUTPUT_KEEP_PROB)
+                original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
+                return original_out, update_op
+            elif self.NUM_MLP == 3:
+                l1 = tf.nn.dropout(tf.add(tf.matmul(outputs, weights['h1']), bias['h1']),
+                                   keep_prob=self.OUTPUT_KEEP_PROB)
+                l2 = tf.nn.dropout(tf.add(tf.matmul(l1, weights['h2']), bias['h2']),
+                                   keep_prob=self.OUTPUT_KEEP_PROB)
+                l3 = tf.nn.dropout(tf.add(tf.matmul(l2, weights['h3']), bias['h3']),
+                                   keep_prob=self.OUTPUT_KEEP_PROB)
+                top = tf.nn.dropout(tf.add(tf.matmul(l3, weights['mlpout']), bias['out']),
+                                    keep_prob=self.OUTPUT_KEEP_PROB)
+                original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
+                return original_out, update_op
 
     def setup_logger(self,logger_name, log_file, level=logging.DEBUG):
         l = logging.getLogger(logger_name)
@@ -171,12 +206,31 @@ class HyperParameters:
         train_iterator = train_batch.make_initializable_iterator()
         test_iterator = test_batch.make_initializable_iterator()
         # Define weights
-        weights = tf.get_variable('out',shape=[self.NUM_HIDDEN, self.NUM_CLASSES],
-                                  initializer=tf.contrib.layers.xavier_initializer())
+
+        weights = {
+            'out': tf.get_variable('out', shape=[self.NUM_HIDDEN, self.NUM_CLASSES],
+                                   initializer=tf.contrib.layers.xavier_initializer()),
+
+            'h1': tf.get_variable('h1',shape=[self.NUM_HIDDEN, self.NUM_NEURON],
+                                  initializer=tf.contrib.layers.xavier_initializer()),
+            'h2': tf.get_variable('h2',shape=[self.NUM_NEURON, self.NUM_NEURON],
+                                  initializer=tf.contrib.layers.xavier_initializer()),
+            'h3': tf.get_variable('h3',shape=[self.NUM_NEURON, self.NUM_NEURON],
+                                  initializer=tf.contrib.layers.xavier_initializer()),
+            'mlpout': tf.get_variable('mlpout', shape=[self.NUM_NEURON, self.NUM_CLASSES],
+                                   initializer=tf.contrib.layers.xavier_initializer())
+        }
+        bias = {
+            'out': tf.Variable(tf.random_normal([self.NUM_CLASSES])),
+            'h1': tf.Variable(tf.random_normal([self.NUM_NEURON])),
+            'h2': tf.Variable(tf.random_normal([self.NUM_NEURON])),
+            'h3': tf.Variable(tf.random_normal([self.NUM_NEURON])),
+            'mlpout': tf.Variable(tf.random_normal([self.NUM_CLASSES]))
+        }
         # weights = {
         #     'out': tf.Variable(tf.random_normal([self.NUM_HIDDEN, self.NUM_CLASSES]))
         # }
-        logits, update_op = self.MultiRNN(X, weights, seq)
+        logits, update_op = self.MultiRNN(X, weights, bias, seq)
 
         # Define loss and optimizer
         w = get_scenes_weight(self.SCENES,self.VAL_FOLD)
@@ -233,7 +287,10 @@ class HyperParameters:
             logger.info('''
                                     K_folder:{}
                                     Epochs: {}
-                                    Number of hidden neuron: {}
+                                    Number of lstm layer: {}
+                                    Number of lstm neuron: {}
+                                    Number of mlp layer: {}
+                                    Number of mlp neuron: {}
                                     Batch size: {}
                                     FORGET_BIAS: {}
                                     TIMELENGTH: {}
@@ -241,7 +298,10 @@ class HyperParameters:
                                     Scenes:{}'''.format(
                 self.VAL_FOLD,
                 self.EPOCHS + self.OLD_EPOCH,
+                self.NUM_LSTM,
                 self.NUM_HIDDEN,
+                self.NUM_MLP,
+                self.NUM_NEURON,
                 self.BATCH_SIZE,
                 self.FORGET_BIAS,
                 self.TIMELENGTH,
@@ -275,9 +335,9 @@ class HyperParameters:
                 loss, _, se, sp, tempf1, _ = sess.run([loss_op, train_op, sensitivity, specificity, f1,update_op],
                                                    feed_dict={handle: train_handle})
 
-                # logger.debug(
-                #     'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
-                #     loss, (se + sp) / 2, se, sp, tempf1)
+                logger.debug(
+                    'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
+                    loss, (se + sp) / 2, se, sp, tempf1)
                 train_cost = train_cost + loss
                 sen = sen + se
                 spe = spe + sp
@@ -319,14 +379,17 @@ class HyperParameters:
                     ee += 1
                     train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
                     epoch_start = time.time()
-            save_path = saver.save(sess, self.SESSION_DIR + 'model.ckpt')
-            print("Model saved in path: %s" % save_path)
+            if self.MODEL_SAVE:
+                save_path = saver.save(sess, self.SESSION_DIR + 'model.ckpt')
+                print("Model saved in path: %s" % save_path)
 
 
 
 
 if __name__ == "__main__":
+    # fname = datetime.datetime.now().strftime("%Y%m%d")
+    fname ='test'
     for i in range(1,7):
         with tf.Graph().as_default():
-            hyperparameters = HyperParameters(VAL_FOLD=i)
+            hyperparameters = HyperParameters(VAL_FOLD=i, FOLD_NAME= fname)
             hyperparameters.main()
