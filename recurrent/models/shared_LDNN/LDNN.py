@@ -147,34 +147,40 @@ class HyperParameters:
             outputs = tf.reshape(outputs, [-1, self.NUM_HIDDEN])
         with tf.variable_scope('mlp'):
             if self.NUM_MLP == 0:
-                top = tf.nn.dropout(tf.add(tf.matmul(outputs, weights['out']), bias['out']),
+                top = tf.nn.dropout(tf.matmul(outputs, weights['out']),
                                     keep_prob=self.OUTPUT_KEEP_PROB)
                 original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
                 return original_out, update_op
             elif self.NUM_MLP == 1:
-                l1 = tf.nn.dropout(tf.add(tf.matmul(outputs, weights['h1']), bias['h1']),
+                l1 = tf.nn.dropout(tf.matmul(outputs, weights['h1']),
                                     keep_prob=self.OUTPUT_KEEP_PROB)
-                top = tf.nn.dropout(tf.add(tf.matmul(l1, weights['mlpout']), bias['out']),
+                l1 = tf.nn.relu(l1)
+                top = tf.nn.dropout(tf.matmul(l1, weights['mlpout']),
                                     keep_prob=self.OUTPUT_KEEP_PROB)
                 original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
                 return original_out, update_op
             elif self.NUM_MLP == 2:
-                l1 = tf.nn.dropout(tf.add(tf.matmul(outputs, weights['h1']), bias['h1']),
+                l1 = tf.nn.dropout(tf.matmul(outputs, weights['h1']),
                                    keep_prob=self.OUTPUT_KEEP_PROB)
-                l2 = tf.nn.dropout(tf.add(tf.matmul(l1, weights['h2']), bias['h2']),
+                l1 = tf.nn.relu(l1)
+                l2 = tf.nn.dropout(tf.matmul(l1, weights['h2']),
                                    keep_prob=self.OUTPUT_KEEP_PROB)
-                top = tf.nn.dropout(tf.add(tf.matmul(l2, weights['mlpout']), bias['out']),
+                l2 = tf.nn.relu(l2)
+                top = tf.nn.dropout(tf.matmul(l2, weights['mlpout']),
                                     keep_prob=self.OUTPUT_KEEP_PROB)
                 original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
                 return original_out, update_op
             elif self.NUM_MLP == 3:
-                l1 = tf.nn.dropout(tf.add(tf.matmul(outputs, weights['h1']), bias['h1']),
+                l1 = tf.nn.dropout(tf.matmul(outputs, weights['h1']),
                                    keep_prob=self.OUTPUT_KEEP_PROB)
-                l2 = tf.nn.dropout(tf.add(tf.matmul(l1, weights['h2']), bias['h2']),
+                l1 = tf.nn.relu(l1)
+                l2 = tf.nn.dropout(tf.matmul(l1, weights['h2']),
                                    keep_prob=self.OUTPUT_KEEP_PROB)
-                l3 = tf.nn.dropout(tf.add(tf.matmul(l2, weights['h3']), bias['h3']),
+                l2 = tf.nn.relu(l2)
+                l3 = tf.nn.dropout(tf.matmul(l2, weights['h3']),
                                    keep_prob=self.OUTPUT_KEEP_PROB)
-                top = tf.nn.dropout(tf.add(tf.matmul(l3, weights['mlpout']), bias['out']),
+                l3 = tf.nn.relu(l3)
+                top = tf.nn.dropout(tf.matmul(l3, weights['mlpout']),
                                     keep_prob=self.OUTPUT_KEEP_PROB)
                 original_out = tf.reshape(top, [batch_x_shape[0], -1, self.NUM_CLASSES])
                 return original_out, update_op
