@@ -3,9 +3,15 @@ import math
 import time
 import random
 import heapq
-'''
-Adapt minimal heap to lower the time complexity to bath*log(batch)*files
-'''
+from glob import glob
+import pickle
+def get_index(paths):
+    result = []
+    pkl_file = open('/mnt/raid/data/ni/twoears/scenes2018/train/file_lengths.pickle','rb')
+    data = pickle.load(pkl_file)
+    for i,p in enumerate(paths):
+        result.append([i,data[p],p])
+    return np.array(result)
 def construct_rectangle(pathset,Total_epochs):
     # current_length = [0]*Total_epochs
     index_rectangle = [[]]*Total_epochs
@@ -60,20 +66,39 @@ def get_filepaths(Total_epochs, Batch_timelength,paths):
             output.append(string)
 
     return output
-# dir_train = 'trainpaths.npy'
-# paths = np.load(dir_train)
-# t = time.time()
-# a = get_filepaths(1,6000,paths)
-# print(time.time()-t)
 
+def get_train_data(cv_id, scenes, epochs, timelengths):
+    paths = []
+    for s in scenes:
+        for f in range(1, 7):
+            if f == cv_id: continue
+            p = '/mnt/raid/data/ni/twoears/scenes2018/train/fold' + str(f) + '/' + s
+            path = glob(p + '/**/**/*.npz', recursive=True)
+            paths += path
 
-# fx, fy = np.array([]).reshape(0,160), np.array([]).reshape(0,13)
-# for instance in a[0].split('@'):
-#     p, start, end = instance.split('&')
-#     data = np.load(p)
-#     x = np.reshape(data['x'], [-1, 160])
-#     y = np.transpose(data['y'])
-#     y[y == 0] = -1
-#     fx = np.concatenate((fx, x[int(start):int(end)]), axis=0)
-#     fy = np.concatenate((fy, y[int(start):int(end)]), axis=0)
-# print(time.time()-t)
+    INDEX_PATH = get_index(paths)
+    out = get_filepaths(epochs, timelengths, INDEX_PATH)
+    return out, paths
+def get_valid_data(cv_id, scenes, epochs, timelengths):
+    paths = []
+    for s in scenes:
+        p = '/mnt/raid/data/ni/twoears/scenes2018/train/fold'+ str(cv_id)+ '/' + s
+        path = glob(p + '/**/**/*.npz', recursive=True)
+        paths += path
+    INDEX_PATH = get_index(paths)
+    return get_filepaths(epochs, timelengths, INDEX_PATH)
+def get_scenes_weight(scene_list,cv_id):
+    weight_dir = '/mnt/raid/data/ni/twoears/trainweight.npy'
+    #  folder, scene, w_postive, w_negative
+    w = np.load(weight_dir)
+    count_pos = count_neg = [0] * 13
+    for i in scene_list:
+        for j in w:
+            if j[0] != str(cv_id) and j[1] == i:
+                count_pos = [x + int(y) for x, y in zip(count_pos, j[2:15])]
+                count_neg = [x + int(y) for x, y in zip(count_neg, j[15:28])]
+                
+    total = (sum(count_pos) + sum(count_neg))
+    pos = [x / total for x in count_pos]
+    neg = [x / total for x in count_neg]
+    return [y / x for x, y in zip(pos, neg)]
