@@ -82,15 +82,16 @@ def my_loss_builder(mask_val, loss_weights):
 
 
 def my_accuracy_builder(mask_val, output_threshold, metric='bac2'):
-    def my_accuracy(y_true, y_pred):
+    def my_accuracy_per_batch(y_true, y_pred):
         y_pred_labels = K.cast(K.greater_equal(y_pred, output_threshold), 'float32')
         mask, count_unmasked = mask_from(y_true, mask_val)
 
         count_positives = K.sum(y_true * mask)  # just the +1 labels are added, the rest is 0
         count_positives = K.switch(count_positives, count_positives, 1.0)
-        count_positives = K.print_tensor(count_positives, message='count_positives: ')
+        # count_positives = K.print_tensor(count_positives, message='count_positives: ')
         sensitivity = 0.0
         specificity = 0.0
+
         if metric in ('bac2', 'bac', 'sensitivity'):
             sensitivity = K.sum(y_pred_labels * y_true * mask) / count_positives  # true positive rate
             if metric == 'sensitivity':
@@ -98,7 +99,7 @@ def my_accuracy_builder(mask_val, output_threshold, metric='bac2'):
         if metric in ('bac2', 'bac', 'specificity'):
             count_negatives = count_unmasked - count_positives  # count_unmasked are all valid labels
             count_negatives = K.switch(count_negatives, count_negatives, 1.0)
-            count_negatives = K.print_tensor(count_negatives, message='count_negatives: ')
+            # count_negatives = K.print_tensor(count_negatives, message='count_negatives: ')
             specificity = K.sum((y_pred_labels - 1) * (y_true - 1) * mask) / count_negatives
             if metric == 'specificity':
                 return specificity
@@ -109,4 +110,4 @@ def my_accuracy_builder(mask_val, output_threshold, metric='bac2'):
             bac = (sensitivity + specificity) / 2
             return bac
         raise ValueError("'metric' has to be either 'bac2', 'bac', 'sensitivity' or 'specificity'")
-    return my_accuracy
+    return my_accuracy_per_batch
