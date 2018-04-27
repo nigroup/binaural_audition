@@ -2,6 +2,8 @@ import glob
 import numpy as np
 from os import path
 from tqdm import tqdm
+from keras import backend as K
+from tensorflow.python.ops.nn_impl import weighted_cross_entropy_with_logits
 
 def create_generator(dloader):
     while True:
@@ -10,13 +12,26 @@ def create_generator(dloader):
             return
         yield b_x, b_y
 
-def get_training_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
+def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
                          location='train', name='train_weights'):
     name += '_' + label_mode + '.npy'
     save_path = path.join(path_pattern, location, name)
     if not path.exists(save_path):
         _create_weights_array(save_path)
-    return
+    weights_array = np.load(save_path)
+    if type(fold_nbs) is int:
+        l = list()
+        l.append(fold_nbs)
+        fold_nbs = l
+    if type(scene_nbs) is int:
+        l = list()
+        l.append(scene_nbs)
+        scene_nbs = l
+    weights_array = weights_array[fold_nbs, :, :, :]
+    weights_array = weights_array[:, scene_nbs, :, :]
+    class_pos_neg_counts = np.sum(weights_array, axis=(0, 1))
+    # weight on positive = negative count / positive count
+    return class_pos_neg_counts[:, 1] / class_pos_neg_counts[:, 0]
 
 def _create_weights_array(save_path):
     path_to_file, filename = path.split(save_path)
@@ -49,4 +64,49 @@ def _create_weights_array(save_path):
                     weights_array[fold, scene, :, 1] += n_neg
     np.save(save_path, weights_array)
 
-get_training_weights(1, 1, 'blockbased')
+
+def mask_from(y_true, mask_val):
+    mask = K.cast(K.not_equal(y_true, mask_val), 'float32')
+    count_unmasked = K.sum(mask)
+    return mask, count_unmasked
+
+
+def my_loss_builder(mask_val, loss_weights):
+    def my_loss(y_true, y_pred):
+        entropy = weighted_cross_entropy_with_logits(y_true, y_pred, K.constant(loss_weights, dtype='float32'))
+        mask, count_unmasked = mask_from(y_true, mask_val)
+        masked_entropy = entropy * mask
+        loss = K.sum(masked_entropy) / count_unmasked
+        return loss
+    return my_loss
+
+
+def my_accuracy_builder(mask_val, output_threshold, metric='bac2'):
+    def my_accuracy(y_true, y_pred):
+        y_pred_labels = K.cast(K.greater_equal(y_pred, output_threshold), 'float32')
+        mask, count_unmasked = mask_from(y_true, mask_val)
+
+        count_positives = K.sum(y_true * mask)  # just the +1 labels are added, the rest is 0
+        count_positives = K.switch(count_positives, count_positives, 1.0)
+        count_positives = K.print_tensor(count_positives, message='count_positives: ')
+        sensitivity = 0.0
+        specificity = 0.0
+        if metric in ('bac2', 'bac', 'sensitivity'):
+            sensitivity = K.sum(y_pred_labels * y_true * mask) / count_positives  # true positive rate
+            if metric == 'sensitivity':
+                return sensitivity
+        if metric in ('bac2', 'bac', 'specificity'):
+            count_negatives = count_unmasked - count_positives  # count_unmasked are all valid labels
+            count_negatives = K.switch(count_negatives, count_negatives, 1.0)
+            count_negatives = K.print_tensor(count_negatives, message='count_negatives: ')
+            specificity = K.sum((y_pred_labels - 1) * (y_true - 1) * mask) / count_negatives
+            if metric == 'specificity':
+                return specificity
+        if metric == 'bac2':
+            bac2 = 1 - K.sqrt(((K.square(1 - sensitivity) + K.square(1 - specificity)) / 2))
+            return bac2
+        if metric == 'bac':
+            bac = (sensitivity + specificity) / 2
+            return bac
+        raise ValueError("'metric' has to be either 'bac2', 'bac', 'sensitivity' or 'specificity'")
+    return my_accuracy

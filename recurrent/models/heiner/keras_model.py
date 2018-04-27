@@ -16,6 +16,17 @@ NFEATURES = 160
 BATCHSIZE = 40
 EPOCHS = 3
 
+OUTPUT_TRESHOLD = 0.5
+
+ALL_FOLDS = list(range(1, 7))
+TRAIN_FOLDS = [1, 2, 3, 4, 5]
+VAL_FOLDS = list(set(ALL_FOLDS).difference(set(TRAIN_FOLDS)))
+
+TRAIN_SCENES = [1]
+
+LABEL_MODE = 'blockbased'
+MASK_VAL = -1
+
 print('Build model...')
 
 x = Input(batch_shape=(BATCHSIZE, TIMESTEPS, NFEATURES), name='Input', dtype='float32')
@@ -30,28 +41,31 @@ model = Model(x, y)
 model.summary()
 print(5*'\n')
 
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['acc'])
+my_loss = utils.my_loss_builder(MASK_VAL, utils.get_loss_weights(TRAIN_FOLDS, TRAIN_SCENES, LABEL_MODE))
+my_acc = utils.my_accuracy_builder(MASK_VAL, OUTPUT_TRESHOLD, metric='bac')
+
+model.compile(optimizer='adam', loss=my_loss, metrics=['acc'])
 print('Model compiled.' + '\n')
 
-train_loader = DataLoader('train', 'blockbased', [1, 2, 3, 4, 5], 1, batchsize=BATCHSIZE,
+train_loader = DataLoader('train', LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, batchsize=BATCHSIZE,
                           timesteps=TIMESTEPS, epochs=EPOCHS, features=NFEATURES, classes=NCLASSES)
-print('Number of batches per epoch ' + str(train_loader.len()))
+print('Number of batches per epoch (training): ' + str(train_loader.len()))
 train_steps_per_epoch = min(train_loader.len())
 print('Therefore using %d steps per epoch' % train_steps_per_epoch)
+print(5*'\n')
 
-val_loader = DataLoader('val', 'blockbased', 6, 1, epochs=1, batchsize=BATCHSIZE,
-                          timesteps=TIMESTEPS, features=NFEATURES, classes=NCLASSES)
-val_steps_per_epoch = val_loader.len()
+val_loader = DataLoader('val', LABEL_MODE, VAL_FOLDS, TRAIN_SCENES, epochs=EPOCHS, batchsize=BATCHSIZE,
+                        timesteps=TIMESTEPS, features=NFEATURES, classes=NCLASSES)
+
+print('Number of batches per epoch (validation): ' + str(val_loader.len()))
+val_steps_per_epoch = min(val_loader.len())
+print('Therefore using %d steps per epoch' % val_steps_per_epoch)
 
 train_gen = utils.create_generator(train_loader)
 val_gen = utils.create_generator(val_loader)
 
-# for _ in range(14):
-#     x, y = next(train_gen)
-#     print('x: {}   y: {}'.format(x.shape, y.shape))
-
-# model.fit_generator(train_gen, steps_per_epoch=train_steps_per_epoch, epochs=EPOCHS,
-#                     validation_data=val_gen, validation_steps=val_steps_per_epoch)
+model.fit_generator(train_gen, steps_per_epoch=train_steps_per_epoch, epochs=EPOCHS,
+                    validation_data=val_gen, validation_steps=val_steps_per_epoch)
 
 # try multiple fits
 # for True:

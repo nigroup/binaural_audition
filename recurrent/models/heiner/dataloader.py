@@ -109,13 +109,17 @@ class DataLoader:
             s = self.seed
         random.seed(s)
 
-    def _create_deque(self):
+    def _create_deque(self, shuffle=True):
         inds = list(range(len(self.filenames)))
-        random.shuffle(inds)
+        if shuffle:
+            random.shuffle(inds)
         return deque(inds)
 
     def _init_buffers(self):
-        self.file_ind_queue = self._create_deque()
+        if self.mode == 'train':
+            self.file_ind_queue = self._create_deque()
+        else:
+            self.file_ind_queue = self._create_deque(shuffle=False)
         self.buffer_x = np.zeros((self.batchsize, self.buffer_size, self.features), np.float32)
         self.buffer_y = np.full((self.batchsize, self.buffer_size, self.classes), self.mask_val, np.float32)
         self.row_start = 0
@@ -129,7 +133,10 @@ class DataLoader:
             self._build_actual_heap()
 
     def _reset_buffers(self):
-        self.file_ind_queue = self._create_deque()
+        if self.mode == 'train':
+            self.file_ind_queue = self._create_deque()
+        else:
+            self.file_ind_queue = self._create_deque(shuffle=False)
         self.row_leftover[:] = -1
         self._clear_buffers()
 
@@ -294,7 +301,10 @@ class DataLoader:
         for epoch in range(1, self.epochs+1):
             length = 0
             self._seed(epoch)
-            dq = self._create_deque()
+            if self.mode == 'train':
+                dq = self._create_deque()
+            else:
+                dq = self._create_deque(shuffle=False)
             sim_lengths = np.zeros(self.batchsize, dtype=np.int32)
             left_lengths = np.zeros(self.batchsize, dtype=np.int32)
 
@@ -339,6 +349,10 @@ class DataLoader:
             length += last_batch_defining_row // self.timesteps
             self.effective_length.append(effective_length)
             self.length.append(length)
+
+        if self.epochs == 1:
+            self.length = self.length[0]
+            self.effective_length = self.effective_length[0]
 
     def _length_dict(self):
         pickle_path = path.join(self.pickle_path, 'file_lengths.pickle')
