@@ -3,6 +3,7 @@ from keras.layers import Dense, Input, CuDNNLSTM
 import keras.backend as K
 from heiner.dataloader import DataLoader
 from heiner import utils
+from heiner import accuracy_utils
 from keras.callbacks import Callback
 
 import os
@@ -52,14 +53,14 @@ print(5*'\n')
 
 my_loss = utils.my_loss_builder(MASK_VAL, utils.get_loss_weights(TRAIN_FOLDS, TRAIN_SCENES, LABEL_MODE))
 
-metrics = ['bac', 'bac2']
+metrics = ['TP', 'TN', 'P', 'N'][0:1]
 metrics_functions = []
 for metric in metrics:
-    metrics_functions.append(utils.my_accuracy_builder(MASK_VAL, OUTPUT_TRESHOLD, metric=metric))
+    metrics_functions.append(accuracy_utils.stateful_metric_builder(metric, OUTPUT_TRESHOLD, MASK_VAL))
 
 
 model.compile(optimizer='adam', loss=my_loss, metrics=metrics_functions)
-model.metrics_names[1:] = [metric + '_per_batch' for metric in metrics]
+# model.metrics_names[1:] = [metric + '_per_batch' for metric in metrics]
 print('Model compiled.' + '\n')
 
 train_loader = DataLoader('train', LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, batchsize=BATCHSIZE,
@@ -96,9 +97,10 @@ class MyHistory(Callback):
         self.losses_val.append(logs.get('val_loss'))
 
 
-myHistory = MyHistory()
+# myHistory = MyHistory()
 model.fit_generator(train_gen, steps_per_epoch=train_steps_per_epoch, epochs=EPOCHS,
-                    validation_data=val_gen, validation_steps=val_steps_per_epoch, callbacks=[myHistory])
+                    validation_data=val_gen, validation_steps=val_steps_per_epoch)
+                    # , callbacks=[myHistory])
 
 # TODO: if there is no way to get the metrics per batch or unaveraged i'm forced to use the
 # TODO: basic functions 'train_on_batch' and 'test_on_batch' -> maybe just 'test_on_batch'
