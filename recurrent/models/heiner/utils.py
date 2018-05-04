@@ -33,6 +33,7 @@ def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/raid/da
     # weight on positive = negative count / positive count
     return class_pos_neg_counts[:, 1] / class_pos_neg_counts[:, 0]
 
+
 def _create_weights_array(save_path):
     path_to_file, filename = path.split(save_path)
     if filename.__contains__('blockbased'):

@@ -11,11 +11,12 @@ class DataLoader:
 
     def __init__(self, mode, label_mode, fold_nbs, scene_nbs, batchsize=50, timesteps=4000, epochs=10,
                  buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
-                 seed=1, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=-1.0):
+                 seed=1, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=-1.0,
+                 val_stateful=False):
 
         self.mode = mode
         self.path_pattern = path_pattern
-        self.mask_val = mask_val
+
 
         if not (self.mode == 'train' or self.mode == 'test' or self.mode == 'val'):
             raise ValueError("mode has to be 'train' or 'val' or 'test'")
@@ -55,6 +56,9 @@ class DataLoader:
 
         self.filenames = glob.glob(self.path_pattern)
 
+        self.mask_val = mask_val
+        self.val_stateful = val_stateful
+
         # whether to create last batches by padding the rows which are not long enough
         self.use_every_timestep = use_every_timestep
         if self.mode == 'train' and self.use_every_timestep:
@@ -64,7 +68,7 @@ class DataLoader:
         if self.mode == 'val' or self.mode == 'test':
             self.use_every_timestep = True
 
-        if self.mode == 'train' or self.mode == 'val':
+        if self.mode == 'train' or self.mode == 'val' and val_stateful:
             self.seed = seed
             self.seed_by_epoch = seed_by_epoch
 
@@ -83,9 +87,25 @@ class DataLoader:
             self.length = None
             self._data_efficiency = None
         else:
-            self.filenames = deque(self.filenames)
-            self.length = len(self.filenames)
-            self._data_efficiency = 1.0
+            if self.mode == 'test':
+                self.filenames = deque(self.filenames)
+                self.length = len(self.filenames)
+                self._data_efficiency = 1.0
+            else:
+                # validation loader which is not stateful (means state should be reset after each batch) will not use a
+                # priority queue
+                self.priority_queue = False
+                self.length = int(np.ceil(len(self.filenames) / self.batchsize))
+                self._data_efficiency = 1.0
+                if self.epochs > 1:
+                    self.act_epoch = 1
+                    self.length = [self.length] * self.epochs
+                    self._data_efficiency = [self._data_efficiency] * self.epochs
+
+                length_tuples = [(self._length_dict()[fn], fn) for fn in self.filenames]
+                self.filenames = [tup[1] for tup in sorted(length_tuples, key=lambda x: x[0], reverse=True)]
+                self.filenames_deque = deque(self.filenames)
+
 
     def data_efficiency(self):
         if self._data_efficiency is not None:
@@ -226,12 +246,12 @@ class DataLoader:
 
     def next_batch(self):
         if self.mode == 'train' or self.mode == 'val':
-            b_x, b_y = self._next_batch_train_val()
+            b_x, b_y = self._next_batch_train_val_stateful()
         else:
             b_x, b_y = self._next_batch_test()
         return b_x, b_y
 
-    def _next_batch_train_val(self):
+    def _next_batch_train_val_stateful(self):
 
         def batches_with_timesteps(timesteps):
             x = self.buffer_x[:, self.row_start:self.row_start + timesteps, :].copy()
@@ -256,7 +276,7 @@ class DataLoader:
                 if not self.next_epoch():
                     return None, None
             self.fill_buffer()
-            return self._next_batch_train_val()
+            return self._next_batch_train_val_stateful()
 
     def _next_batch_test(self):
         if len(self.filenames) > 0:
@@ -266,6 +286,30 @@ class DataLoader:
                 return sequence, labels
         else:
             return None, None
+
+    def _next_batch_val_not_stateful(self):
+        if len(self.filenames_deque) > 0:
+            max_length = self._length_dict()[self.filenames_deque[0]]
+            b_x = np.zeros((self.batchsize, max_length, self.features), np.float32)
+            b_y = np.full((self.batchsize, max_length, self.classes), self.mask_val, np.float32)
+
+            r=0
+            while r < self.batchsize and len(self.filenames_deque) > 0:
+                next_filename = self.filenames_deque.popleft()
+                with np.load(next_filename) as data:
+                    sequence = data['x']
+                    length = sequence.shape[1]
+                    labels = data['y'] if self.instant_mode else data['y_block']
+                    b_x[r, :length, :] = sequence[0, :, :]
+                    b_y[r, :length, :] = labels[0, :, :]
+            return b_x, b_y
+        else:
+            self.act_epoch += 1
+            if self.act_epoch > self.epochs:
+                return None, None
+            else:
+                self.filenames_deque = deque(self.filenames)
+                return self._next_batch_val_not_stateful()
 
     def len(self):
         if self.length is None:
