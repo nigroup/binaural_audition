@@ -1,9 +1,10 @@
 from keras.models import Model
 from keras.layers import Dense, Input, CuDNNLSTM
+import keras.backend as K
 from heiner.dataloader import DataLoader
 from heiner import utils
+from heiner import accuracy_utils
 from keras.callbacks import Callback
-import numpy as np
 
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '2'
@@ -52,7 +53,13 @@ print(5*'\n')
 
 my_loss = utils.my_loss_builder(MASK_VAL, utils.get_loss_weights(TRAIN_FOLDS, TRAIN_SCENES, LABEL_MODE))
 
-model.compile(optimizer='adam', loss=my_loss, metrics=None)
+metrics = ['TP', 'TN', 'P', 'N'][0:1]
+metrics_functions = []
+for metric in metrics:
+    metrics_functions.append(accuracy_utils.stateful_metric_builder(metric, OUTPUT_TRESHOLD, MASK_VAL))
+
+
+model.compile(optimizer='adam', loss=my_loss, metrics=metrics_functions)
 # model.metrics_names[1:] = [metric + '_per_batch' for metric in metrics]
 print('Model compiled.' + '\n')
 
@@ -60,7 +67,8 @@ train_loader = DataLoader('train', LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, batchs
                           timesteps=TIMESTEPS, epochs=EPOCHS, features=NFEATURES, classes=NCLASSES)
 train_loader_len = train_loader.len()
 print('Number of batches per epoch (training): ' + str(train_loader_len))
-
+train_steps_per_epoch = min(train_loader_len)
+print('Therefore using %d steps per epoch' % train_steps_per_epoch)
 print(5*'\n')
 
 val_loader = DataLoader('val', LABEL_MODE, VAL_FOLDS, TRAIN_SCENES, epochs=EPOCHS, batchsize=BATCHSIZE,
@@ -68,43 +76,38 @@ val_loader = DataLoader('val', LABEL_MODE, VAL_FOLDS, TRAIN_SCENES, epochs=EPOCH
 
 val_loader_len = val_loader.len()
 print('Number of batches per epoch (validation): ' + str(val_loader_len))
-
+val_steps_per_epoch = min(val_loader_len)
+print('Therefore using %d steps per epoch' % val_steps_per_epoch)
 
 train_gen = utils.create_generator(train_loader)
 val_gen = utils.create_generator(val_loader)
 
 
-def get_index(loader_len, epoch, iteration):
-    index = 0
-    act_e = 0
-    while act_e < epoch-1:
-        index += loader_len[act_e]
-    index += iteration
+class MyHistory(Callback):
+    def on_train_begin(self, logs={}):
+        self.my_accs_train = []
+        self.my_accs_val = []
+        self.losses_train = []
+        self.losses_val = []
+
+    def on_batch_end(self, batch, logs={}):
+        self.my_accs_train.append(logs.get('my_accuracy_per_batch'))
+        self.my_accs_val.append(logs.get('val_my_accuracy_per_batch'))
+        self.losses_train.append(logs.get('loss'))
+        self.losses_val.append(logs.get('val_loss'))
 
 
-train_losses = np.zeros((1, np.sum(train_loader_len)), dtype=np.float32)
-val_losses = np.zeros((1, np.sum(val_loader_len)), dtype=np.float32)
-for e in range(EPOCHS):
-    epoch = e+1
+# myHistory = MyHistory()
+model.fit_generator(train_gen, steps_per_epoch=train_steps_per_epoch, epochs=EPOCHS,
+                    validation_data=val_gen, validation_steps=val_steps_per_epoch)
+                    # , callbacks=[myHistory])
 
-    # training phase
-    for iteration in range(1, val_loader_len[e]+1):
-        b_x, b_y = next(train_gen)
-        loss = model.train_on_batch(b_x, b_y)
-        train_losses[0, get_index(train_loader_len, epoch, iteration)] = loss
-        # TODO: below
-        # train_accs = calculate_accuracies(model.predict_on_batch(b_x), metrics=metrics,
-        #                                   output_threshold = OUTPUT_TRESHOLD, mask_val = MASK_VAL)
-        # append it depending on shape
-    # TODO: reset model state
-    model.reset_states()
+# TODO: if there is no way to get the metrics per batch or unaveraged i'm forced to use the
+# TODO: basic functions 'train_on_batch' and 'test_on_batch' -> maybe just 'test_on_batch'
 
-    # validation phase
-    for iteration in range(1, val_loader_len[e]+1):
-        b_x, b_y = next(val_gen)
-        loss = model.test_on_batch(b_x, b_y)
-        val_losses[0, get_index(val_loader_len, epoch, iteration)] = loss
+# TODO: modify the fit_generator method
 
-
-# TODO: i think hyperas is doable
-
+# try multiple fits
+# for True:
+#     model.fit_generator(train_gen, steps_per_epoch=train_steps_per_epoch, epochs=EPOCHS,
+#                         validation_data=val_gen, validation_steps=val_steps_per_epoch)
