@@ -29,11 +29,17 @@ def construct_rectangle(pathset,Total_epochs):
             # current_length[k] += int(j[1])
             index_rectangle[k] = index_rectangle[k] + [int(j[0])]
     return np.array(index_rectangle)
-def get_filepaths(Total_epochs, Batch_timelength,paths):
+def get_filepaths(Total_epochs, Batch_timelength,paths, mode):
     output = []
     total_length = paths[:,1].astype(int).sum()
     num_clips = math.ceil(total_length/Batch_timelength) -1
-    rectangle = construct_rectangle(paths.tolist(),Total_epochs)
+    if mode == 'train':
+        rectangle = construct_rectangle(paths.tolist(),Total_epochs)
+    elif mode == 'validation':
+        temp = [[]]
+        for j in paths:
+            temp[0] += [int(j[0])]
+        rectangle = np.array(temp)
     row_flag = np.array([0]*2*Total_epochs).reshape([Total_epochs,2])
     for _ in range(num_clips):
         for i in range(Total_epochs):
@@ -68,6 +74,17 @@ def get_filepaths(Total_epochs, Batch_timelength,paths):
     return output
 
 def get_train_data(cv_id, scenes, epochs, timelengths):
+    """Get a training set that has become a list
+
+        Args:
+            cv_id: which folder be used as validation set.
+            epochs: number of epoch
+            timelengths: length
+
+        Returns:
+           each row is [scene instance id, stard_index, end_index]
+
+        """
     paths = []
     for s in scenes:
         for f in range(1, 7):
@@ -77,8 +94,10 @@ def get_train_data(cv_id, scenes, epochs, timelengths):
             paths += path
 
     INDEX_PATH = get_index(paths)
-    out = get_filepaths(epochs, timelengths, INDEX_PATH)
+    out = get_filepaths(epochs, timelengths, INDEX_PATH,mode='train')
     return out, paths
+
+
 def get_valid_data(cv_id, scenes, epochs, timelengths):
     paths = []
     for s in scenes:
@@ -86,8 +105,20 @@ def get_valid_data(cv_id, scenes, epochs, timelengths):
         path = glob(p + '/**/**/*.npz', recursive=True)
         paths += path
     INDEX_PATH = get_index(paths)
-    return get_filepaths(epochs, timelengths, INDEX_PATH)
+    return get_filepaths(epochs, timelengths, INDEX_PATH,mode='validation')
+
+
 def get_scenes_weight(scene_list,cv_id):
+    """Fetches postive_count and negative counts.
+
+        Args:
+            scene_list: A list contains scene ID.
+            cv_id: which folder be used as validation set.
+
+        Returns:
+            weights: [class1,class2,...,class13]
+
+        """
     weight_dir = '/mnt/raid/data/ni/twoears/trainweight.npy'
     #  folder, scene, w_postive, w_negative
     w = np.load(weight_dir)
@@ -97,7 +128,7 @@ def get_scenes_weight(scene_list,cv_id):
             if j[0] != str(cv_id) and j[1] == i:
                 count_pos = [x + int(y) for x, y in zip(count_pos, j[2:15])]
                 count_neg = [x + int(y) for x, y in zip(count_neg, j[15:28])]
-                
+
     total = (sum(count_pos) + sum(count_neg))
     pos = [x / total for x in count_pos]
     neg = [x / total for x in count_neg]
