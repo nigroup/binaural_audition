@@ -5,6 +5,50 @@ import random
 import heapq
 from glob import glob
 import pickle
+import sys
+import tensorflow as tf
+
+# training loader
+def _read_py_function(filename):
+    filename = filename.decode(sys.getdefaultencoding())
+    fx, fy = np.array([]).reshape(0, 160), np.array([]).reshape(0, 13)
+    # each filename is : path1&start_index&end_index@path2&start_index&end_index
+    # the total length was defined before
+    for instance in filename.split('@'):
+        p, start, end = instance.split('&')
+        data = np.load(p)
+        x = data['x'][0]
+        y = data['y'][0]
+        fx = np.concatenate((fx, x[int(start):int(end)]), axis=0)
+        fy = np.concatenate((fy, y[int(start):int(end)]), axis=0)
+    l = np.array([fx.shape[0]])
+    return fx.astype(np.float32), fy.astype(np.int32), l.astype(np.int32)
+def read_trainset(path_set, batchsize):
+    dataset = tf.data.Dataset.from_tensor_slices(path_set)
+    dataset = dataset.map(
+        lambda filename: tuple(tf.py_func(_read_py_function, [filename], [tf.float32, tf.int32, tf.int32])))
+    # batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
+    batch = dataset.batch(batchsize)
+    return batch
+
+
+# validation loader
+def _read_py_function1(filename):
+    filename = filename.decode(sys.getdefaultencoding())
+    data = np.load(filename)
+    x = data['x'][0]
+    y = data['y'][0]
+    l = np.array([x.shape[0]])
+    return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
+def read_validationset(self, path_set, batchsize):
+    # shuffle path_set
+    dataset = tf.data.Dataset.from_tensor_slices(path_set)
+    dataset = dataset.map(
+        lambda filename: tuple(tf.py_func(_read_py_function1, [filename], [tf.float32, tf.int32, tf.int32])))
+    batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
+    return batch
+
+
 def get_index(paths):
     result = []
     pkl_file = open('/mnt/raid/data/ni/twoears/scenes2018/train/file_lengths.pickle','rb')
