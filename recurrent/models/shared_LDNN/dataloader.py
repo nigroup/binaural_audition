@@ -8,7 +8,7 @@ import pickle
 import sys
 import tensorflow as tf
 
-# training loader
+# training loader-----------------------
 def _read_py_function(filename):
     filename = filename.decode(sys.getdefaultencoding())
     fx, fy = np.array([]).reshape(0, 160), np.array([]).reshape(0, 13)
@@ -32,15 +32,17 @@ def read_trainset(path_set, batchsize):
     return batch
 
 
-# validation loader
+# validation loader-------------------------------
 def _read_py_function1(filename):
     filename = filename.decode(sys.getdefaultencoding())
     data = np.load(filename)
     x = data['x'][0]
     y = data['y'][0]
+    # for padding value 0, change OFF'0'-> 2
+    y[y == 0] = 2
     l = np.array([x.shape[0]])
     return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
-def read_validationset(self, path_set, batchsize):
+def read_validationset(path_set, batchsize):
     # shuffle path_set
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(
@@ -48,7 +50,7 @@ def read_validationset(self, path_set, batchsize):
     batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     return batch
 
-
+# related function for rectangle-----------------------------------------
 def get_index(paths):
     result = []
     pkl_file = open('/mnt/raid/data/ni/twoears/scenes2018/train/file_lengths.pickle','rb')
@@ -150,7 +152,17 @@ def get_valid_data(cv_id, scenes, epochs, timelengths):
         paths += path
     INDEX_PATH = get_index(paths)
     return get_filepaths(epochs, timelengths, INDEX_PATH,mode='validation')
-
+def get_validation_data(cv_id, scenes, epochs, timelengths):
+    paths = []
+    for s in scenes:
+        p = '/mnt/raid/data/ni/twoears/scenes2018/train/fold'+ str(cv_id)+ '/' + s
+        path = glob(p + '/**/**/*.npz', recursive=True)
+        paths += path
+    # get index, length, path
+    INDEX_PATH = get_index(paths)
+    #sort length
+    x = INDEX_PATH[INDEX_PATH[:, 1].argsort()]
+    return x[:,2].tolist()
 
 def get_scenes_weight(scene_list,cv_id):
     """Fetches postive_count and negative counts.

@@ -15,7 +15,7 @@ sys.path.insert(0, '/home/changbinli/script/rnn/')
 import logging
 import time
 import datetime
-from dataloader import get_train_data, get_valid_data, get_scenes_weight,read_trainset
+from dataloader import get_train_data, get_valid_data, get_scenes_weight,read_trainset,read_validationset,get_validation_data
 from model_loader import MultiRNN
 from utils import setup_logger
 '''
@@ -50,26 +50,26 @@ class HyperParameters:
         # How many scenes include in this model.
         self.SCENES = ['scene1']
         # Parameters for stacked-LSTM layer
-        self.NUM_HIDDEN = 100
-        self.NUM_LSTM = 1
+        self.NUM_HIDDEN = 512
+        self.NUM_LSTM = 3
         # Parameters for MLP
         self.NUM_NEURON = 100
         self.NUM_MLP = 1
 
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
-        self.OUTPUT_KEEP_PROB = 0.9
-        self.BATCH_SIZE = 100
-        self.VALIDATION_BATCH_SIZE = 10
-        self.EPOCHS = 1
-        self.TIMELENGTH = 1000
+        self.OUTPUT_KEEP_PROB = 0.8
+        self.BATCH_SIZE = 70
+        self.VALIDATION_BATCH_SIZE = 50
+        self.EPOCHS = 100
+        self.TIMELENGTH = 2000
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
         self.LEARNING_RATE = 0.001
         # Pre-processing dataset to get rectangle or paths(for validation)
         self.VAL_FOLD = VAL_FOLD
         self.TRAIN_SET, self.PATHS = get_train_data(self.VAL_FOLD,self.SCENES,self.EPOCHS,self.TIMELENGTH)
-        self.VALID_SET = get_valid_data(self.VAL_FOLD,self.SCENES, 1, self.TIMELENGTH)
+        self.VALID_SET = get_validation_data(self.VAL_FOLD,self.SCENES, 1, self.TIMELENGTH)
         self.TOTAL_SAMPLES = len(self.PATHS)
         self.NUM_TRAIN = len(self.TRAIN_SET)
         self.NUM_TEST = len(self.VALID_SET)
@@ -80,25 +80,29 @@ class HyperParameters:
     def validation(self, batch_size):
         with tf.name_scope('LDNN'):
             # TODO: use padding for batch testing or what?
-            valid_batch = read_trainset(self.SET['validation'], batch_size)
+            valid_batch = read_validationset(self.SET['validation'], batch_size)
             handle = tf.placeholder(tf.string, shape=[])
             iterator = tf.data.Iterator.from_string_handle(handle, valid_batch.output_types, valid_batch.output_shapes)
             with tf.device('/cpu:0'):
                 X, Y, seq = iterator.get_next()
             mask_zero_frames = tf.cast(tf.not_equal(Y, -1), tf.int32)
-            seq = tf.reshape(seq, [self.BATCH_SIZE])  # original sequence length, only used for RNN
+            mask_padding = tf.cast(tf.not_equal(Y, 0), tf.int32)
+            mask_negative = tf.cast(tf.not_equal(Y, 2), tf.int32)
+            # convert 2(-1) to 0
+            Y = Y * mask_negative
+
+            seq = tf.reshape(seq, [batch_size])  # original sequence length, only used for RNN
             valid_iterator = valid_batch.make_initializable_iterator()
-            logits, update_op, reset_op = MultiRNN(X, batch_size, self.NUM_CLASSES,
+            logits, update_op, reset_op = MultiRNN(X, batch_size, seq, self.NUM_CLASSES,
                                          self.NUM_LSTM, self.NUM_HIDDEN, self.OUTPUT_KEEP_PROB,
                                          self.NUM_MLP, self.NUM_NEURON)
 
-            # logits is already being sigmoid
             predicted = tf.to_int32(tf.sigmoid(logits) > self.OUTPUT_THRESHOLD)
-            TP = tf.count_nonzero(predicted * Y * mask_zero_frames)
+            TP = tf.count_nonzero(predicted * Y * mask_zero_frames * mask_padding)
             # mask padding, zero_frame,
-            TN = tf.count_nonzero((predicted - 1) * (Y - 1) * mask_zero_frames)
-            FP = tf.count_nonzero(predicted * (Y - 1) * mask_zero_frames)
-            FN = tf.count_nonzero((predicted - 1) * Y * mask_zero_frames)
+            TN = tf.count_nonzero((predicted - 1) * (Y - 1) * mask_zero_frames* mask_padding)
+            FP = tf.count_nonzero(predicted * (Y - 1) * mask_zero_frames* mask_padding)
+            FN = tf.count_nonzero((predicted - 1) * Y * mask_zero_frames* mask_padding)
             precision = TP / (TP + FP)
             recall = TP / (TP + FN)
             f1 = 2 * precision * recall / (precision + recall)
@@ -115,12 +119,12 @@ class HyperParameters:
             iterator = tf.data.Iterator.from_string_handle(handle, train_batch.output_types, train_batch.output_shapes)
             with tf.device('/cpu:0'):
                 X, Y, seq = iterator.get_next()
-            # get mask matrix for loss fuction, will be used after round output
+            # get mask matrix
             mask_zero_frames = tf.cast(tf.not_equal(Y, -1), tf.int32)
             seq = tf.reshape(seq, [batch_size])  # original sequence length, only used for RNN
 
             train_iterator = train_batch.make_initializable_iterator()
-            logits, update_op, reset = MultiRNN(X, batch_size, self.NUM_CLASSES,
+            logits, update_op, reset = MultiRNN(X, batch_size, seq, self.NUM_CLASSES,
                                          self.NUM_LSTM, self.NUM_HIDDEN, self.OUTPUT_KEEP_PROB,
                                          self.NUM_MLP, self.NUM_NEURON)
 
