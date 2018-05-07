@@ -7,7 +7,7 @@ from glob import glob
 import pickle
 import sys
 import tensorflow as tf
-
+import pandas as pd
 # training loader-----------------------
 def _read_py_function(filename):
     filename = filename.decode(sys.getdefaultencoding())
@@ -162,7 +162,8 @@ def get_validation_data(cv_id, scenes, epochs, timelengths):
     INDEX_PATH = get_index(paths)
     #sort length
     x = INDEX_PATH[INDEX_PATH[:, 1].argsort()]
-    return x[:,2].tolist()
+    result = x[:,2].tolist()
+    return result
 
 def get_scenes_weight(scene_list,cv_id):
     """Fetches postive_count and negative counts.
@@ -189,3 +190,24 @@ def get_scenes_weight(scene_list,cv_id):
     pos = [x / total for x in count_pos]
     neg = [x / total for x in count_neg]
     return [y / x for x, y in zip(pos, neg)]
+def get_performence(true_pos,true_neg,false_pos,false_neg, index):
+    TP = np.array(true_pos[index])
+    TN = np.array(true_neg[index])
+    FP = np.array(false_pos[index])
+    FN = np.array(false_neg[index])
+    # precision = TP / (TP + FP)
+    precision = np.array([x/y if y != 0 else 0 for x,y in zip(TP ,(TP + FP))])
+    # recall = TP / (TP + FN)
+    recall = np.array([x/y if y != 0 else 0 for x,y in zip(TP ,(TP + FN))])
+    # f1 = 2 * precision * recall / (precision + recall)
+    f1 = np.array([x/y if y != 0 else 0 for x,y in zip(2 * precision * recall ,(precision + recall))])
+    # TPR = TP/(TP+FN)
+    sensitivity = recall
+    # specificity = TN / (TN + FP)
+    specificity = np.array([x/y if y != 0 else 0 for x,y in zip(TN  ,(TN + FP))])
+    return (sensitivity+specificity)/2
+def average_performance(list):
+    df = pd.DataFrame(list,columns=['sceneID','instance','class1','class2','class3','class4'
+        ,'class5', 'class6','class7','class8','class9','class10','class11','class12','class13'])
+    df1 = df.groupby('sceneID').mean()
+    return df1.mean().mean()

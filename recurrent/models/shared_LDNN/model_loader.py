@@ -49,7 +49,6 @@ def get_state_reset_op(state_variables, cell, BATCH_SIZE):
     zero_states = cell.zero_state(BATCH_SIZE, tf.float32)
     return get_state_update_op(state_variables, zero_states)
 
-
 def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
              NUM_HIDDEN, OUTPUT_KEEP_PROB, NUM_MLP,NUM_NEURON):
     with tf.variable_scope('lstm', initializer=tf.orthogonal_initializer()):
@@ -65,6 +64,7 @@ def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
                                                 time_major=False,
                                                 sequence_length=seq)
         update_op = get_state_update_op(states, new_states)
+        # TODO: reset the state to zero or the final state og training??? Now is zero.
         reset_op = get_state_reset_op(states,mlstm_cell,BATCH_SIZE)
         outputs = tf.reshape(outputs, [-1, NUM_HIDDEN])
     with tf.variable_scope('mlp'):

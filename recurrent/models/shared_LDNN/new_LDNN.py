@@ -15,9 +15,10 @@ sys.path.insert(0, '/home/changbinli/script/rnn/')
 import logging
 import time
 import datetime
-from dataloader import get_train_data, get_valid_data, get_scenes_weight,read_trainset,read_validationset,get_validation_data
+from dataloader import *
 from model_loader import MultiRNN
 from utils import setup_logger
+import numpy as np
 '''
 For block_intepreter with rectangle 
 '''
@@ -98,8 +99,8 @@ class HyperParameters:
                                          self.NUM_MLP, self.NUM_NEURON)
 
             predicted = tf.to_int32(tf.sigmoid(logits) > self.OUTPUT_THRESHOLD)
+            # mask padding, zero_frames part
             TP = tf.count_nonzero(predicted * Y * mask_zero_frames * mask_padding)
-            # mask padding, zero_frame,
             TN = tf.count_nonzero((predicted - 1) * (Y - 1) * mask_zero_frames* mask_padding)
             FP = tf.count_nonzero(predicted * (Y - 1) * mask_zero_frames* mask_padding)
             FN = tf.count_nonzero((predicted - 1) * Y * mask_zero_frames* mask_padding)
@@ -109,7 +110,20 @@ class HyperParameters:
             # TPR = TP/(TP+FN)
             sensitivity = recall
             specificity = TN / (TN + FP)
-            return valid_iterator, sensitivity, specificity, f1, reset_op,handle
+            # New performance measurement:
+            #  return [batch_size,1, performance(13 classes)]
+            TP1 = tf.cast(tf.not_equal(predicted * Y * mask_zero_frames * mask_padding, 0), tf.int32)
+            TP1 = tf.reduce_sum(TP1,axis=1)
+
+            TN1 = tf.cast(tf.not_equal((predicted - 1) * (Y - 1) * mask_zero_frames * mask_padding, 0), tf.int32)
+            TN1 = tf.reduce_sum(TN1, axis=1)
+
+            FP1 = tf.cast(tf.not_equal(predicted * (Y - 1) * mask_zero_frames * mask_padding, 0), tf.int32)
+            FP1 = tf.reduce_sum(FP1, axis=1)
+
+            FN1 = tf.cast(tf.not_equal((predicted - 1) * Y * mask_zero_frames * mask_padding, 0), tf.int32)
+            FN1 = tf.reduce_sum(FN1, axis=1)
+            return valid_iterator, sensitivity, specificity, f1, reset_op,handle,TP1,TN1,FP1,FN1
 
 
     def train(self, batch_size):
@@ -124,7 +138,7 @@ class HyperParameters:
             seq = tf.reshape(seq, [batch_size])  # original sequence length, only used for RNN
 
             train_iterator = train_batch.make_initializable_iterator()
-            logits, update_op, reset = MultiRNN(X, batch_size, seq, self.NUM_CLASSES,
+            logits, update_op, _ = MultiRNN(X, batch_size, seq, self.NUM_CLASSES,
                                          self.NUM_LSTM, self.NUM_HIDDEN, self.OUTPUT_KEEP_PROB,
                                          self.NUM_MLP, self.NUM_NEURON)
 
@@ -170,7 +184,7 @@ class HyperParameters:
             # connect shared variable
             scope.reuse_variables()
             # -----------------------validation graph---------
-            valid_iterator, valid_sensitivy, valid_specifict, valid_f1, reset_op, handle_valid = self.validation(self.VALIDATION_BATCH_SIZE)
+            valid_iterator, valid_sensitivy, valid_specifict, valid_f1, reset_op, handle_valid,TP,TN,FP,FN = self.validation(self.VALIDATION_BATCH_SIZE)
 
             # Initialize the variables (i.e. assign their default value)
             init = tf.global_variables_initializer()
@@ -242,6 +256,7 @@ class HyperParameters:
                     sen = sen + se
                     spe = spe + sp
                     f = tempf1 + f
+                    # num % batch_per_epoch == 0
                     if (num % batch_per_epoch == 0):
                         epoch_duration0 = time.time() - epoch_start
                         logger.info(
@@ -260,17 +275,28 @@ class HyperParameters:
                         epoch_start = time.time()
                         # After each train epoch, validation set need initilize again
                         sess.run(valid_iterator.initializer)
-                        for ii in range(v_batches_per_epoch):
+                        # Create a list to collect performence
+                        performence = []
+                        for index in range(v_batches_per_epoch):
                             # Reset the state to zero before feeding input
                             sess.run([reset_op])
-                            se, sp, tempf1 = sess.run([valid_sensitivy, valid_specifict, valid_f1],
+                            se, sp, tempf1,true_pos,true_neg,false_pos,false_neg = sess.run([valid_sensitivy, valid_specifict, valid_f1,TP,TN,FP,FN],
                                                       feed_dict={handle_valid: valid_handle})
-
                             sen = sen + se
                             spe = spe + sp
                             f = tempf1 + f
-                        epoch_duration1 = time.time() - epoch_start
+                            # print(true_pos,true_neg,false_pos,false_neg)
+                            # store performance
+                            current_scene_instances = self.SET['validation'][index*self.VALIDATION_BATCH_SIZE:(index+1)*self.VALIDATION_BATCH_SIZE]
+                            for index1,si_path in enumerate(current_scene_instances):
+                                cut = si_path.split('/')
+                                scene_id, instance_name = cut[len(cut)-2:]
+                                classes_performance = get_performence(true_pos,true_neg,false_pos,false_neg,index1)
+                                performence.append([scene_id,instance_name]+classes_performance.tolist())
+                        # average each scene instance after validation finish
+                        print(average_performance(performence))
 
+                        epoch_duration1 = time.time() - epoch_start
                         logger.info(
                             '''Epochs: {},Validation_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
                                 .format(epoch_number,
@@ -283,6 +309,7 @@ class HyperParameters:
                         epoch_number += 1
                         train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
                         epoch_start = time.time()
+
                 if self.MODEL_SAVE:
                     save_path = saver.save(sess, self.SESSION_DIR + 'model.ckpt')
                     print("Model saved in path: %s" % save_path)
