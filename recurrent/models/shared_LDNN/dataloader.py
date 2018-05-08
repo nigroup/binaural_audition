@@ -218,12 +218,14 @@ def get_performence(true_pos,true_neg,false_pos,false_neg, index):
     TN = np.array(true_neg[index])
     FP = np.array(false_pos[index])
     FN = np.array(false_neg[index])
+    N = TP[0] + TN[0] + FP[0] + FN[0]
     for i in range(13):
         result.append(TP[i])
         result.append(TN[i])
         result.append(FP[i])
         result.append(FN[i])
-    return np.array(result)
+    return np.array(result)/N
+
 def average_performance(list,dir,epoch_num):
     header = ['sceneID','instance',
               'class1tp','class1tn','class1fp','class1fn',
