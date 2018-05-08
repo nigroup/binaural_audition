@@ -288,6 +288,7 @@ class HyperParameters:
                                 cut = si_path.split('/')
                                 scene_id, instance_name = cut[len(cut)-2:]
                                 classes_performance = get_performence(true_pos,true_neg,false_pos,false_neg,index1)
+                                # print([scene_id,instance_name]+classes_performance.tolist())
                                 performence.append([scene_id,instance_name]+classes_performance.tolist())
                         # average each scene instance after validation finish
                         p = average_performance(performence,self.LOG_FOLDER,epoch_number)

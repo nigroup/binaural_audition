@@ -191,33 +191,67 @@ def get_scenes_weight(scene_list,cv_id):
     neg = [x / total for x in count_neg]
     return [y / x for x, y in zip(pos, neg)]
 def get_performence(true_pos,true_neg,false_pos,false_neg, index):
+    # TP = np.array(true_pos[index])
+    # TN = np.array(true_neg[index])
+    # FP = np.array(false_pos[index])
+    # FN = np.array(false_neg[index])
+    # # precision = TP / (TP + FP)
+    # precision = np.array([x/y if y != 0 else 0 for x,y in zip(TP ,(TP + FP))])
+    # # recall = TP / (TP + FN)
+    # recall = np.array([x/y if y != 0 else 0 for x,y in zip(TP ,(TP + FN))])
+    # # f1 = 2 * precision * recall / (precision + recall)
+    # f1 = np.array([x/y if y != 0 else 0 for x,y in zip(2 * precision * recall ,(precision + recall))])
+    # # TPR = TP/(TP+FN)
+    # sensitivity = recall
+    # # specificity = TN / (TN + FP)
+    # specificity = np.array([x/y if y != 0 else 0 for x,y in zip(TN  ,(TN + FP))])
+    # result = []
+    # for i in range(13):
+    #     if sensitivity[i] !=0 and specificity[i] != 0:
+    #         result.append((sensitivity[i]+specificity[i])/2)
+    #     elif sensitivity[i] ==0 and specificity[i] != 0:
+    #         result.append(specificity[i])
+    #     elif sensitivity[i] !=0 and specificity[i] == 0:
+    #         result.append(sensitivity[i])
+    result = []
     TP = np.array(true_pos[index])
     TN = np.array(true_neg[index])
     FP = np.array(false_pos[index])
     FN = np.array(false_neg[index])
-    # precision = TP / (TP + FP)
-    precision = np.array([x/y if y != 0 else 0 for x,y in zip(TP ,(TP + FP))])
-    # recall = TP / (TP + FN)
-    recall = np.array([x/y if y != 0 else 0 for x,y in zip(TP ,(TP + FN))])
-    # f1 = 2 * precision * recall / (precision + recall)
-    f1 = np.array([x/y if y != 0 else 0 for x,y in zip(2 * precision * recall ,(precision + recall))])
-    # TPR = TP/(TP+FN)
-    sensitivity = recall
-    # specificity = TN / (TN + FP)
-    specificity = np.array([x/y if y != 0 else 0 for x,y in zip(TN  ,(TN + FP))])
-    result = []
     for i in range(13):
-        if sensitivity[i] !=0 and specificity[i] != 0:
-            result.append((sensitivity[i]+specificity[i])/2)
-        elif sensitivity[i] ==0 and specificity[i] != 0:
-            result.append(specificity[i])
-        elif sensitivity[i] !=0 and specificity[i] == 0:
-            result.append(sensitivity[i])
+        result.append(TP[i])
+        result.append(TN[i])
+        result.append(FP[i])
+        result.append(FN[i])
     return np.array(result)
 def average_performance(list,dir,epoch_num):
-    df = pd.DataFrame(list,columns=['sceneID','instance','class1','class2','class3','class4'
-        ,'class5', 'class6','class7','class8','class9','class10','class11','class12','class13'])
+    header = ['sceneID','instance',
+              'class1tp','class1tn','class1fp','class1fn',
+              'class2tp', 'class2tn', 'class2fp', 'class2fn',
+              'class3tp', 'class3tn', 'class3fp', 'class3fn',
+              'class4tp', 'class4tn', 'class4fp', 'class4fn',
+              'class5tp', 'class5tn', 'class5fp', 'class5fn',
+              'class6tp', 'class6tn', 'class6fp', 'class6fn',
+              'class7tp', 'class7tn', 'class7fp', 'class7fn',
+              'class8tp', 'class8tn', 'class8fp', 'class8fn',
+              'class9tp', 'class9tn', 'class9fp', 'class9fn',
+              'class10tp', 'class10tn', 'class10fp', 'class10fn',
+              'class11tp', 'class11tn', 'class11fp', 'class11fn',
+              'class12tp', 'class12tn', 'class12fp', 'class12fn',
+              'class13tp', 'class13tn', 'class13fp', 'class13fn']
+    df = pd.DataFrame(list,columns=header)
     dir += str(epoch_num) + '.pkl'
     df.to_pickle(dir)
     df1 = df.groupby('sceneID').mean()
-    return df1.mean().mean()
+    four_list = df1.mean().tolist()
+    classes_performance = []
+    for i in range(13):
+        start = i * 4
+        TP = four_list[start]
+        TN = four_list[start+1]
+        FP = four_list[start+2]
+        FN = four_list[start+3]
+        sensiticity = TP / (TP + FN)
+        specificity = TN / (TN + FP)
+        classes_performance.append((sensiticity+specificity)/2)
+    return sum(classes_performance) / len(classes_performance)
