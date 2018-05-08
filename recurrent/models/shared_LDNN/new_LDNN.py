@@ -23,7 +23,7 @@ import numpy as np
 For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
-# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -59,10 +59,10 @@ class HyperParameters:
 
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
-        self.OUTPUT_KEEP_PROB = 0.8
+        self.OUTPUT_KEEP_PROB = 0.9
         self.BATCH_SIZE = 70
         self.VALIDATION_BATCH_SIZE = 50
-        self.EPOCHS = 100
+        self.EPOCHS = 200
         self.TIMELENGTH = 2000
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
@@ -112,17 +112,13 @@ class HyperParameters:
             specificity = TN / (TN + FP)
             # New performance measurement:
             #  return [batch_size,1, performance(13 classes)]
-            TP1 = tf.cast(tf.not_equal(predicted * Y * mask_zero_frames * mask_padding, 0), tf.int32)
-            TP1 = tf.reduce_sum(TP1,axis=1)
+            TP1 = tf.count_nonzero(predicted * Y * mask_zero_frames * mask_padding,axis=1)
 
-            TN1 = tf.cast(tf.not_equal((predicted - 1) * (Y - 1) * mask_zero_frames * mask_padding, 0), tf.int32)
-            TN1 = tf.reduce_sum(TN1, axis=1)
+            TN1 = tf.count_nonzero((predicted - 1) * (Y - 1) * mask_zero_frames* mask_padding,axis=1)
 
-            FP1 = tf.cast(tf.not_equal(predicted * (Y - 1) * mask_zero_frames * mask_padding, 0), tf.int32)
-            FP1 = tf.reduce_sum(FP1, axis=1)
+            FP1 = tf.count_nonzero(predicted * (Y - 1) * mask_zero_frames* mask_padding,axis=1)
 
-            FN1 = tf.cast(tf.not_equal((predicted - 1) * Y * mask_zero_frames * mask_padding, 0), tf.int32)
-            FN1 = tf.reduce_sum(FN1, axis=1)
+            FN1 = tf.count_nonzero((predicted - 1) * Y * mask_zero_frames* mask_padding,axis=1)
             return valid_iterator, sensitivity, specificity, f1, reset_op,handle,TP1,TN1,FP1,FN1
 
 
@@ -294,13 +290,14 @@ class HyperParameters:
                                 classes_performance = get_performence(true_pos,true_neg,false_pos,false_neg,index1)
                                 performence.append([scene_id,instance_name]+classes_performance.tolist())
                         # average each scene instance after validation finish
-                        print(average_performance(performence))
+                        p = average_performance(performence,self.LOG_FOLDER,epoch_number)
 
                         epoch_duration1 = time.time() - epoch_start
                         logger.info(
-                            '''Epochs: {},Validation_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
+                            '''Epochs: {},Validation_accuracy: {:.3f},Validation_performance: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
                                 .format(epoch_number,
                                         ((sen + spe) / 2) / v_batches_per_epoch,
+                                        p,
                                         sen / v_batches_per_epoch,
                                         spe / v_batches_per_epoch,
                                         f / v_batches_per_epoch,

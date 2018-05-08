@@ -205,9 +205,19 @@ def get_performence(true_pos,true_neg,false_pos,false_neg, index):
     sensitivity = recall
     # specificity = TN / (TN + FP)
     specificity = np.array([x/y if y != 0 else 0 for x,y in zip(TN  ,(TN + FP))])
-    return (sensitivity+specificity)/2
-def average_performance(list):
+    result = []
+    for i in range(13):
+        if sensitivity[i] !=0 and specificity[i] != 0:
+            result.append((sensitivity[i]+specificity[i])/2)
+        elif sensitivity[i] ==0 and specificity[i] != 0:
+            result.append(specificity[i])
+        elif sensitivity[i] !=0 and specificity[i] == 0:
+            result.append(sensitivity[i])
+    return np.array(result)
+def average_performance(list,dir,epoch_num):
     df = pd.DataFrame(list,columns=['sceneID','instance','class1','class2','class3','class4'
         ,'class5', 'class6','class7','class8','class9','class10','class11','class12','class13'])
+    dir += str(epoch_num) + '.pkl'
+    df.to_pickle(dir)
     df1 = df.groupby('sceneID').mean()
     return df1.mean().mean()
