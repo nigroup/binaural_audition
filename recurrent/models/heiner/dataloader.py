@@ -5,6 +5,7 @@ from collections import deque
 import random
 import pickle
 import heapq
+import re
 
 
 class DataLoader:
@@ -59,6 +60,9 @@ class DataLoader:
         self.mask_val = mask_val
         self.val_stateful = val_stateful
 
+        self.length_dict = None
+        self.scene_instances_and_ids_dict = None
+
         # whether to create last batches by padding the rows which are not long enough
         self.use_every_timestep = use_every_timestep
         if self.mode == 'train' and self.use_every_timestep:
@@ -106,7 +110,6 @@ class DataLoader:
                 self.filenames = [tup[1] for tup in sorted(length_tuples, key=lambda x: x[0], reverse=True)]
                 self.filenames_deque = deque(self.filenames)
 
-
     def data_efficiency(self):
         if self._data_efficiency is not None:
             return self._data_efficiency
@@ -141,7 +144,9 @@ class DataLoader:
         else:
             self.file_ind_queue = self._create_deque(shuffle=False)
         self.buffer_x = np.zeros((self.batchsize, self.buffer_size, self.features), np.float32)
-        self.buffer_y = np.full((self.batchsize, self.buffer_size, self.classes), self.mask_val, np.float32)
+
+        # last dimension: 0 -> labels, 1 -> scene, 2 -> scene instance id
+        self.buffer_y = np.full((self.batchsize, self.buffer_size, self.classes, 3), self.mask_val, np.float32)
         self.row_start = 0
         self.row_lengths = np.zeros(self.batchsize, np.int32)
 
@@ -200,18 +205,21 @@ class DataLoader:
             if len(labels.shape) == 3:
                 bs, _, ncl = labels.shape
                 if bs == 1 and ncl == self.classes:
-                    self.buffer_y[row_ind, start:end, :] = labels[:, start_in_sequence:start_in_sequence+(end - start), :]
+                    self.buffer_y[row_ind, start:end, :, 0] = labels[:, start_in_sequence:start_in_sequence+(end - start), :]
             else:
                 if self.instant_mode:
-                    self.buffer_y[row_ind, start:end, :] = \
+                    self.buffer_y[row_ind, start:end, :, 0] = \
                         labels[:, start_in_sequence:start_in_sequence + (end - start)].T
                 else:
                     flat_steps, _ = labels.shape
                     labels = labels.reshape((self.classes, flat_steps // self.classes))
-                    self.buffer_y[row_ind, start:end, :] = \
+                    self.buffer_y[row_ind, start:end, :, 0] = \
                         labels[:, start_in_sequence:start_in_sequence + (end - start)].T
 
-            self.row_lengths[row_ind] = end
+        scene, scene_instance_id = self._scene_instances_and_ids_dict()[self.filenames[act_file_ind]]
+        self.buffer_y[row_ind, start:end, :, 1] = scene
+        self.buffer_y[row_ind, start:end, :, 2] = scene_instance_id
+        self.row_lengths[row_ind] = end
 
     def fill_buffer(self):
         for row_ind in range(self.batchsize):
@@ -255,7 +263,7 @@ class DataLoader:
 
         def batches_with_timesteps(timesteps):
             x = self.buffer_x[:, self.row_start:self.row_start + timesteps, :].copy()
-            y = self.buffer_y[:, self.row_start:self.row_start + timesteps, :].copy()
+            y = self.buffer_y[:, self.row_start:self.row_start + timesteps, :, :].copy()
             self.row_start += timesteps
             return x, y
 
@@ -291,7 +299,9 @@ class DataLoader:
         if len(self.filenames_deque) > 0:
             max_length = self._length_dict()[self.filenames_deque[0]]
             b_x = np.zeros((self.batchsize, max_length, self.features), np.float32)
-            b_y = np.full((self.batchsize, max_length, self.classes), self.mask_val, np.float32)
+
+            # last dimension: 0 -> labels, 1 -> scene, 2 -> scene instance id
+            b_y = np.full((self.batchsize, max_length, self.classes, 3), self.mask_val, np.float32)
 
             r=0
             while r < self.batchsize and len(self.filenames_deque) > 0:
@@ -301,7 +311,11 @@ class DataLoader:
                     length = sequence.shape[1]
                     labels = data['y'] if self.instant_mode else data['y_block']
                     b_x[r, :length, :] = sequence[0, :, :]
-                    b_y[r, :length, :] = labels[0, :, :]
+                    b_y[r, :length, :, 0] = labels[0, :, :]
+
+                scene, scene_instance_id = self._scene_instances_and_ids_dict()[self.filenames[next_filename]]
+                b_y[r, :length, :, 1] = scene
+                b_y[r, :length, :, 2] = scene_instance_id
             return b_x, b_y
         else:
             self.act_epoch += 1
@@ -399,11 +413,14 @@ class DataLoader:
             self.effective_length = self.effective_length[0]
 
     def _length_dict(self):
-        pickle_path = path.join(self.pickle_path, 'file_lengths.pickle')
-        if not path.exists(pickle_path):
-            self._create_length_dict()
-        with open(pickle_path, 'rb') as handle:
-            return pickle.load(handle)
+        if self.length_dict is None:
+            pickle_path = path.join(self.pickle_path, 'file_lengths.pickle')
+            if not path.exists(pickle_path):
+                self._create_length_dict()
+            with open(pickle_path, 'rb') as handle:
+                self.length_dict = pickle.load(handle)
+
+        return self.length_dict
 
     def _create_length_dict(self):
         from tqdm import tqdm
@@ -415,4 +432,32 @@ class DataLoader:
 
         d = {file: get_length(file) for file in tqdm(all_existing_files)}
         with open(path.join(self.pickle_path, 'file_lengths.pickle'), 'wb') as handle:
+            pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def _scene_instances_and_ids_dict(self):
+        if self.scene_instances_and_ids_dict is None:
+            pickle_path = path.join(self.pickle_path, 'scene_instances_and_ids.pickle')
+            if not path.exists(pickle_path):
+                self._create_scene_instances_and_ids_dict()
+            with open(pickle_path, 'rb') as handle:
+                self.scene_instances_and_ids_dict = pickle.load(handle)
+
+        return self.scene_instances_and_ids_dict
+
+    def _create_scene_instances_and_ids_dict(self):
+        from tqdm import tqdm
+        all_existing_files = glob.glob(self.pickle_path_pattern)
+        all_existing_files = sorted(all_existing_files)
+        scene_nb_regex = re.compile('scene([0-9]+)[_/]')
+
+        self.scene_instance = 1
+
+        def get_scene_instance_and_id(file):
+            scene_number = int(scene_nb_regex.findall(file)[0])
+            t = (scene_number, self.scene_instance)
+            self.scene_instance += 1
+            return t
+
+        d = {file: get_scene_instance_and_id(file) for file in tqdm(all_existing_files)}
+        with open(path.join(self.pickle_path, 'scene_instances_and_ids.pickle'), 'wb') as handle:
             pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
