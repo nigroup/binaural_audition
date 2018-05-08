@@ -90,7 +90,7 @@ for e in range(EPOCHS):
     # training phase
     for iteration in range(1, val_loader_len[e]+1):
         b_x, b_y = next(train_gen)
-        loss = model.train_on_batch(b_x, b_y)
+        loss = model.train_on_batch(b_x, b_y[:, :, :, 0])
         train_losses[0, get_index(train_loader_len, epoch, iteration)] = loss
         # TODO: below
         # train_accs = calculate_accuracies(model.predict_on_batch(b_x), metrics=metrics,

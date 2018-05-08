@@ -99,6 +99,10 @@ class DataLoader:
                 # validation loader which is not stateful (means state should be reset after each batch) will not use a
                 # priority queue
                 self.priority_queue = False
+                self.batchsize = batchsize
+                self.epochs = epochs
+                self.act_epoch = 1
+
                 self.length = int(np.ceil(len(self.filenames) / self.batchsize))
                 self._data_efficiency = 1.0
                 if self.epochs > 1:
