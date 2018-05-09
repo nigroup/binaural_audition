@@ -30,7 +30,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 class HyperParameters:
     def __init__(self, VAL_FOLD, FOLD_NAME):
         # OLD_EPOCH indicates which epoch to restore from storeded model
-        self.MODEL_SAVE = False
+        self.MODEL_SAVE = True
         self.RESTORE = False
         self.OLD_EPOCH = 0
         if not self.RESTORE:
@@ -49,7 +49,7 @@ class HyperParameters:
             self.SESSION_DIR = self.LOG_FOLDER + str(VAL_FOLD) + '/'
 
         # How many scenes include in this model.
-        self.SCENES = ['scene1']
+        self.SCENES = ['scene'+str(i) for i in range(1,2)]
         # Parameters for stacked-LSTM layer
         self.NUM_HIDDEN = 512
         self.NUM_LSTM = 3
@@ -57,12 +57,14 @@ class HyperParameters:
         self.NUM_NEURON = 100
         self.NUM_MLP = 1
 
+        # regularization
+        self.LAMBDA_L2 = 0.005
+        self.OUTPUT_KEEP_PROB = 0.9
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
-        self.OUTPUT_KEEP_PROB = 0.9
         self.BATCH_SIZE = 70
         self.VALIDATION_BATCH_SIZE = 50
-        self.EPOCHS = 200
+        self.EPOCHS = 10
         self.TIMELENGTH = 2000
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
@@ -149,6 +151,16 @@ class HyperParameters:
                 total = tf.cast(tf.reduce_sum(seq) - number_zero_frame, tf.float32)
                 # eliminate zero_frame loss
                 loss_op = tf.reduce_sum(loss_op * tf.cast(mask_zero_frames, tf.float32)) / total
+                # L2
+                for unreg in [tf_var.name for tf_var in tf.trainable_variables() if
+                              ("noreg" in tf_var.name or "Bias" in tf_var.name)]:
+                    print(unreg)
+                l2 = self.LAMBDA_L2 * sum(
+                    tf.nn.l2_loss(tf_var)
+                    for tf_var in tf.trainable_variables()
+                    if not ("noreg" in tf_var.name or "Bias" in tf_var.name)
+                )
+                loss_op += l2
             with tf.variable_scope('optimize'):
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.LEARNING_RATE)
                 # train_op = optimizer.minimize(loss_op)
@@ -217,7 +229,7 @@ class HyperParameters:
                     self.BATCH_SIZE,
                     self.TIMELENGTH,
                     self.OUTPUT_KEEP_PROB,
-                    self.SCENES))
+                    'scene1-80'))
                 train_handle = sess.run(train_iterator.string_handle())
                 valid_handle = sess.run(valid_iterator.string_handle())
                 # Run the initializer if restore == False
@@ -318,8 +330,8 @@ class HyperParameters:
 
 
 if __name__ == "__main__":
-    # fname = datetime.datetime.now().strftime("%Y%m%d")
-    fname ='test'
+    fname = datetime.datetime.now().strftime("%Y%m%d")
+    # fname ='test'
     for i in range(1,7):
         with tf.Graph().as_default():
             hyperparameters = HyperParameters(VAL_FOLD=i, FOLD_NAME= fname)
