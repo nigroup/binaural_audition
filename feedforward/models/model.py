@@ -2,7 +2,7 @@ import tensorflow as tf
 from settings import *
 import time
 import numpy as np
-
+import pdb
 
 class GraphModel():
     def __init__(self, hyperparams):
@@ -207,7 +207,6 @@ class GraphModel():
         for i in np.arange(number_fully_connected_layers-1):
             fcLayers.append(fc_layer(fcLayers[i-1]))
         '''
-
         return dense
 
         # y = tf.placeholder(tf.float32, shape=(None, n_labels),name="y")  # (5000, 13)

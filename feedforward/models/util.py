@@ -45,10 +45,8 @@ def crossentropy(oy, oy_, weights=None):
     if weights == None:
         weights = np.ones(oy.shape[1])
     print("ok")
-    pdb.set_trace()
     ersterSummand = weights * oy * -np.log(sig(oy_))
     zweiterSummand = (1 - oy) * -np.log(1 - sig(oy_))
-    pdb.set_trace()
     return ersterSummand + zweiterSummand
 
 

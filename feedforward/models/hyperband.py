@@ -6,10 +6,8 @@ from model import *
 
 
 
-trainData = DataSet(trainDir,frames=framelength,folds=trainFolds, batchsize=20,shortload=shortload,model="framewise_cnn")
-testData = DataSet(testDir,frames=framelength,folds=testFolds, batchsize=None,shortload=shortload,model="framewise_cnn")
-
-
+trainData = DataSet(trainDir,frames=framelength,folds=trainFolds, overlapSampleSize=25, batchsize=10,shortload=shortload)
+testData = DataSet(testDir,frames=framelength,folds=testFolds, overlapSampleSize=25, batchsize=None,shortload=shortload)
 
 
 # hyperparams
@@ -82,7 +80,7 @@ def kfold(hyperparams, data,graphModel, g):
 
 
 def train(hyperparams ,data, sess,graphModel):
-
+    bestmodel = "bestesModell" #?
     bestacc = 0
 
     data.getTrainBatchSize()
@@ -93,6 +91,7 @@ def train(hyperparams ,data, sess,graphModel):
         for i in range(data.batches):
 
             train_x, train_y = data.get_next_train_batch()
+
             sess.run([graphModel.optimiser], feed_dict={graphModel.x: train_x, graphModel.y: train_y})
 
 
@@ -103,7 +102,7 @@ def train(hyperparams ,data, sess,graphModel):
                 print(acc)
                 if acc > bestacc:
                     bestacc = acc
-                    bestmodel = "bestesModell"
+
 
                     #tf.train.Saver().save(sess, 'my_test_model')
                     #tf.train.Saver -- bestimmte Variablen (Klasse:Modell )
