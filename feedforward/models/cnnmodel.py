@@ -221,4 +221,4 @@ def model(hyperparams,x):
 
     '''
 
-    return dense
+    return dense¡

@@ -2,7 +2,7 @@
 import socket
 from readData import *
 from settings import *
-from cnnmodel import *
+from model import *
 
 
 
@@ -58,59 +58,30 @@ hyperparams = {
     "sequence_ratemap_pool_strides": sequence_ratemap_pool_strides
 }
 
+hyperparameterlist = [
+    hyperparams, hyperparams
+]
 
 
 
+def kfold(hyperparams, data,graphModel, g):
 
-
-
-
-############################################################
-# train:
-x = tf.placeholder(tf.float32, shape=(None, n_features, framelength, 1), name="x")  # None=batch_size, 1=channels
-y = tf.placeholder(tf.float32, shape=(None, n_labels), name="y")  # (5000, 13)
-
-y_ = model(hyperparams, x)
-
-# cross_entropy = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=y, logits=y_, pos_weight=tf.constant(weights)))
-cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=y_)
-optimiser = tf.train.AdamOptimizer(learning_rate=0.4).minimize(cross_entropy)
-# init_op = tf.global_variables_initializer()
-
-############################################################
-# val
-proby_ = tf.nn.sigmoid(y_)
-sigmoid = tf.nn.sigmoid(y_)
-
-correct_prediction = tf.equal(sigmoid > 0.5, y == 1)
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-
-tf.summary.scalar('accuracy', accuracy)
-merged = tf.summary.merge_all()
-test_writer = tf.summary.FileWriter(logs_path + "/test" + str(time.time()), graph=tf.get_default_graph())
-# balanced accuracy
-############################################################
-init_op = tf.global_variables_initializer()
-
-
-
-
-def kfold(hyperparams, data, sess):
     avg_acc=0
+
     for k in trainFolds:
-        copytrainFolds = trainFolds[:]
-        copytrainFolds.remove(k)
-        data.groupFolds(trainFolds=copytrainFolds,valFolds=[k],testFolds=[])
-        print(k)
-        print(copytrainFolds)
-        acc,model = train(hyperparams,data,sess)
-        avg_acc= acc + avg_acc
-        print("one fold ended")
+        with tf.Session(graph=g) as sess:
+            sess.run(tf.global_variables_initializer())
+            copytrainFolds = trainFolds[:]
+            copytrainFolds.remove(k)
+            data.groupFolds(trainFolds=copytrainFolds,valFolds=[k],testFolds=[])
+
+            acc,model = train(hyperparams,data,sess,graphModel)
+            avg_acc= acc + avg_acc
+            print("one fold ended")
     return avg_acc/k
 
 
-def train(hyperparams ,data, sess):
-
+def train(hyperparams ,data, sess,graphModel):
 
     bestacc = 0
 
@@ -120,41 +91,35 @@ def train(hyperparams ,data, sess):
 
         # training on all apart from k
         for i in range(data.batches):
-            train_x, train_y = data.get_next_train_batch()
-            sess.run([optimiser], feed_dict={x: train_x, y: train_y})
 
+            train_x, train_y = data.get_next_train_batch()
+            sess.run([graphModel.optimiser], feed_dict={graphModel.x: train_x, graphModel.y: train_y})
 
 
             if i%5==0:
 
-                val_x,val_y = data.getData("val")
-                acc,summary = sess.run([accuracy,merged], feed_dict={x: val_x, y:val_y })
+                val_x, val_y = data.getData("val")
+                acc,summary = sess.run([graphModel.accuracy,graphModel.merged], feed_dict={ graphModel.y:val_y, graphModel.x: val_x })
                 print(acc)
                 if acc > bestacc:
                     bestacc = acc
                     bestmodel = "bestesModell"
 
+                    #tf.train.Saver().save(sess, 'my_test_model')
+                    #tf.train.Saver -- bestimmte Variablen (Klasse:Modell )
 
 
     return bestacc, bestmodel
 
 
+for hp_index, hyperparams in enumerate(hyperparameterlist):
+
+    print("train hyperparameter configuration" + str(hp_index))
+    with tf.Graph().as_default() as g:
+        graphModel = GraphModel(hyperparams)
+        kfold(hyperparams, trainData, graphModel, g)
 
 
-
-
-
-
-
-
-
-
-with tf.Session() as sess:
-    init = tf.global_variables_initializer()
-    sess.run(init)
-
-    #loop around hyperparams
-    kfold(hyperparams,trainData,sess)
 
 
 
