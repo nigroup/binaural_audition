@@ -4,6 +4,8 @@ import time
 import numpy as np
 import pdb
 
+
+
 class GraphModel():
     def __init__(self, hyperparams):
 
@@ -12,23 +14,23 @@ class GraphModel():
         ############################################################
         # train:
         self.y = tf.placeholder(tf.float32, shape=(None, n_labels), name="y")  # (5000, 13)
-        self.x = tf.placeholder(tf.float32, shape=(None, n_features, framelength, 1),
-                                name="x2")  # None=batch_size, 1=channels
+        self.x = tf.placeholder(tf.float32, shape=(None, n_features, framelength, 1), name="x2")  # None=batch_size, 1=channels
+        self.cross_entropy_class_weights = tf.placeholder(tf.float32, shape=(n_labels), name="cross_entropy_class_weights")
 
-        y_ = self.convCoreModel(self.hyperparams, self.x)
+        self.y_ = self.convCoreModel(self.hyperparams, self.x)
 
-        # cross_entropy = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=y, logits=y_, pos_weight=tf.constant(weights)))
-        cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.y, logits=y_)
+        cross_entropy = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=self.y, logits=self.y_, pos_weight=self.cross_entropy_class_weights))
+        #cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.y, logits=y_)
         self.optimiser = tf.train.AdamOptimizer(learning_rate=0.4).minimize(cross_entropy)
         # init_op = tf.global_variables_initializer()
 
         ############################################################
         # val
-        proby_ = tf.nn.sigmoid(y_)
-        sigmoid = tf.nn.sigmoid(y_)
+        proby_ = tf.nn.sigmoid(self.y_)
+        self.sigmoid = tf.nn.sigmoid(self.y_)
 
-        correct_prediction = tf.equal(sigmoid > 0.5, self.y == 1)
-        self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
+        self.correct_prediction = tf.equal(self.sigmoid > 0.5, self.y == 1)
+        self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, "float")) #f.metrics.precision_at_k ?? check Ivos comment on complicated acc
 
         tf.summary.scalar('accuracy', self.accuracy)
         self.merged = tf.summary.merge_all()
@@ -199,7 +201,7 @@ class GraphModel():
         dense = fc_layer(flatLayerMerged)
 
         '''
-        fcLayers = []
+        fcLayers = []c
         fcLayers.append(fc_layer(flatLayerMerged))
 
 

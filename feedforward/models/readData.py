@@ -166,6 +166,11 @@ class DataSet:
         self.testX, self.testY = self.mergeListData(filter(lambda x: x["fold"] in testFolds, self.data))
 
 
+    def calcweightsOnTrainFolds(self):
+        ones_per_class = np.sum(self.trainY, axis=(0,2))
+        zeros_per_class = self.trainY.shape[0]*self.trainY.shape[2]-ones_per_class
+        self.cross_entropy_class_weights   = zeros_per_class / ones_per_class
+
 
 
     def get_next_train_batch(self):

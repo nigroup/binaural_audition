@@ -73,6 +73,9 @@ def kfold(hyperparams, data,graphModel, g):
             copytrainFolds.remove(k)
             data.groupFolds(trainFolds=copytrainFolds,valFolds=[k],testFolds=[])
 
+            data.calcweightsOnTrainFolds()
+            #also calc standardize matrix here
+
             acc,model = train(hyperparams,data,sess,graphModel)
             avg_acc= acc + avg_acc
             print("one fold ended")
@@ -91,15 +94,16 @@ def train(hyperparams ,data, sess,graphModel):
         for i in range(data.batches):
 
             train_x, train_y = data.get_next_train_batch()
-
-            sess.run([graphModel.optimiser], feed_dict={graphModel.x: train_x, graphModel.y: train_y})
+            sess.run([graphModel.optimiser], feed_dict={graphModel.x: train_x, graphModel.y: train_y, graphModel.cross_entropy_class_weights : data.cross_entropy_class_weights})
 
 
             if i%5==0:
 
                 val_x, val_y = data.getData("val")
-                acc,summary = sess.run([graphModel.accuracy,graphModel.merged], feed_dict={ graphModel.y:val_y, graphModel.x: val_x })
+                os, ocp, oy,oy_,acc,summary = sess.run([graphModel.sigmoid, graphModel.correct_prediction, graphModel.y, graphModel.y_, graphModel.accuracy,graphModel.merged], feed_dict={ graphModel.y:val_y, graphModel.x: val_x })
                 print(acc)
+
+                pdb.set_trace()
                 if acc > bestacc:
                     bestacc = acc
 
