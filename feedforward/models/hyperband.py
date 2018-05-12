@@ -68,7 +68,9 @@ def kfold(hyperparams, data,graphModel, g):
 
     for k in trainFolds:
         with tf.Session(graph=g) as sess:
-            sess.run(tf.global_variables_initializer())
+            init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+            sess.run(init)
+
             copytrainFolds = trainFolds[:]
             copytrainFolds.remove(k)
             data.groupFolds(trainFolds=copytrainFolds,valFolds=[k],testFolds=[])
@@ -80,6 +82,13 @@ def kfold(hyperparams, data,graphModel, g):
             avg_acc= acc + avg_acc
             print("one fold ended")
     return avg_acc/k
+
+
+def mylog(y,y_,acc):
+
+    pdb.set_trace()
+
+    pass
 
 
 def train(hyperparams ,data, sess,graphModel):
@@ -97,13 +106,15 @@ def train(hyperparams ,data, sess,graphModel):
             sess.run([graphModel.optimiser], feed_dict={graphModel.x: train_x, graphModel.y: train_y, graphModel.cross_entropy_class_weights : data.cross_entropy_class_weights})
 
 
+
             if i%5==0:
 
                 val_x, val_y = data.getData("val")
-                os, ocp, oy,oy_,acc,summary = sess.run([graphModel.sigmoid, graphModel.correct_prediction, graphModel.y, graphModel.y_, graphModel.accuracy,graphModel.merged], feed_dict={ graphModel.y:val_y, graphModel.x: val_x })
+                o_recall = sess.run([graphModel.recall], feed_dict={ graphModel.y:val_y, graphModel.x: val_x })
+                acc = o_recall
+
                 print(acc)
 
-                pdb.set_trace()
                 if acc > bestacc:
                     bestacc = acc
 

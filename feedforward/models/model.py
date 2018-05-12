@@ -18,26 +18,28 @@ class GraphModel():
         self.cross_entropy_class_weights = tf.placeholder(tf.float32, shape=(n_labels), name="cross_entropy_class_weights")
 
         self.y_ = self.convCoreModel(self.hyperparams, self.x)
+        self.sigmoid = tf.nn.sigmoid(self.y_)
+        self.thresholded = tf.to_int32(self.sigmoid > 0.5)
 
         cross_entropy = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=self.y, logits=self.y_, pos_weight=self.cross_entropy_class_weights))
         #cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.y, logits=y_)
         self.optimiser = tf.train.AdamOptimizer(learning_rate=0.4).minimize(cross_entropy)
-        # init_op = tf.global_variables_initializer()
 
         ############################################################
         # val
-        proby_ = tf.nn.sigmoid(self.y_)
-        self.sigmoid = tf.nn.sigmoid(self.y_)
 
-        self.correct_prediction = tf.equal(self.sigmoid > 0.5, self.y == 1)
-        self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, "float")) #f.metrics.precision_at_k ?? check Ivos comment on complicated acc
+        self.recall_update, self.recall = tf.metrics.recall(labels=self.y, predictions=self.thresholded)
+        #self.ivo_accuracy =
 
-        tf.summary.scalar('accuracy', self.accuracy)
+        #self.correct_prediction = tf.equal(self.sigmoid > 0.5, self.y == 1)
+        #self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, "float")) #f.metrics.precision_at_k ?? check Ivos comment on complicated acc
+
+
+        #tf.summary.scalar('accuracy', self.accuracy)
         self.merged = tf.summary.merge_all()
         test_writer = tf.summary.FileWriter(logs_path + "/test" + str(time.time()), graph=tf.get_default_graph())
         # balanced accuracy
         ############################################################
-        init_op = tf.global_variables_initializer()
 
     def convCoreModel(self, hyperparams, x):
 
