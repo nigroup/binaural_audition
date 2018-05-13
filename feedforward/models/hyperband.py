@@ -84,15 +84,9 @@ def kfold(hyperparams, data,graphModel, g):
     return avg_acc/k
 
 
-def mylog(y,y_,acc):
-
-    pdb.set_trace()
-
-    pass
 
 
 def train(hyperparams ,data, sess,graphModel):
-    bestmodel = "bestesModell" #?
     bestacc = 0
 
     data.getTrainBatchSize()
@@ -107,7 +101,7 @@ def train(hyperparams ,data, sess,graphModel):
 
 
 
-            if i%5==0:
+            if i%5==0 and len(data.valFold)s>0:
 
                 val_x, val_y = data.getData("val")
                 o_recall = sess.run([graphModel.recall], feed_dict={ graphModel.y:val_y, graphModel.x: val_x })
@@ -118,55 +112,45 @@ def train(hyperparams ,data, sess,graphModel):
                 if acc > bestacc:
                     bestacc = acc
 
-
-                    #tf.train.Saver().save(sess, 'my_test_model')
-                    #tf.train.Saver -- bestimmte Variablen (Klasse:Modell )
+    return bestacc
 
 
-    return bestacc, bestmodel
 
-
+hp_acc = []
 for hp_index, hyperparams in enumerate(hyperparameterlist):
 
     print("train hyperparameter configuration" + str(hp_index))
     with tf.Graph().as_default() as g:
         graphModel = GraphModel(hyperparams)
-        kfold(hyperparams, trainData, graphModel, g)
+        hp_acc.append(kfold(hyperparams, trainData, graphModel, g))
+
+
+hp_acc = np.array(hp_acc)
+best_hyperparams = np.argmax(hp_acc)
+
+
+
+
+#final training and testing
+trainData.groupFolds(trainFolds=trainFolds,valFolds=[])
+with tf.Graph().as_default() as gFinalTrain:
+    graphModel = GraphModel(hyperparameterlist[best_hyperparams])
+    with tf.Session(graph=gFinalTrain) as sess:
+        init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+        sess.run(init)
+        train(hyperparameterlist[best_hyperparams] ,trainData, sess, graphModel)
+
+        test_x, test_y = testData.getData("test")
+        testData.groupFolds(trainFolds=[], valFolds=[], testFolds=testFolds)
+        o_recall = sess.run([graphModel.recall], feed_dict={graphModel.y: text_y, graphModel.x: test_x})
+        acc = o_recall
+
+        print("Final Result:" + acc)
 
 
 
 
 
-print("Ende")
-
-
-
-
-'''
-testData = DataSet(testDir,frames=framelength,folds=[7,8], batchsize=None,shortload=shortload,model=model)
-'''
-
-
-
-
-
-'''
-for para_conf in hyperparameters_configurations:
-    avg_acc[param_conf] = kfold(param_conf)
-
-
-    #choose best loop and save hyperparams
-
-'''
-
-
-
-#trainData.groupFolds(trainFolds=[1,2,3,4,5],valFolds=[],testFolds=[])
-#train(hyperparams, trainData)
-
-
-
-#hier testen - ergebnis fuer paper
 
 
 
