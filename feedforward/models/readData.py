@@ -172,6 +172,22 @@ class DataSet:
         self.cross_entropy_class_weights   = zeros_per_class / ones_per_class
 
 
+    def standardize(self):
+        def calcStandardization(data):
+            mean = np.mean(data, axis=(0,2), keepdims=True)
+            variance = np.var(data, axis=(0,2), keepdims=True)
+            return variance, mean
+
+        def standardize(data,mean,variance):
+            return (data-mean)/variance
+
+
+
+        variance, mean = calcStandardization(self.trainX)
+        standardize(self.trainX, mean, variance)
+        standardize(self.valX, mean,variance)
+
+
 
     def get_next_train_batch(self):
         '''

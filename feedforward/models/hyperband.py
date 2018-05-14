@@ -76,9 +76,13 @@ def kfold(hyperparams, data,graphModel, g):
             data.groupFolds(trainFolds=copytrainFolds,valFolds=[k],testFolds=[])
 
             data.calcweightsOnTrainFolds()
+            data.standardize()
+
+
+
             #also calc standardize matrix here
 
-            acc,model = train(hyperparams,data,sess,graphModel)
+            acc= train(hyperparams,data,sess,graphModel)
             avg_acc= acc + avg_acc
             print("one fold ended")
     return avg_acc/k
@@ -101,11 +105,11 @@ def train(hyperparams ,data, sess,graphModel):
 
 
 
-            if i%5==0 and len(data.valFold)s>0:
+            if i%5==0 and len(data.valFolds)>0:
 
                 val_x, val_y = data.getData("val")
                 o_recall = sess.run([graphModel.recall], feed_dict={ graphModel.y:val_y, graphModel.x: val_x })
-                acc = o_recall
+                acc = o_recall[0]
 
                 print(acc)
 
@@ -122,6 +126,7 @@ for hp_index, hyperparams in enumerate(hyperparameterlist):
     print("train hyperparameter configuration" + str(hp_index))
     with tf.Graph().as_default() as g:
         graphModel = GraphModel(hyperparams)
+        single_acc = kfold(hyperparams, trainData, graphModel, g)
         hp_acc.append(kfold(hyperparams, trainData, graphModel, g))
 
 
@@ -131,21 +136,29 @@ best_hyperparams = np.argmax(hp_acc)
 
 
 
+best_hyperparams = 1
+
 #final training and testing
-trainData.groupFolds(trainFolds=trainFolds,valFolds=[])
 with tf.Graph().as_default() as gFinalTrain:
     graphModel = GraphModel(hyperparameterlist[best_hyperparams])
     with tf.Session(graph=gFinalTrain) as sess:
         init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
         sess.run(init)
+
+        trainData.groupFolds(trainFolds=trainFolds, valFolds=[], testFolds=[])
+        trainData.calcweightsOnTrainFolds()
+        trainData.standardize()
+
         train(hyperparameterlist[best_hyperparams] ,trainData, sess, graphModel)
 
-        test_x, test_y = testData.getData("test")
         testData.groupFolds(trainFolds=[], valFolds=[], testFolds=testFolds)
-        o_recall = sess.run([graphModel.recall], feed_dict={graphModel.y: text_y, graphModel.x: test_x})
-        acc = o_recall
+        test_x, test_y = testData.getData("test")
 
-        print("Final Result:" + acc)
+        o_recall = sess.run([graphModel.recall], feed_dict={graphModel.y: test_y, graphModel.x: test_x})
+        acc = o_recall[0]
+
+        print("Final Result:")
+        print(acc)
 
 
 
