@@ -2,14 +2,12 @@
 import socket
 from readData import *
 from settings import *
-from cnnmodel import *
+from model import *
 
 
 
-trainData = DataSet(trainDir,frames=framelength,folds=trainFolds, batchsize=20,shortload=shortload,model="framewise_cnn")
-testData = DataSet(testDir,frames=framelength,folds=testFolds, batchsize=None,shortload=shortload,model="framewise_cnn")
-
-
+trainData = DataSet(trainDir,frames=framelength,folds=trainFolds, overlapSampleSize=25, batchsize=10,shortload=shortload)
+testData = DataSet(testDir,frames=framelength,folds=testFolds, overlapSampleSize=25, batchsize=None,shortload=shortload)
 
 
 # hyperparams
@@ -58,60 +56,41 @@ hyperparams = {
     "sequence_ratemap_pool_strides": sequence_ratemap_pool_strides
 }
 
+hyperparameterlist = [
+    hyperparams, hyperparams
+]
 
 
 
+def kfold(hyperparams, data,graphModel, g):
 
-
-
-
-############################################################
-# train:
-x = tf.placeholder(tf.float32, shape=(None, n_features, framelength, 1), name="x")  # None=batch_size, 1=channels
-y = tf.placeholder(tf.float32, shape=(None, n_labels), name="y")  # (5000, 13)
-
-y_ = model(hyperparams, x)
-
-# cross_entropy = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=y, logits=y_, pos_weight=tf.constant(weights)))
-cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=y_)
-optimiser = tf.train.AdamOptimizer(learning_rate=0.4).minimize(cross_entropy)
-# init_op = tf.global_variables_initializer()
-
-############################################################
-# val
-proby_ = tf.nn.sigmoid(y_)
-sigmoid = tf.nn.sigmoid(y_)
-
-correct_prediction = tf.equal(sigmoid > 0.5, y == 1)
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-
-tf.summary.scalar('accuracy', accuracy)
-merged = tf.summary.merge_all()
-test_writer = tf.summary.FileWriter(logs_path + "/test" + str(time.time()), graph=tf.get_default_graph())
-# balanced accuracy
-############################################################
-init_op = tf.global_variables_initializer()
-
-
-
-
-def kfold(hyperparams, data, sess):
     avg_acc=0
+
     for k in trainFolds:
-        copytrainFolds = trainFolds[:]
-        copytrainFolds.remove(k)
-        data.groupFolds(trainFolds=copytrainFolds,valFolds=[k],testFolds=[])
-        print(k)
-        print(copytrainFolds)
-        acc,model = train(hyperparams,data,sess)
-        avg_acc= acc + avg_acc
-        print("one fold ended")
+        with tf.Session(graph=g) as sess:
+            init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+            sess.run(init)
+
+            copytrainFolds = trainFolds[:]
+            copytrainFolds.remove(k)
+            data.groupFolds(trainFolds=copytrainFolds,valFolds=[k],testFolds=[])
+
+            data.calcweightsOnTrainFolds()
+            data.standardize()
+
+
+
+            #also calc standardize matrix here
+
+            acc= train(hyperparams,data,sess,graphModel)
+            avg_acc= acc + avg_acc
+            print("one fold ended")
     return avg_acc/k
 
 
-def train(hyperparams ,data, sess):
 
 
+def train(hyperparams ,data, sess,graphModel):
     bestacc = 0
 
     data.getTrainBatchSize()
@@ -120,74 +99,71 @@ def train(hyperparams ,data, sess):
 
         # training on all apart from k
         for i in range(data.batches):
+
             train_x, train_y = data.get_next_train_batch()
-            sess.run([optimiser], feed_dict={x: train_x, y: train_y})
+            sess.run([graphModel.optimiser], feed_dict={graphModel.x: train_x, graphModel.y: train_y, graphModel.cross_entropy_class_weights : data.cross_entropy_class_weights})
 
 
 
-            if i%5==0:
+            if i%5==0 and len(data.valFolds)>0:
 
-                val_x,val_y = data.getData("val")
-                acc,summary = sess.run([accuracy,merged], feed_dict={x: val_x, y:val_y })
+                val_x, val_y = data.getData("val")
+                o_recall = sess.run([graphModel.recall], feed_dict={ graphModel.y:val_y, graphModel.x: val_x })
+                acc = o_recall[0]
+
                 print(acc)
+
                 if acc > bestacc:
                     bestacc = acc
-                    bestmodel = "bestesModell"
+
+    return bestacc
 
 
 
-    return bestacc, bestmodel
+hp_acc = []
+for hp_index, hyperparams in enumerate(hyperparameterlist):
+
+    print("train hyperparameter configuration" + str(hp_index))
+    with tf.Graph().as_default() as g:
+        graphModel = GraphModel(hyperparams)
+        single_acc = kfold(hyperparams, trainData, graphModel, g)
+        hp_acc.append(kfold(hyperparams, trainData, graphModel, g))
 
 
-
-
-
-
-
-
-
-
-
-
-with tf.Session() as sess:
-    init = tf.global_variables_initializer()
-    sess.run(init)
-
-    #loop around hyperparams
-    kfold(hyperparams,trainData,sess)
-
-
-
-print("Ende")
+hp_acc = np.array(hp_acc)
+best_hyperparams = np.argmax(hp_acc)
 
 
 
 
-'''
-testData = DataSet(testDir,frames=framelength,folds=[7,8], batchsize=None,shortload=shortload,model=model)
-'''
+best_hyperparams = 1
+
+#final training and testing
+with tf.Graph().as_default() as gFinalTrain:
+    graphModel = GraphModel(hyperparameterlist[best_hyperparams])
+    with tf.Session(graph=gFinalTrain) as sess:
+        init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+        sess.run(init)
+
+        trainData.groupFolds(trainFolds=trainFolds, valFolds=[], testFolds=[])
+        trainData.calcweightsOnTrainFolds()
+        trainData.standardize()
+
+        train(hyperparameterlist[best_hyperparams] ,trainData, sess, graphModel)
+
+        testData.groupFolds(trainFolds=[], valFolds=[], testFolds=testFolds)
+        test_x, test_y = testData.getData("test")
+
+        o_recall = sess.run([graphModel.recall], feed_dict={graphModel.y: test_y, graphModel.x: test_x})
+        acc = o_recall[0]
+
+        print("Final Result:")
+        print(acc)
 
 
 
 
 
-'''
-for para_conf in hyperparameters_configurations:
-    avg_acc[param_conf] = kfold(param_conf)
-
-
-    #choose best loop and save hyperparams
-
-'''
-
-
-
-#trainData.groupFolds(trainFolds=[1,2,3,4,5],valFolds=[],testFolds=[])
-#train(hyperparams, trainData)
-
-
-
-#hier testen - ergebnis fuer paper
 
 
 

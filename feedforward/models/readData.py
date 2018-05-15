@@ -10,6 +10,8 @@ import pdb
 
 logger = logging.getLogger(__name__)
 from settings import *
+from mlxtend.preprocessing import shuffle_arrays_unison
+
 
 
 class DataSet:
@@ -21,14 +23,14 @@ class DataSet:
     # batchsize - None: one batch is created only (testing)
     # shortload - if true: only 10 files are loaded for testing
 
-    def __init__(self, dir, frames, folds, batchsize=None, shortload=None, model=None):
+    def __init__(self, dir, frames, folds, overlapSampleSize, batchsize=None, shortload=None):
+        self.overlapSampleSize = overlapSampleSize
         self.counter = 0
         self.batchsize = batchsize
         self.batches = 0
         self.shortload = shortload
         self.dir = dir
         self.frames = frames
-        self.model = model
         self.folds = folds
         self.trainFolds = []
         self.valFolds = []
@@ -52,6 +54,10 @@ class DataSet:
         if self.batchsize == None:
             self.batchsize = countdata
 
+
+        #we define a sample as a block:
+        #self.batchsize = self.batchsize * self.frames #wedont
+
         batches = int(countdata / self.batchsize)
 
         # if the last batch is not complete, we dont use it #ok!
@@ -73,10 +79,11 @@ class DataSet:
             allpaths = allpaths + paths
 
         x, y = self.getDatafromPaths(allpaths)
-        return {"fold": fold, "x": x, "y": y}
+        return {"fold": fold, "x": x, "y_block": y}
+
+
 
     def getDatafromPaths(self, allpaths):
-
         xdata = np.ones((self.frames, 160, 1))
         ydata = np.ones((self.frames, 13, 1))
 
@@ -93,10 +100,9 @@ class DataSet:
             # for wavefilelength stride one right and cut piece of
 
             # ?#change - here 500ms immmer eins nach rechts gehen  -- ggf. stride von zwei frames# geht einer nach rechts -
-
             # old style: files were cur in blocks - not needed anymore
             x = file["x"][:, 0:file["x"].shape[1] - (file["x"].shape[1] % self.frames), :]
-            y = file["y"][:, 0:file["x"].shape[1] - (file["y"].shape[1] % self.frames)]
+            y = file["y_block"][:, 0:file["x"].shape[1] - (file["y_block"].shape[1] % self.frames)]
 
             # reshape
             x = x.reshape((self.frames, 160, -1))
@@ -115,10 +121,10 @@ class DataSet:
     def getData(self, type):
 
         if type == "val":
-            return self.valX.reshape((-1, n_features, framelength, 1)), self.valY.reshape((-1, n_labels))
+            return self.valX.reshape((-1, n_features, framelength, 1)), self.valY[-1,:,:].reshape((-1, n_labels))
 
         if type == "test":
-            return self.testX.reshape((-1, n_features, framelength, 1)), self.testY.reshape((-1, n_labels))
+            return self.testX.reshape((-1, n_features, framelength, 1)), self.testY[-1,:,:].reshape((-1, n_labels))
 
     def shuffle(self):
         ind = np.arange(self.trainX.shape[2])
@@ -139,7 +145,7 @@ class DataSet:
 
         for i, dataFold in enumerate(data):
             xdata = np.concatenate((xdata, data[i]["x"]), axis=2)
-            ydata = np.concatenate((ydata, data[i]["y"]), axis=2)
+            ydata = np.concatenate((ydata, data[i]["y_block"]), axis=2)
 
         xData = xdata[:, :, 1:]
         yData = ydata[:, :, 1:]
@@ -159,7 +165,55 @@ class DataSet:
         self.valX, self.valY = self.mergeListData(filter(lambda x: x["fold"] in valFolds, self.data))
         self.testX, self.testY = self.mergeListData(filter(lambda x: x["fold"] in testFolds, self.data))
 
+
+    def calcweightsOnTrainFolds(self):
+        ones_per_class = np.sum(self.trainY, axis=(0,2))
+        zeros_per_class = self.trainY.shape[0]*self.trainY.shape[2]-ones_per_class
+        self.cross_entropy_class_weights   = zeros_per_class / ones_per_class
+
+
+    def standardize(self):
+        def calcStandardization(data):
+            mean = np.mean(data, axis=(0,2), keepdims=True)
+            variance = np.var(data, axis=(0,2), keepdims=True)
+            return variance, mean
+
+        def standardize(data,mean,variance):
+            return (data-mean)/variance
+
+
+
+        variance, mean = calcStandardization(self.trainX)
+        standardize(self.trainX, mean, variance)
+        standardize(self.valX, mean,variance)
+
+
+
     def get_next_train_batch(self):
+        '''
+            if 3 samples (3*49) and self.blockbasedJumps = 25
+            return x:5*49 and y:5*13
+        :return:
+        '''
+
+        def overlapSamples(array):
+            '''
+            stride and (probably) expand the data
+            '''
+
+            overlaptimes = array.shape[2] *2 -1 -1 #last one cant be taken (framesize is in our case not a multiple of oversampling)
+            returnArray= np.zeros([array.shape[0],array.shape[1],overlaptimes])
+
+            array = np.reshape(array, (-1, array.shape[1]))
+
+
+            for i in np.arange(overlaptimes):
+                singleSlice =  array[  i*self.overlapSampleSize   : i*self.overlapSampleSize + self.frames  ,:]
+                returnArray[:,:,i] = singleSlice
+
+            return returnArray
+
+
 
         # last batch
         if (self.counter == self.batches - 1):
@@ -170,22 +224,31 @@ class DataSet:
         if (self.batches != 1 or self.counter == 0):
             self.counter = self.counter + 1
 
-        # unterscheidung kann hoechstwahrscheinlich weg
-        '''
-        if self.model==None:
-            labels = self.ydata[:,:,(self.counter-1)*self.batchsize:(self.counter)*self.batchsize]
-        elif self.model=="framewise_cnn": 
-            labels = self.ydata[-2,:,(self.counter-1)*self.batchsize:(self.counter)*self.batchsize]
 
-        labels = 
-        '''
-        labels = self.trainY[-2, :, (self.counter - 1) * self.batchsize:(self.counter) * self.batchsize]
-        data = self.trainX[:, :, (self.counter - 1) * self.batchsize:(self.counter) * self.batchsize]
+
+        #get data for batch
+        labels = self.trainY[:, :, (self.counter - 1) * self.batchsize : (self.counter) * self.batchsize] #shape was -1 in first dimension
+        data = self.trainX[:, :, (self.counter - 1) * self.batchsize : (self.counter) * self.batchsize]
+
+
+        #stride in Data (can expand Data)
+        data = overlapSamples(data)
+        labels = overlapSamples(labels)
+
+
+        #get Blcok Based Labels
+        labels = labels[-1,:,:]
+
+
+
+        #shuffle blocks in batch
+        #todo shuffle
+
 
         nans = np.isnan(labels)
         labels[nans] = 1
 
-        data = data.reshape((-1, n_features, framelength, 1))
+        data = data.reshape((-1, n_features, framelength, 1)) #does not do anything... todo remove
         labels = labels.reshape((-1, n_labels))  # [200,13]
 
         return data, labels

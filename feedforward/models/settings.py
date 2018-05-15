@@ -27,4 +27,4 @@ if socket.gethostname()=="eltanin":
 else:
     trainDir = '/Users/alessandroschneider/Desktop/TuBerlin/bachelor/data/train/'
     testDir = '/Users/alessandroschneider/Desktop/TuBerlin/bachelor/data/test'
-    shortload=1
+    shortload=2

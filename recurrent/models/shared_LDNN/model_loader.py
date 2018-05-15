@@ -51,6 +51,17 @@ def get_state_reset_op(state_variables, cell, BATCH_SIZE):
 
 def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
              NUM_HIDDEN, OUTPUT_KEEP_PROB, NUM_MLP,NUM_NEURON):
+    """model a LDNN Network,
+
+      argument:
+        x:features
+
+      return:
+        original_out: prediction
+        update_op: resume state from previous state
+        reset_op: not use in train, only for validation to reset zero
+
+    """
     with tf.variable_scope('lstm', initializer=tf.orthogonal_initializer()):
         mlstm_cell = tf.contrib.rnn.MultiRNNCell(
             [unit_lstm(NUM_HIDDEN,OUTPUT_KEEP_PROB) for _ in range(NUM_LSTM)], state_is_tuple=True)
