@@ -112,3 +112,11 @@ def my_accuracy_builder(mask_val, output_threshold, metric='bac2'):
             return bac
         raise ValueError("'metric' has to be either 'bac2', 'bac', 'sensitivity' or 'specificity'")
     return my_accuracy_per_batch
+
+
+def get_index_in_loader_len(loader_len, epoch, iteration):
+    index = 0
+    act_e = 0
+    while act_e < epoch-1:
+        index += loader_len[act_e]
+    index += iteration
