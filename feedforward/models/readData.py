@@ -78,14 +78,32 @@ class DataSet:
             paths = glob(os.path.join(dir, "*.npz"))
             allpaths = allpaths + paths
 
-        x, y = self.getDatafromPaths(allpaths)
-        return {"fold": fold, "x": x, "y_block": y}
+        data = self.getDatafromPaths(allpaths)
+        return {"fold": fold, "data" : data }
+
+
+    def getDatafromPath(self, path):
+        print path
+        file = np.load(path)
+
+
+        x = file["x"][:, 0:file["x"].shape[1] - (file["x"].shape[1] % self.frames), :]
+        y = file["y_block"][:, 0:file["x"].shape[1] - (file["y_block"].shape[1] % self.frames)]
+
+        # reshape
+        x = x.reshape((self.frames, 160, -1))
+        y = y.reshape((self.frames, 13, -1))
+        y[y == -1] = 0
+        instanceData = {"x": x, "y_block": y}
+
+        return instanceData
 
 
 
     def getDatafromPaths(self, allpaths):
-        xdata = np.ones((self.frames, 160, 1))
-        ydata = np.ones((self.frames, 13, 1))
+        alldata = []
+        #xdata = np.ones((self.frames, 160, 1))
+        #ydata = np.ones((self.frames, 13, 1))
 
         if self.shortload == None:
             numbersceneinstances = len(allpaths)
@@ -93,38 +111,25 @@ class DataSet:
             numbersceneinstances = self.shortload
 
         for i in np.arange(numbersceneinstances):
-            print(allpaths[i])
-
-            file = np.load(allpaths[i])
-
-            # for wavefilelength stride one right and cut piece of
-
-            # ?#change - here 500ms immmer eins nach rechts gehen  -- ggf. stride von zwei frames# geht einer nach rechts -
-            # old style: files were cur in blocks - not needed anymore
-            x = file["x"][:, 0:file["x"].shape[1] - (file["x"].shape[1] % self.frames), :]
-            y = file["y_block"][:, 0:file["x"].shape[1] - (file["y_block"].shape[1] % self.frames)]
-
-            # reshape
-            x = x.reshape((self.frames, 160, -1))
-            y = y.reshape((self.frames, 13, -1))
-            y[y == -1] = 0
+            instanceData = self.getDatafromPath(allpaths[i])
+            alldata.append(instanceData)
 
             # concatenate
-            xdata = np.concatenate((xdata, x), axis=2)
-            ydata = np.concatenate((ydata, y), axis=2)
+            #xdata = np.concatenate((xdata, x), axis=2)
+            #ydata = np.concatenate((ydata, y), axis=2)
 
         # remove first ones - a bit stupid, fix!
-        xData = xdata[:, :, 1:]
-        yData = ydata[:, :, 1:]
-        return x, y
+        #xData = xdata[:, :, 1:]
+        #yData = ydata[:, :, 1:]
+        return alldata
 
-    def getData(self, type):
+    def getData(self, type, instance):
 
         if type == "val":
-            return self.valX.reshape((-1, n_features, framelength, 1)), self.valY[-1,:,:].reshape((-1, n_labels))
+            return self.valX[instance].reshape((-1, n_features, framelength, 1)), self.valY[instance][-1,:,:].reshape((-1, n_labels))
 
         if type == "test":
-            return self.testX.reshape((-1, n_features, framelength, 1)), self.testY[-1,:,:].reshape((-1, n_labels))
+            return self.testX[instance].reshape((-1, n_features, framelength, 1)), self.testY[instance][-1,:,:].reshape((-1, n_labels))
 
     def shuffle(self):
         ind = np.arange(self.trainX.shape[2])
@@ -139,17 +144,31 @@ class DataSet:
 
         print(str(self.counter) + "new epoch!")
 
-    def mergeListData(self, data):
+    def mergeListData_flattened(self, alldata):
         xdata = np.ones((self.frames, 160, 1))
         ydata = np.ones((self.frames, 13, 1))
 
-        for i, dataFold in enumerate(data):
-            xdata = np.concatenate((xdata, data[i]["x"]), axis=2)
-            ydata = np.concatenate((ydata, data[i]["y_block"]), axis=2)
+        for i, dataFold in enumerate(alldata):
+            for j, singleinstancedatadict in enumerate(alldata[i]["data"]):
+                xdata = np.concatenate((xdata, singleinstancedatadict["x"]), axis=2)
+                ydata = np.concatenate((ydata, singleinstancedatadict["y_block"]), axis=2)
 
         xData = xdata[:, :, 1:]
         yData = ydata[:, :, 1:]
         return xData, yData
+
+
+    def mergeListData_instancesremained(self, alldata):
+        xData = []
+        yData = []
+
+        for i, dataFold in enumerate(alldata):
+            for j, singleinstancedatadict in enumerate(alldata[i]["data"]):
+                xData.append(singleinstancedatadict["x"])
+                yData.append(singleinstancedatadict["y_block"])
+        return xData, yData
+
+
 
     def groupFolds(self, trainFolds, valFolds, testFolds):
         self.counter = 0
@@ -161,9 +180,12 @@ class DataSet:
         self.trainX, self.trainY = [], []
         self.testX, self.testY = [], []
 
-        self.trainX, self.trainY = self.mergeListData(filter(lambda x: x["fold"] in trainFolds, self.data))
-        self.valX, self.valY = self.mergeListData(filter(lambda x: x["fold"] in valFolds, self.data))
-        self.testX, self.testY = self.mergeListData(filter(lambda x: x["fold"] in testFolds, self.data))
+
+
+        self.trainX, self.trainY = self.mergeListData_flattened(filter(lambda x: x["fold"] in trainFolds, self.data)) #unpack all sceneInstances
+
+        self.valX, self.valY = self.mergeListData_instancesremained(filter(lambda x: x["fold"] in valFolds, self.data)) #leave sceneInstaces as they are, > accuracy per sceneInstance
+        self.testX, self.testY = self.mergeListData_instancesremained(filter(lambda x: x["fold"] in testFolds, self.data)) #leave sceneInstaces as they are, > accuracy per sceneInstance
 
 
     def calcweightsOnTrainFolds(self):
@@ -185,7 +207,7 @@ class DataSet:
 
         variance, mean = calcStandardization(self.trainX)
         standardize(self.trainX, mean, variance)
-        standardize(self.valX, mean,variance)
+        #standardize(self.valX, mean,variance) TODO - has to be done again because val data are in new stupid dict structure...
 
 
 
