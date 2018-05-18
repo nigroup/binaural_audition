@@ -23,7 +23,7 @@ import numpy as np
 For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -43,32 +43,32 @@ class HyperParameters:
             if not os.path.exists(self.SESSION_DIR):
                 os.makedirs(self.SESSION_DIR)
         else:
-            self.RESTORE_DATE = '20180422'
+            self.RESTORE_DATE = FOLD_NAME
             self.OLD_EPOCH = 2
             self.LOG_FOLDER = './log/' + self.RESTORE_DATE + '/'
             self.SESSION_DIR = self.LOG_FOLDER + str(VAL_FOLD) + '/'
 
         # How many scenes include in this model.
-        self.SCENES = ['scene'+str(i) for i in range(1,2)]
+        self.SCENES = ['scene'+str(i) for i in range(1,81)]
         # Parameters for stacked-LSTM layer
-        self.NUM_HIDDEN = 512
+        self.NUM_HIDDEN = 581
         self.NUM_LSTM = 3
         # Parameters for MLP
-        self.NUM_NEURON = 100
-        self.NUM_MLP = 1
+        self.NUM_NEURON = 128
+        self.NUM_MLP = 0
 
         # regularization
-        self.LAMBDA_L2 = 0.005
+        self.LAMBDA_L2 =  0.001717511348445849
         self.OUTPUT_KEEP_PROB = 0.9
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
-        self.BATCH_SIZE = 70
-        self.VALIDATION_BATCH_SIZE = 50
-        self.EPOCHS = 10
-        self.TIMELENGTH = 2000
+        self.BATCH_SIZE = 100
+        self.VALIDATION_BATCH_SIZE = 20
+        self.EPOCHS = 30
+        self.TIMELENGTH = 500
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
-        self.LEARNING_RATE = 0.001
+        self.LEARNING_RATE = 0.003586963428122012
         # Pre-processing dataset to get rectangle or paths(for validation)
         self.VAL_FOLD = VAL_FOLD
         self.TRAIN_SET, self.PATHS = get_train_data(self.VAL_FOLD,self.SCENES,self.EPOCHS,self.TIMELENGTH)
@@ -82,7 +82,6 @@ class HyperParameters:
     # For construct a part of graph for inference, batch_size can be 1
     def validation(self, batch_size):
         with tf.name_scope('LDNN'):
-            # TODO: use padding for batch testing or what?
             valid_batch = read_validationset(self.SET['validation'], batch_size)
             handle = tf.placeholder(tf.string, shape=[])
             iterator = tf.data.Iterator.from_string_handle(handle, valid_batch.output_types, valid_batch.output_shapes)
@@ -208,20 +207,24 @@ class HyperParameters:
             tf.logging.set_verbosity(tf.logging.INFO)
 
             # Start training
-            with tf.Session() as sess:
+            config = tf.ConfigProto()
+            config.gpu_options.allow_growth = True
+            with tf.Session(config=config) as sess:
                 logger.info('''
-                                                K_folder:{}
-                                                Epochs: {}
-                                                Number of lstm layer: {}
-                                                Number of lstm neuron: {}
-                                                Number of mlp layer: {}
-                                                Number of mlp neuron: {}
-                                                Batch size: {}
-                                                TIMELENGTH: {}
-                                                Dropout: {}
-                                                Scenes:{}'''.format(
+                                                                K_folder:{}
+                                                                Epochs: {}
+                                                                Learning rate: {}
+                                                                Number of lstm layer: {}
+                                                                Number of lstm neuron: {}
+                                                                Number of mlp layer: {}
+                                                                Number of mlp neuron: {}
+                                                                Batch size: {}
+                                                                TIMELENGTH: {}
+                                                                Dropout: {}
+                                                                Scenes:{}'''.format(
                     self.VAL_FOLD,
                     self.EPOCHS + self.OLD_EPOCH,
+                    self.LEARNING_RATE,
                     self.NUM_LSTM,
                     self.NUM_HIDDEN,
                     self.NUM_MLP,
@@ -229,7 +232,7 @@ class HyperParameters:
                     self.BATCH_SIZE,
                     self.TIMELENGTH,
                     self.OUTPUT_KEEP_PROB,
-                    'scene1-80'))
+                    len(self.SCENES)))
                 train_handle = sess.run(train_iterator.string_handle())
                 valid_handle = sess.run(valid_iterator.string_handle())
                 # Run the initializer if restore == False
@@ -257,9 +260,9 @@ class HyperParameters:
                     loss, _, se, sp, tempf1, _ = sess.run([loss_op, train_op, sensitivity, specificity, f1, update_op],
                                                           feed_dict={handle: train_handle})
 
-                    # logger.debug(
-                    #     'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
-                    #     loss, (se + sp) / 2, se, sp, tempf1)
+                    logger.debug(
+                        'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
+                        loss, (se + sp) / 2, se, sp, tempf1)
                     train_cost = train_cost + loss
                     sen = sen + se
                     spe = spe + sp
@@ -303,7 +306,7 @@ class HyperParameters:
                                 # print([scene_id,instance_name]+classes_performance.tolist())
                                 performence.append([scene_id,instance_name]+classes_performance.tolist())
                         # average each scene instance after validation finish
-                        p = average_performance(performence,self.LOG_FOLDER,epoch_number)
+                        p = average_performance(performence,self.LOG_FOLDER,epoch_number,self.VAL_FOLD)
 
                         epoch_duration1 = time.time() - epoch_start
                         logger.info(
@@ -321,7 +324,7 @@ class HyperParameters:
                         epoch_start = time.time()
 
                 if self.MODEL_SAVE:
-                    save_path = saver.save(sess, self.SESSION_DIR + 'model.ckpt')
+                    save_path = saver.save(sess, self.SESSION_DIR + 'model.ckpt',write_meta_graph=False)
                     print("Model saved in path: %s" % save_path)
 
 
@@ -330,9 +333,9 @@ class HyperParameters:
 
 
 if __name__ == "__main__":
-    fname = datetime.datetime.now().strftime("%Y%m%d")
-    # fname ='test'
-    for i in range(1,7):
+    # fname = datetime.datetime.now().strftime("%Y%m%d")
+    fname ='20180516_setting2'
+    for i in range(5,7):
         with tf.Graph().as_default():
             hyperparameters = HyperParameters(VAL_FOLD=i, FOLD_NAME= fname)
             hyperparameters.main()
