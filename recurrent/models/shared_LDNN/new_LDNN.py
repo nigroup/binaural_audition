@@ -23,7 +23,7 @@ import numpy as np
 For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
-# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -58,7 +58,7 @@ class HyperParameters:
         self.NUM_MLP = 0
 
         # regularization
-        self.LAMBDA_L2 =  0.001717511348445849
+        # self.LAMBDA_L2 = 0.001717511348445849
         self.OUTPUT_KEEP_PROB = 0.9
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
@@ -68,7 +68,7 @@ class HyperParameters:
         self.TIMELENGTH = 500
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
-        self.LEARNING_RATE = 0.003586963428122012
+        self.LEARNING_RATE = 0.01
         # Pre-processing dataset to get rectangle or paths(for validation)
         self.VAL_FOLD = VAL_FOLD
         self.TRAIN_SET, self.PATHS = get_train_data(self.VAL_FOLD,self.SCENES,self.EPOCHS,self.TIMELENGTH)
@@ -82,10 +82,11 @@ class HyperParameters:
     # For construct a part of graph for inference, batch_size can be 1
     def validation(self, batch_size):
         with tf.name_scope('LDNN'):
-            valid_batch = read_validationset(self.SET['validation'], batch_size)
-            handle = tf.placeholder(tf.string, shape=[])
-            iterator = tf.data.Iterator.from_string_handle(handle, valid_batch.output_types, valid_batch.output_shapes)
             with tf.device('/cpu:0'):
+                valid_batch = read_validationset(self.SET['validation'], batch_size)
+                handle = tf.placeholder(tf.string, shape=[])
+                iterator = tf.data.Iterator.from_string_handle(handle, valid_batch.output_types,
+                                                               valid_batch.output_shapes)
                 X, Y, seq = iterator.get_next()
             mask_zero_frames = tf.cast(tf.not_equal(Y, -1), tf.int32)
             mask_padding = tf.cast(tf.not_equal(Y, 0), tf.int32)
@@ -125,10 +126,12 @@ class HyperParameters:
 
     def train(self, batch_size):
         with tf.name_scope('LDNN'):
-            train_batch = read_trainset(self.SET['train'], self.BATCH_SIZE)
-            handle = tf.placeholder(tf.string, shape=[])
-            iterator = tf.data.Iterator.from_string_handle(handle, train_batch.output_types, train_batch.output_shapes)
+
             with tf.device('/cpu:0'):
+                train_batch = read_trainset(self.SET['train'], self.BATCH_SIZE)
+                handle = tf.placeholder(tf.string, shape=[])
+                iterator = tf.data.Iterator.from_string_handle(handle, train_batch.output_types,
+                                                               train_batch.output_shapes)
                 X, Y, seq = iterator.get_next()
             # get mask matrix
             mask_zero_frames = tf.cast(tf.not_equal(Y, -1), tf.int32)
@@ -151,15 +154,15 @@ class HyperParameters:
                 # eliminate zero_frame loss
                 loss_op = tf.reduce_sum(loss_op * tf.cast(mask_zero_frames, tf.float32)) / total
                 # L2
-                for unreg in [tf_var.name for tf_var in tf.trainable_variables() if
-                              ("noreg" in tf_var.name or "Bias" in tf_var.name)]:
-                    print(unreg)
-                l2 = self.LAMBDA_L2 * sum(
-                    tf.nn.l2_loss(tf_var)
-                    for tf_var in tf.trainable_variables()
-                    if not ("noreg" in tf_var.name or "Bias" in tf_var.name)
-                )
-                loss_op += l2
+                # for unreg in [tf_var.name for tf_var in tf.trainable_variables() if
+                #               ("noreg" in tf_var.name or "Bias" in tf_var.name)]:
+                #     print(unreg)
+                # l2 = self.LAMBDA_L2 * sum(
+                #     tf.nn.l2_loss(tf_var)
+                #     for tf_var in tf.trainable_variables()
+                #     if not ("bias" in tf_var.name)
+                # )
+                # loss_op += l2
             with tf.variable_scope('optimize'):
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.LEARNING_RATE)
                 # train_op = optimizer.minimize(loss_op)
@@ -335,7 +338,7 @@ class HyperParameters:
 if __name__ == "__main__":
     # fname = datetime.datetime.now().strftime("%Y%m%d")
     fname ='20180516_setting2'
-    for i in range(5,7):
+    for i in range(4,7):
         with tf.Graph().as_default():
             hyperparameters = HyperParameters(VAL_FOLD=i, FOLD_NAME= fname)
             hyperparameters.main()
