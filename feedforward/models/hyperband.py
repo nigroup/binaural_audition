@@ -84,8 +84,29 @@ def kfold(hyperparams, data,graphModel, g):
 
             acc= train(hyperparams,data,sess,graphModel)
             avg_acc= acc + avg_acc
-            print("one fold ended")
     return avg_acc/k
+
+
+
+def validate_mean_over_instances(data, graphModel,sess,  type):  #data is a list of lists of a dict { x y_block}
+    if type=="val":
+        numberScenes = len(data.valX)
+    else:
+        numberScenes= len(data.testX)
+
+    acc = 0
+    for instance in np.arange(numberScenes):
+        data_x, data_y = data.getData(type, instance)
+        o_recall = sess.run([graphModel.recall], feed_dict={graphModel.y: data_y, graphModel.x: data_x})
+        acc_instance = o_recall[0]
+
+
+        acc = acc + acc_instance
+
+    average_acc_batch = acc / numberScenes
+    return average_acc_batch
+
+
 
 
 
@@ -100,18 +121,14 @@ def train(hyperparams ,data, sess,graphModel):
         # training on all apart from k
         for i in range(data.batches):
 
+            print("in a batch")
             train_x, train_y = data.get_next_train_batch()
             sess.run([graphModel.optimiser], feed_dict={graphModel.x: train_x, graphModel.y: train_y, graphModel.cross_entropy_class_weights : data.cross_entropy_class_weights})
 
 
-
+            #validation #
             if i%5==0 and len(data.valFolds)>0:
-
-                val_x, val_y = data.getData("val")
-                o_recall = sess.run([graphModel.recall], feed_dict={ graphModel.y:val_y, graphModel.x: val_x })
-                acc = o_recall[0]
-
-                print(acc)
+                acc = validate_mean_over_instances(data, graphModel, sess, "val")
 
                 if acc > bestacc:
                     bestacc = acc
@@ -148,17 +165,19 @@ with tf.Graph().as_default() as gFinalTrain:
         trainData.groupFolds(trainFolds=trainFolds, valFolds=[], testFolds=[])
         trainData.calcweightsOnTrainFolds()
         trainData.standardize()
-
+        print("I start training")
         train(hyperparameterlist[best_hyperparams] ,trainData, sess, graphModel)
 
-        testData.groupFolds(trainFolds=[], valFolds=[], testFolds=testFolds)
-        test_x, test_y = testData.getData("test")
 
-        o_recall = sess.run([graphModel.recall], feed_dict={graphModel.y: test_y, graphModel.x: test_x})
-        acc = o_recall[0]
+
+        testData.groupFolds(trainFolds=[], valFolds=[], testFolds=testFolds)
+
+        acc = validate_mean_over_instances(testData, graphModel, sess, "test")
 
         print("Final Result:")
         print(acc)
+
+
 
 
 
