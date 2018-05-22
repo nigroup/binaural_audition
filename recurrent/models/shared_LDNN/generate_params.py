@@ -2,8 +2,9 @@ from hyperband.hyperband import Hyperband
 from hyperband.common_defs import *
 
 space = {
-    'LEARNING_RATE': hp.loguniform('LEARNING_RATE', -8, -4),
-    'LAMBDA_L2': hp.uniform('LEARNING_RATE', 0, 0.05),
+    'LEARNING_RATE': hp.loguniform('LEARNING_RATE', -9.2, -4.5),
+    'LAMBDA_L2': hp.uniform('LEARNING_RATE', 0, 0.02),
+    'OUTPUT_KEEP_PROB':hp.uniform('OUTPUT_KEEP_PROB', 0.25, 0.9),
     'NUM_LSTM': hp.quniform('NUM_LSTM', 1, 4, 1),
     'NUM_HIDDEN': hp.qloguniform('NUM_HIDDEN', 4, 7, 1),
     #Returns a value like round(exp(uniform(low, high)) / q) * q
