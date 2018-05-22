@@ -23,7 +23,7 @@ import numpy as np
 For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
-# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -58,7 +58,7 @@ class HyperParameters:
         self.NUM_MLP = 0
 
         # regularization
-        # self.LAMBDA_L2 = 0.001717511348445849
+        self.LAMBDA_L2 = 0.001717511348445849
         self.OUTPUT_KEEP_PROB = 0.9
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
@@ -68,7 +68,7 @@ class HyperParameters:
         self.TIMELENGTH = 500
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
-        self.LEARNING_RATE = 0.01
+        self.LEARNING_RATE = 0.003
         # Pre-processing dataset to get rectangle or paths(for validation)
         self.VAL_FOLD = VAL_FOLD
         self.TRAIN_SET, self.PATHS = get_train_data(self.VAL_FOLD,self.SCENES,self.EPOCHS,self.TIMELENGTH)
@@ -128,7 +128,10 @@ class HyperParameters:
         with tf.name_scope('LDNN'):
 
             with tf.device('/cpu:0'):
-                train_batch = read_trainset(self.SET['train'], self.BATCH_SIZE)
+                # teosorflow error solution: Cannot create a tensor proto whose content is larger than 2GB\
+                numpy_path = np.array(self.SET['train'])
+                self.path_placeholder = tf.placeholder(numpy_path.dtype, numpy_path.shape)
+                train_batch = read_trainset(self.path_placeholder, self.BATCH_SIZE)
                 handle = tf.placeholder(tf.string, shape=[])
                 iterator = tf.data.Iterator.from_string_handle(handle, train_batch.output_types,
                                                                train_batch.output_shapes)
@@ -157,12 +160,12 @@ class HyperParameters:
                 # for unreg in [tf_var.name for tf_var in tf.trainable_variables() if
                 #               ("noreg" in tf_var.name or "Bias" in tf_var.name)]:
                 #     print(unreg)
-                # l2 = self.LAMBDA_L2 * sum(
-                #     tf.nn.l2_loss(tf_var)
-                #     for tf_var in tf.trainable_variables()
-                #     if not ("bias" in tf_var.name)
-                # )
-                # loss_op += l2
+                l2 = self.LAMBDA_L2 * sum(
+                    tf.nn.l2_loss(tf_var)
+                    for tf_var in tf.trainable_variables()
+                    if not ("bias" in tf_var.name)
+                )
+                loss_op += l2
             with tf.variable_scope('optimize'):
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.LEARNING_RATE)
                 # train_op = optimizer.minimize(loss_op)
@@ -253,7 +256,7 @@ class HyperParameters:
                 train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
                 epoch_start = time.time()
                 # Trainset only need initialize once
-                sess.run(train_iterator.initializer)
+                sess.run(train_iterator.initializer,feed_dict={self.path_placeholder:self.SET['train']})
                 # Numbers of batch for whole training
                 n_batches = int(self.NUM_TRAIN / self.BATCH_SIZE)
                 # Numbers of batch per epoch, to stop the training and do validation
