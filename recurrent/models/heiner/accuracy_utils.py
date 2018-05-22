@@ -59,6 +59,8 @@ def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instanc
 
     all_scene_instance_ids = np.unique(y_true[:, :, 0, 1])
     for scene_instance_id in all_scene_instance_ids:
+        if scene_instance_id == mask_val:
+            continue
         extracted_indices = y_true[:, :, 0, 1] == scene_instance_id
 
         y_pred_extracted = y_pred[extracted_indices, :]
@@ -128,6 +130,7 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
         raise ValueError('unknown mode. available: {}, wanted: {}'.format(available_modes, mode))
 
     if mode == 'train' or mode == 'val':
+        # TODO: i think something is incorrect here
         weights = 1 / np.array([21, 10, 29, 21, 29, 21, 21, 10, 20, 20, 29, 21, 29, 29, 21, 21, 10,
                                 20, 21, 29, 20, 20, 29, 29, 21, 20, 29, 29, 20, 21, 21, 29, 10, 10,
                                 29, 21, 21, 29, 29, 29, 21, 21, 29, 10, 20, 29, 29, 20, 20, 20, 29,
