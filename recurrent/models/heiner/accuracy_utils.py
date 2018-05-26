@@ -53,7 +53,8 @@ def val_accuracy(scene_instance_id_metrics_dict, metric='BAC', ret=('final', 'pe
     return r_v[0] if len(r_v) == 1 else tuple(r_v)
 
 
-def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict, y_pred_logits, y_true, output_threshold, mask_val):
+def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
+                                                                   y_pred_logits, y_true, output_threshold, mask_val):
 
     y_pred = (y_pred_logits >= output_threshold).astype(np.float32)
 
@@ -104,6 +105,7 @@ def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict,
 
     for scene_instance_id, metrics in scene_instance_ids_metrics_dict.items():
         scene_number = get_scene_number_from_scene_instance_id(scene_instance_id)
+        scene_number -= 1
 
         metrics_decorrelated = metrics / np.sum(metrics, axis=0)
         scene_number_class_accuracies_metrics[scene_number] += metrics_decorrelated
@@ -131,6 +133,7 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
 
     if mode == 'train' or mode == 'val':
         # TODO: i think something is incorrect here
+        # wait for ivo's answer -> maybe do it wrt the used scenes
         weights = 1 / np.array([21, 10, 29, 21, 29, 21, 21, 10, 20, 20, 29, 21, 29, 29, 21, 21, 10,
                                 20, 21, 29, 20, 20, 29, 29, 21, 20, 29, 29, 20, 21, 21, 29, 10, 10,
                                 29, 21, 21, 29, 29, 29, 21, 21, 29, 10, 20, 29, 29, 20, 20, 20, 29,
@@ -150,7 +153,7 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
     weights = weights[:, np.newaxis]
 
     scene_number_class_accuracies *= weights
-    # TODO: somehow np.nan occurs here :/
+
     class_accuracies = np.sum(scene_number_class_accuracies, axis=0)
     return class_accuracies
 
