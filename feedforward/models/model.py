@@ -43,9 +43,9 @@ class GraphModel():
 
     def convCoreModel(self, hyperparams, x):
 
-        def fc_layer(input):
+        def fc_layer(input, neuronsize):
 
-            w = tf.Variable(tf.random_normal(shape=(input.shape[1].value, n_labels), stddev=0.03), name='w')
+            w = tf.Variable(tf.random_normal(shape=(input.shape[1].value, neuronsize), stddev=0.03), name='w')
             layer = tf.matmul(input, w)  # (800, 13)
             return layer
 
@@ -199,25 +199,30 @@ class GraphModel():
                                                 lastconvAMS.shape[
                                                     3].value * lastconvAMS.shape[4].value])
 
+
+        #first fully connected
         flatLayerMerged = tf.concat([flatLayerRatemap, flatLayerAMS], axis=1)
-        dense = fc_layer(flatLayerMerged)
-
-        '''
-        fcLayers = []c
-        fcLayers.append(fc_layer(flatLayerMerged))
 
 
+        fc_layers = []
+        nr_fc_layers = len(hyperparams["number_neurons_fully_connected_layers"])
+        for i in np.arange(nr_fc_layers):
+            if i == 0:
+                first_layer = flatLayerMerged
+            else:
+                first_layer = fc_layers[i-1]
 
-        for i in np.arange(number_fully_connected_layers-1):
-            fcLayers.append(fc_layer(fcLayers[i-1]))
-        '''
+            fc_layers.append(fc_layer(flatLayerMerged, neuronsize=hyperparams["number_neurons_fully_connected_layers"][i]))
+
+        #last fully connected layer, layer
+        dense = fc_layer(fc_layers[nr_fc_layers-1], neuronsize=n_labels)
+
         return dense
 
-        # y = tf.placeholder(tf.float32, shape=(None, n_labels),name="y")  # (5000, 13)
 
-        # here different between framewise and blockbased:
-        # framewise: batch_size * 13
-        # blockbased: 1 * 13
+
+
+
 
         '''
 

@@ -26,7 +26,7 @@ class DataSet:
     def __init__(self, dir, frames, folds, overlapSampleSize, batchsize=None, shortload=None):
         self.overlapSampleSize = overlapSampleSize
         self.counter = 0
-        self.batchsize = batchsize
+        self.batchsize = batchsize #should be multiple of frames
         self.batches = 0
         self.shortload = shortload
         self.dir = dir
@@ -55,8 +55,6 @@ class DataSet:
             self.batchsize = countdata
 
 
-        #we define a sample as a block:
-        #self.batchsize = self.batchsize * self.frames #wedont
 
         batches = int(countdata / self.batchsize)
 
@@ -83,7 +81,6 @@ class DataSet:
 
 
     def getDatafromPath(self, path):
-        print path
         file = np.load(path)
 
 
