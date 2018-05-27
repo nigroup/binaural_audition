@@ -6,8 +6,8 @@ from model import *
 from hyperparams import *
 
 
-trainData = DataSet(trainDir,frames=framelength,folds=trainFolds, overlapSampleSize=25, batchsize=10,shortload=shortload)
-testData = DataSet(testDir,frames=framelength,folds=testFolds, overlapSampleSize=25, batchsize=None,shortload=shortload)
+trainData = DataSet(trainDir,frames=framelength,folds=trainFolds, overlapSampleSize=25, shortload=shortload)
+testData = DataSet(testDir,frames=framelength,folds=testFolds, overlapSampleSize=25, shortload=shortload)
 
 
 
@@ -67,13 +67,12 @@ def validate_mean_over_instances(data, graphModel,sess,  type):  #data is a list
 def train(hyperparams ,data, sess,graphModel):
     bestacc = 0
 
-    data.getTrainBatchSize()
+    data.calcNumberOfBatches(batchsize=hyperparams["batchsize"])
 
     for epoch in range(hyperparams["epochs_per_k_fold_cross_validation"]):
 
         # training on all apart from k
         for i in range(data.batches):
-
             train_x, train_y = data.get_next_train_batch()
             sess.run([graphModel.optimiser], feed_dict={graphModel.x: train_x, graphModel.y: train_y, graphModel.cross_entropy_class_weights : data.cross_entropy_class_weights})
 

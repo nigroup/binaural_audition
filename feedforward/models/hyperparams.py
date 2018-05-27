@@ -31,7 +31,7 @@ class Hyperparams:
         self.feature_maps_layer = np.array([10, 20, 30, 40, 50, 60, 70, 80, 90])  # all combinations for all layers
 
         ##other
-        self.batchsize = np.array([49,49*2,49*3,49*4])
+        self.batchsize = np.array([1,2,4,8]) #blocks of framesizes (*49 in timeseries)
         self.number_fully_connected_layers = np.array([2,3]) #!
         self.number_neurons_fully_connected_layers = np.array([[190,90],[190,100,50]]) #start with 380 and end with 13
         self.epochs_per_k_fold_cross_validation = 500
@@ -44,25 +44,6 @@ class Hyperparams:
 
 
 
-    def getrandomHyperparams(self):
-
-
-        hyperparams = {
-            "nr_conv_layers_ratemap": self.nr_conv_layers_ratemap[0],
-            "sequence_ratemap_pool_window_size": self.sequence_ratemap_pool_window_size,
-            "nr_conv_layers_ams": self.nr_conv_layers_ams[0],
-            "sequence_ams_pool_window_size": self.sequence_ams_pool_window_size,
-            "feature_maps_layer": self.feature_maps_layer[0:1],
-            "epochs_per_k_fold_cross_validation": self.epochs_per_k_fold_cross_validation,
-            "ams_ksize": self.ams_ksize,
-            "sequence_ams_pool_strides": self.sequence_ams_pool_strides,
-            "ratemap_ksize": random.choice(self.ratemap_ksize),  #done
-            "sequence_ratemap_pool_strides": self.sequence_ratemap_pool_strides,
-            "number_neurons_fully_connected_layers" : random.choice(self.number_neurons_fully_connected_layers), #done
-        }
-
-        pdb.set_trace()
-        return hyperparams
 
 
 
@@ -78,6 +59,7 @@ class Hyperparams:
             "sequence_ams_pool_strides": self.sequence_ams_pool_strides,
             "ratemap_ksize": self.ratemap_ksize,
             "sequence_ratemap_pool_strides": self.sequence_ratemap_pool_strides,
-            "number_neurons_fully_connected_layers" : self.number_neurons_fully_connected_layers[0]
+            "number_neurons_fully_connected_layers" : random.choice(self.number_neurons_fully_connected_layers), #done
+            "batchsize": random.choice(self.batchsize)
         }
         return hyperparams
