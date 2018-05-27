@@ -72,7 +72,9 @@ class DataLoader:
         if self.mode == 'val' or self.mode == 'test':
             self.use_every_timestep = True
 
-        if self.mode == 'train' or self.mode == 'val' and val_stateful:
+        if self.mode == 'train' or (self.mode == 'val' and val_stateful):
+            self.val_stateful = True
+
             self.seed = seed
             self.seed_by_epoch = seed_by_epoch
 
@@ -102,6 +104,9 @@ class DataLoader:
                 self.batchsize = batchsize
                 self.epochs = epochs
                 self.act_epoch = 1
+
+                self.features = features
+                self.classes = classes
 
                 self.length = int(np.ceil(len(self.filenames) / self.batchsize))
                 self._data_efficiency = 1.0
@@ -257,7 +262,10 @@ class DataLoader:
 
     def next_batch(self):
         if self.mode == 'train' or self.mode == 'val':
-            b_x, b_y = self._next_batch_train_val_stateful()
+            if self.mode == 'val' and not self.val_stateful:
+                b_x, b_y = self._next_batch_val_not_stateful()
+            else:
+                b_x, b_y = self._next_batch_train_val_stateful()
         else:
             b_x, b_y = self._next_batch_test()
         return b_x, b_y
@@ -319,8 +327,9 @@ class DataLoader:
                     b_x[r, :length, :] = sequence[0, :, :]
                     b_y[r, :length, :, 0] = labels[0, :, :]
 
-                scene_instance_id = self._scene_instance_ids_dict()[self.filenames[next_filename]]
+                scene_instance_id = self._scene_instance_ids_dict()[next_filename]
                 b_y[r, :length, :, 1] = scene_instance_id
+                r += 1
             return b_x, b_y
         else:
             self.act_epoch += 1

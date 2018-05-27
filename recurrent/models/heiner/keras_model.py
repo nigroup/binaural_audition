@@ -2,8 +2,11 @@ from keras.models import Model
 from keras.layers import Dense, Input, CuDNNLSTM
 from heiner.dataloader import DataLoader
 from heiner import utils
+from heiner import accuracy_utils as acc_utils
+from heiner import model_extension as m_ext
 from keras.callbacks import Callback
 import numpy as np
+from tqdm import tqdm
 
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '2'
@@ -40,7 +43,7 @@ VAL_STATEFUL = False
 
 print('Build model...')
 
-x = Input(batch_shape=(BATCHSIZE, TIMESTEPS, NFEATURES), name='Input', dtype='float32')
+x = Input(batch_shape=(BATCHSIZE, None, NFEATURES), name='Input', dtype='float32')
 # here will be the conv or grid lstm
 y = x
 for units in UNITS_PER_LAYER_RNN:
@@ -75,31 +78,60 @@ print('Number of batches per epoch (validation): ' + str(val_loader_len))
 train_gen = utils.create_generator(train_loader)
 val_gen = utils.create_generator(val_loader)
 
+train_losses = []
+val_losses = []
 
-train_losses = np.zeros((np.sum(train_loader_len)), dtype=np.float32)
-val_losses = np.zeros((np.sum(val_loader_len)), dtype=np.float32)
-for e in range(EPOCHS):
+train_accs = []
+val_accs = []
+
+val_class_accuracies = []
+
+for e in tqdm(range(EPOCHS), desc='epoch'):
     epoch = e+1
-
-    # training phase
-    for iteration in range(1, train_loader_len[e]+1):
-        b_x, b_y = next(train_gen)
-        loss = model.train_on_batch(b_x, b_y[:, :, :, 0])
-        train_losses[utils.get_index_in_loader_len(train_loader_len, epoch, iteration)] = loss
-        # TODO: below
-        # train_accs = calculate_accuracies(model.predict_on_batch(b_x), metrics=metrics,
-        #                                   output_threshold = OUTPUT_THRESHOLD, mask_val = MASK_VAL)
-        # append it depending on shape
-    # TODO: reset model state
     model.reset_states()
 
+    # training phase
+    scene_instance_id_metrics_dict_train = dict()
+
+    for iteration in tqdm(range(1, train_loader_len[e]+1), desc='train_iterations'):
+        b_x, b_y = next(train_gen)
+        loss, out = m_ext.train_and_predict_on_batch(model, b_x, b_y[:, :, :, 0])
+        train_losses.append(loss)
+
+        acc_utils.calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict_train,
+                                                                                 out, b_y, OUTPUT_THRESHOLD, MASK_VAL)
+
+        tqdm.write('loss: {}'.format(loss))
+
+    final_acc = acc_utils.train_accuracy(scene_instance_id_metrics_dict_train, metric='BAC')
+    train_accs.append(final_acc)
+
+    tqdm.write('accuracy: {}'.format(final_acc))
+
     # validation phase
-    for iteration in range(1, val_loader_len[e]+1):
+    scene_instance_id_metrics_dict_val = dict()
+
+    model.reset_states()
+    for iteration in tqdm(range(1, val_loader_len[e]+1), desc='val_iterations'):
         b_x, b_y = next(val_gen)
-        loss = model.test_on_batch(b_x, b_y)
-        val_losses[utils.get_index_in_loader_len(val_loader_len, epoch, iteration)] = loss
+        loss, out = m_ext.test_and_predict_on_batch(model, b_x, b_y[:, :, :, 0])
+        val_losses.append(loss)
+
+        acc_utils.calculate_class_accuracies_metrics_per_scene_instance_in_batch(
+            scene_instance_id_metrics_dict_val, out, b_y, OUTPUT_THRESHOLD, MASK_VAL)
+
         if not VAL_STATEFUL:
             model.reset_states()
+
+        tqdm.write('loss: {}'.format(loss))
+
+    final_acc, class_accuracies = acc_utils.val_accuracy(
+        scene_instance_id_metrics_dict_val, metric='BAC', ret=('final', 'per_class'))
+
+    val_accs.append(final_acc)
+    val_class_accuracies.append(class_accuracies)
+
+    tqdm.write('accuracy: {}'.format(final_acc))
 
 
 # TODO: i think hyperas is doable
