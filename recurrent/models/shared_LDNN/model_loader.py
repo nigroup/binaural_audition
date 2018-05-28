@@ -8,11 +8,11 @@ import numpy as np
 
 def unit_lstm(NUM_HIDDEN, OUTPUT_KEEP_PROB):
     lstm_cell = tf.contrib.rnn.BasicLSTMCell(NUM_HIDDEN)
-    lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell,
-                                              input_keep_prob=1.0,
-                                              output_keep_prob=OUTPUT_KEEP_PROB,
-                                              variational_recurrent=True,
-                                              dtype=tf.float32)
+    # lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell,
+    #                                           input_keep_prob=1.0,
+    #                                           output_keep_prob=OUTPUT_KEEP_PROB,
+    #                                           variational_recurrent=True,
+    #                                           dtype=tf.float32)
     # lstm_cell = tf.contrib.rnn.LayerNormBasicLSTMCell(num_units = self.NUM_HIDDEN,
     #                                                   layer_norm = True,
     #                                                   forget_bias=self.FORGET_BIAS,
@@ -50,7 +50,7 @@ def get_state_reset_op(state_variables, cell, BATCH_SIZE):
     return get_state_update_op(state_variables, zero_states)
 
 def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
-             NUM_HIDDEN, OUTPUT_KEEP_PROB, NUM_MLP,NUM_NEURON):
+             NUM_HIDDEN, OUTPUT_KEEP_PROB, NUM_MLP,NUM_NEURON, training=True):
     """model a LDNN Network,
 
       argument:
@@ -67,7 +67,9 @@ def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
             [unit_lstm(NUM_HIDDEN,OUTPUT_KEEP_PROB) for _ in range(NUM_LSTM)], state_is_tuple=True)
         states = get_state_variables(mlstm_cell, BATCH_SIZE)
         batch_x_shape = tf.shape(x)
+        # if time_major=false, [batch_size, max_time, ...],
         layer = tf.reshape(x, [batch_x_shape[0], -1, 160])
+        # If time_major == False (default),  [batch_size, max_time, cell.output_size]
         outputs, new_states = tf.nn.dynamic_rnn(cell=mlstm_cell,
                                                 inputs=layer,
                                                 initial_state=states,
@@ -77,6 +79,7 @@ def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
         update_op = get_state_update_op(states, new_states)
         # TODO: reset the state to zero or the final state og training??? Now is zero.
         reset_op = get_state_reset_op(states,mlstm_cell,BATCH_SIZE)
+        # Reshape to apply the same weights over the timesteps
         outputs = tf.reshape(outputs, [-1, NUM_HIDDEN])
     with tf.variable_scope('mlp'):
         weights = {

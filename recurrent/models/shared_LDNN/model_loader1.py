@@ -78,6 +78,7 @@ def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
         batch_x_shape = tf.shape(x)
         inputs = tf.reshape(x, [ -1,batch_x_shape[0], 160])
         outputs, new_states = mlstm_cell(inputs,states,training=training)
+        outputs = tf.transpose(outputs,[1,0,2])
         update_op = get_state_update_op(states, new_states)
         # TODO: reset the state to zero or the final state og training??? Now is zero.
         reset_op = get_state_reset_op(states,BATCH_SIZE,NUM_LSTM ,NUM_HIDDEN)
