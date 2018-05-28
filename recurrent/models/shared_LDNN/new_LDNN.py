@@ -149,17 +149,25 @@ class HyperParameters:
             w = get_scenes_weight(self.SCENES, self.VAL_FOLD)
             # Define loss and optimizer
             with tf.variable_scope('loss'):
-                # assign 0 frames zero cost
-                number_zero_frame = tf.reduce_sum(tf.cast(tf.equal(Y, -1), tf.int32))
-                loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32), logits, tf.constant(w))
+                loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32), logits, tf.constant(w,dtype=tf.float32))
+
                 # number of frames without zero_frame
-                total = tf.cast(tf.reduce_sum(seq) - number_zero_frame, tf.float32)
+                count_unmasked = tf.cast(tf.reduce_sum(mask_zero_frames), tf.float32)
                 # eliminate zero_frame loss
-                loss_op = tf.reduce_sum(loss_op * tf.cast(mask_zero_frames, tf.float32)) / total
+                loss_op = tf.reduce_sum(loss_op * tf.cast(mask_zero_frames, tf.float32)) / count_unmasked
                 # L2
-                # for unreg in [tf_var.name for tf_var in tf.trainable_variables() if
-                #               ("noreg" in tf_var.name or "Bias" in tf_var.name)]:
+                # for unreg in [tf_var.name for tf_var in tf.trainable_variables() if not ("bias" in tf_var.name)]:
                 #     print(unreg)
+                # LDNN / lstm / rnn / multi_rnn_cell / cell_0 / basic_lstm_cell / kernel: 0
+                # LDNN / lstm / rnn / multi_rnn_cell / cell_1 / basic_lstm_cell / kernel: 0
+                # LDNN / lstm / rnn / multi_rnn_cell / cell_2 / basic_lstm_cell / kernel: 0
+                # LDNN / mlp / out: 0
+                # LDNN / mlp / h1: 0
+                # LDNN / mlp / h2: 0
+                # LDNN / mlp / h3: 0
+                # LDNN / mlp / mlpout: 0
+
+                # LDNN/lstm/cudnn_lstm/opaque_kernel:0
                 l2 = self.LAMBDA_L2 * sum(
                     tf.nn.l2_loss(tf_var)
                     for tf_var in tf.trainable_variables()
