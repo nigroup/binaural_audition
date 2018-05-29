@@ -7,11 +7,11 @@ class Hyperparams:
 
 
     def __init__(self):
-        self.ratemap_ksize = np.array([3, 3])  # todo: hyperparameter?
+        self.ratemap_ksize = np.array([3, 2])  # todo: hyperparameter?
 
         ##ratemap
         self.ratemap_ksize = np.array([3, 3])  # todo: hyperparameter?
-        self.nr_conv_layers_ratemap = np.array([3, 4])  # four not so good -> maxpooling reduces to fast
+        self.nr_conv_layers_ratemap = np.array([3, 4, 5])  # four not so good -> maxpooling reduces to fast
         self.sequence_ratemap_pool_window_size = np.array([[1, 2, 2, 1], [1, 3, 3, 1], [1, 2, 3, 1], [1, 2, 2,
                                                                                                  1]])  # this is a sequence; build others; first and last repeating... - 1 = batch_size // 1 = feature_map
         self.sequence_ratemap_pool_strides = np.array(
@@ -19,7 +19,8 @@ class Hyperparams:
 
         ##ams
         self.ams_ksize = np.array([3, 3, 3])  # todo: hyperparameter?
-        self.nr_conv_layers_ams = np.array([3, 4])
+        self.nr_conv_layers_ams = np.array([3, 4, 5])
+
         self.sequence_ams_pool_window_size = np.array([[1, 2, 2, 1], [1, 3, 3, 1], [1, 2, 3, 1], [1, 2, 3,
                                                                                              1]])  # this is a sequence; build others; first and last repeating... - 1 = batch_size AND  feature_map - max 4d possible
         self.sequence_ams_pool_strides = np.array(
@@ -48,10 +49,11 @@ class Hyperparams:
 
 
     def getworkingHyperparams(self):
+        quick =3 ;
         hyperparams = {
-            "nr_conv_layers_ratemap": self.nr_conv_layers_ratemap[0],
+            "nr_conv_layers_ratemap": quick, #self.nr_conv_layers_ratemap[2],
             "sequence_ratemap_pool_window_size": self.sequence_ratemap_pool_window_size,
-            "nr_conv_layers_ams": self.nr_conv_layers_ams[0],
+            "nr_conv_layers_ams": quick,  #self.nr_conv_layers_ams[2],
             "sequence_ams_pool_window_size": self.sequence_ams_pool_window_size,
             "feature_maps_layer": self.feature_maps_layer[0:1],
             "epochs_per_k_fold_cross_validation": self.epochs_per_k_fold_cross_validation,
