@@ -48,15 +48,12 @@ def get_state_reset_op(state_variables,  BATCH_SIZE, NUM_LSTM ,NUM_HIDDEN ):
 def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
              NUM_HIDDEN, OUTPUT_KEEP_PROB, NUM_MLP,NUM_NEURON, training=True):
     """model a LDNN Network,
-
-      argument:
-        x:features
-
-      return:
-        original_out: prediction
-        update_op: resume state from previous state
-        reset_op: not use in train, only for validation to reset zero
-
+                Args:
+                  x: feature, shape = [batch_size, time_length,160]
+                Returns:
+                  original_out: prediction
+                  update_op: resume state from previous state
+                  reset_op: not use in train, only for validation to reset zero
     """
     with tf.variable_scope('lstm', initializer=tf.orthogonal_initializer()):
         """Runs the forward step for the RNN model.
@@ -75,9 +72,13 @@ def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
         mlstm_cell = tf.contrib.cudnn_rnn.CudnnLSTM(NUM_LSTM,
                                                     NUM_HIDDEN)
         states = get_state_variables(NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)
+        # get shape, and add inputs input_shape attributes
         batch_x_shape = tf.shape(x)
-        inputs = tf.reshape(x, [ -1,batch_x_shape[0], 160])
+        x = tf.reshape(x, [batch_x_shape[0], -1, 160])
+        # batch_major -> time_length_major
+        inputs = tf.transpose(x,[1,0,2])
         outputs, new_states = mlstm_cell(inputs,states,training=training)
+        # time_length_major  -> batch_major
         outputs = tf.transpose(outputs,[1,0,2])
         update_op = get_state_update_op(states, new_states)
         # TODO: reset the state to zero or the final state og training??? Now is zero.
