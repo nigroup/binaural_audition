@@ -6,30 +6,26 @@ import time
 import datetime
 import numpy as np
 
-def unit_lstm(NUM_HIDDEN, OUTPUT_KEEP_PROB):
-    lstm_cell = tf.contrib.rnn.BasicLSTMCell(NUM_HIDDEN)
-    # lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell,
-    #                                           input_keep_prob=1.0,
-    #                                           output_keep_prob=OUTPUT_KEEP_PROB,
-    #                                           variational_recurrent=True,
-    #                                           dtype=tf.float32)
-    # lstm_cell = tf.contrib.rnn.LayerNormBasicLSTMCell(num_units = self.NUM_HIDDEN,
-    #                                                   layer_norm = True,
-    #                                                   forget_bias=self.FORGET_BIAS,
-    #                                                   dropout_keep_prob= self.OUTPUT_KEEP_PROB)
-    return lstm_cell
 
-
-def get_state_variables(cell, BATCH_SIZE):
+def get_state_variables(NUM_LSTM,BATCH_SIZE,NUM_HIDDEN):
     # For each layer, get the initial state and make a variable out of it
     # to enable updating its value.
-    state_variables = []
-    for state_c, state_h in cell.zero_state(BATCH_SIZE, tf.float32):
-        state_variables.append(tf.contrib.rnn.LSTMStateTuple(
-            tf.Variable(state_c, trainable=False),
-            tf.Variable(state_h, trainable=False)))
+    # state_variables = []
+    # for state_c, state_h in cell.zero_state(BATCH_SIZE, tf.float32):
+    #     state_variables.append(tf.contrib.rnn.LSTMStateTuple(
+    #         tf.Variable(state_c, trainable=False),
+    #         tf.Variable(state_h, trainable=False)))
+    h = tf.Variable(tf.zeros((NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)), trainable=False)
+    c = tf.Variable(tf.zeros((NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)), trainable=False)
+    # h = np.zeros((NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)).astype(np.float32)
+    # c = np.zeros((NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)).astype(np.float32)
+    # state_variables = []
+    # for state_c, state_h in zip(c,h):
+    #     state_variables.append(tf.contrib.rnn.LSTMStateTuple(
+    #         tf.Variable(state_c, trainable=False),
+    #         tf.Variable(state_h, trainable=False)))
     # Return as a tuple, so that it can be fed to dynamic_rnn as an initial state
-    return tuple(state_variables)
+    return tf.contrib.rnn.LSTMStateTuple(h,c)
 
 
 def get_state_update_op(state_variables, new_states):
@@ -44,42 +40,49 @@ def get_state_update_op(state_variables, new_states):
     return tf.tuple(update_ops)
 
 
-def get_state_reset_op(state_variables, cell, BATCH_SIZE):
+def get_state_reset_op(state_variables,  BATCH_SIZE, NUM_LSTM ,NUM_HIDDEN ):
     # Return an operation to set each variable in a list of LSTMStateTuples to zero
-    zero_states = cell.zero_state(BATCH_SIZE, tf.float32)
+    zero_states = get_state_variables(NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)
     return get_state_update_op(state_variables, zero_states)
 
 def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
              NUM_HIDDEN, OUTPUT_KEEP_PROB, NUM_MLP,NUM_NEURON, training=True):
     """model a LDNN Network,
-
-      argument:
-        x:features
-
-      return:
-        original_out: prediction
-        update_op: resume state from previous state
-        reset_op: not use in train, only for validation to reset zero
-
+                Args:
+                  x: feature, shape = [batch_size, time_length,160]
+                Returns:
+                  original_out: prediction
+                  update_op: resume state from previous state
+                  reset_op: not use in train, only for validation to reset zero
     """
     with tf.variable_scope('lstm', initializer=tf.orthogonal_initializer()):
-        mlstm_cell = tf.contrib.rnn.MultiRNNCell(
-            [unit_lstm(NUM_HIDDEN,OUTPUT_KEEP_PROB) for _ in range(NUM_LSTM)], state_is_tuple=True)
-        states = get_state_variables(mlstm_cell, BATCH_SIZE)
+        """Runs the forward step for the RNN model.
+            Args:
+              inputs: `3-D` tensor with shape `[time_len, batch_size, input_size]`.
+              initial_state: a tuple of tensor(s) of shape
+                `[num_layers * num_dirs, batch_size, num_units]`. If not provided, use
+                zero initial states. The tuple size is 2 for LSTM and 1 for other RNNs.
+              training: whether this operation will be used in training or inference.
+            Returns:
+              output: a tensor of shape `[time_len, batch_size, num_dirs * num_units]`.
+                It is a `concat([fwd_output, bak_output], axis=2)`.
+              output_states: a tuple of tensor(s) of the same shape and structure as
+                `initial_state`.
+        """
+        mlstm_cell = tf.contrib.cudnn_rnn.CudnnLSTM(NUM_LSTM,
+                                                    NUM_HIDDEN)
+        states = get_state_variables(NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)
+        # get shape, and add inputs input_shape attributes
         batch_x_shape = tf.shape(x)
-        # if time_major=false, [batch_size, max_time, ...],
-        layer = tf.reshape(x, [batch_x_shape[0], -1, 160])
-        # If time_major == False (default),  [batch_size, max_time, cell.output_size]
-        outputs, new_states = tf.nn.dynamic_rnn(cell=mlstm_cell,
-                                                inputs=layer,
-                                                initial_state=states,
-                                                dtype=tf.float32,
-                                                time_major=False,
-                                                sequence_length=seq)
+        x = tf.reshape(x, [batch_x_shape[0], -1, 160])
+        # batch_major -> time_length_major
+        inputs = tf.transpose(x,[1,0,2])
+        outputs, new_states = mlstm_cell(inputs,states,training=training)
+        # time_length_major  -> batch_major
+        outputs = tf.transpose(outputs,[1,0,2])
         update_op = get_state_update_op(states, new_states)
         # TODO: reset the state to zero or the final state og training??? Now is zero.
-        reset_op = get_state_reset_op(states,mlstm_cell,BATCH_SIZE)
-        # Reshape to apply the same weights over the timesteps
+        reset_op = get_state_reset_op(states,BATCH_SIZE,NUM_LSTM ,NUM_HIDDEN)
         outputs = tf.reshape(outputs, [-1, NUM_HIDDEN])
     with tf.variable_scope('mlp'):
         weights = {

@@ -49,7 +49,25 @@ def read_validationset(path_set, batchsize):
         lambda filename: tuple(tf.py_func(_read_py_function1, [filename], [tf.float32, tf.int32, tf.int32])))
     batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     return batch
-
+# testing loader-------------------------------
+def _read_py_function1(filename):
+    filename = filename.decode(sys.getdefaultencoding())
+    data = np.load(filename)
+    x = data['x'][0]
+    y = data['y'][0]
+    # for padding value 0, change OFF'0'-> 2
+    y[y == 0] = 2
+    #  and assign NaN frames zero cost in testing (for easier acoustic interpretation of the results)
+    y[y == 'nan'] = 2
+    l = np.array([x.shape[0]])
+    return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
+def read_validationset(path_set, batchsize):
+    # shuffle path_set
+    dataset = tf.data.Dataset.from_tensor_slices(path_set)
+    dataset = dataset.map(
+        lambda filename: tuple(tf.py_func(_read_py_function1, [filename], [tf.float32, tf.int32, tf.int32])))
+    batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
+    return batch
 # related function for rectangle-----------------------------------------
 def get_index(paths):
     result = []
@@ -78,7 +96,7 @@ def construct_rectangle(pathset,Total_epochs):
 def get_filepaths(Total_epochs, Batch_timelength,paths, mode):
     output = []
     total_length = paths[:,1].astype(int).sum()
-    num_clips = math.ceil(total_length/Batch_timelength) -1
+    num_clips = math.ceil(total_length / Batch_timelength) - 1
     if mode == 'train':
         rectangle = construct_rectangle(paths.tolist(),Total_epochs)
     elif mode == 'validation':
@@ -226,7 +244,7 @@ def get_performence(true_pos,true_neg,false_pos,false_neg, index):
         result.append(FN[i])
     return np.array(result)/N
 
-def average_performance(list,dir,epoch_num):
+def average_performance(list,dir,epoch_num,folder):
     header = ['sceneID','instance',
               'class1tp','class1tn','class1fp','class1fn',
               'class2tp', 'class2tn', 'class2fp', 'class2fn',
@@ -242,7 +260,7 @@ def average_performance(list,dir,epoch_num):
               'class12tp', 'class12tn', 'class12fp', 'class12fn',
               'class13tp', 'class13tn', 'class13fp', 'class13fn']
     df = pd.DataFrame(list,columns=header)
-    dir += str(epoch_num) + '.pkl'
+    dir += 'folder'+ str(folder) + '_' +str(epoch_num) + '.pkl'
     df.to_pickle(dir)
     df1 = df.groupby('sceneID').mean()
     four_list = df1.mean().tolist()
