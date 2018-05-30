@@ -4,6 +4,8 @@ from os import path
 from tqdm import tqdm
 from keras import backend as K
 from tensorflow.python.ops.nn_impl import weighted_cross_entropy_with_logits
+from heiner.dataloader import DataLoader
+
 
 def create_generator(dloader):
     while True:
@@ -11,6 +13,7 @@ def create_generator(dloader):
         if b_x is None or b_y is None:
             return
         yield b_x, b_y
+
 
 def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
                          location='train', name='train_weights'):
@@ -120,3 +123,22 @@ def get_index_in_loader_len(loader_len, epoch, iteration):
     while act_e < epoch-1:
         index += loader_len[act_e]
     index += iteration
+
+
+def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
+                       VAL_FOLDS, VAL_STATEFUL):
+    train_loader = DataLoader('train', LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, batchsize=BATCHSIZE,
+                              timesteps=TIMESTEPS, epochs=EPOCHS, features=NFEATURES, classes=NCLASSES)
+    train_loader_len = train_loader.len()
+    print('Number of batches per epoch (training): ' + str(train_loader_len))
+
+    val_loader = DataLoader('val', LABEL_MODE, VAL_FOLDS, TRAIN_SCENES, epochs=EPOCHS, batchsize=BATCHSIZE,
+                            timesteps=TIMESTEPS, features=NFEATURES, classes=NCLASSES, val_stateful=VAL_STATEFUL)
+
+    val_loader_len = val_loader.len()
+    print('Number of batches per epoch (validation): ' + str(val_loader_len))
+
+    train_gen = create_generator(train_loader)
+    val_gen = create_generator(val_loader)
+
+    return train_gen, val_gen, train_loader_len, val_loader_len

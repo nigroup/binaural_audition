@@ -53,6 +53,8 @@ def val_accuracy(scene_instance_id_metrics_dict, metric='BAC', ret=('final', 'pe
     return r_v[0] if len(r_v) == 1 else tuple(r_v)
 
 
+# i think this can not be hugely improved performance wise -> would need an array with the size of all instance ids
+# and some mapping from id to index in that array
 def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
                                                                    y_pred_logits, y_true, output_threshold, mask_val):
 
@@ -83,6 +85,7 @@ def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instanc
             np.vstack((true_positives, false_negatives, true_negatives, false_positives))
 
 
+# TODO: improve performance by creating np array from dict
 def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict, mode, metric='BAC'):
     available_metrics = ('BAC', 'BAC2')
     if metric not in available_metrics:
@@ -94,7 +97,7 @@ def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict,
 
     if mode == 'train' or mode == 'val':
         n_scenes = 80
-    else:
+    else:   # mode == 'test'
         n_scenes = 168
 
     n_metrics, n_classes = scene_instance_ids_metrics_dict[list(scene_instance_ids_metrics_dict.keys())[0]].shape
