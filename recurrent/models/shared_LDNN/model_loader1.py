@@ -8,42 +8,32 @@ import numpy as np
 
 
 def get_state_variables(NUM_LSTM,BATCH_SIZE,NUM_HIDDEN):
-    # For each layer, get the initial state and make a variable out of it
-    # to enable updating its value.
-    # state_variables = []
-    # for state_c, state_h in cell.zero_state(BATCH_SIZE, tf.float32):
-    #     state_variables.append(tf.contrib.rnn.LSTMStateTuple(
-    #         tf.Variable(state_c, trainable=False),
-    #         tf.Variable(state_h, trainable=False)))
     h = tf.Variable(tf.zeros((NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)), trainable=False)
     c = tf.Variable(tf.zeros((NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)), trainable=False)
-    # h = np.zeros((NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)).astype(np.float32)
-    # c = np.zeros((NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)).astype(np.float32)
-    # state_variables = []
-    # for state_c, state_h in zip(c,h):
-    #     state_variables.append(tf.contrib.rnn.LSTMStateTuple(
-    #         tf.Variable(state_c, trainable=False),
-    #         tf.Variable(state_h, trainable=False)))
-    # Return as a tuple, so that it can be fed to dynamic_rnn as an initial state
-    return tf.contrib.rnn.LSTMStateTuple(h,c)
+    return (h,c)
 
 
-def get_state_update_op(state_variables, new_states):
+def get_state_update_op(state_variables, new_states,num_lstm):
     # Add an operation to update the train states with the last state tensors
     update_ops = []
-    for state_variable, new_state in zip(state_variables, new_states):
-        # Assign the new state to the state variables on this layer
-        update_ops.extend([state_variable[0].assign(new_state[0]),
-                           state_variable[1].assign(new_state[1])])
-    # Return a tuple in order to combine all update_ops into a single operation.
-    # The tuple's actual value should not be used.
-    return tf.tuple(update_ops)
+    if num_lstm != 1:
+        for state_variable, new_state in zip(state_variables, new_states):
+            # Assign the new state to the state variables on this layer
+            update_ops.extend([state_variable[0].assign(new_state[0]),
+                               state_variable[1].assign(new_state[1])])
+        # Return a tuple in order to combine all update_ops into a single operation.
+        # The tuple's actual value should not be used.
+        return tf.tuple(update_ops)
+    else:
+        update_ops.extend([state_variables[0].assign(new_states[0]),
+                           state_variables[1].assign(new_states[1])])
+        return tf.tuple(update_ops)
 
 
 def get_state_reset_op(state_variables,  BATCH_SIZE, NUM_LSTM ,NUM_HIDDEN ):
     # Return an operation to set each variable in a list of LSTMStateTuples to zero
     zero_states = get_state_variables(NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)
-    return get_state_update_op(state_variables, zero_states)
+    return get_state_update_op(state_variables, zero_states,NUM_LSTM)
 
 def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
              NUM_HIDDEN, OUTPUT_KEEP_PROB, NUM_MLP,NUM_NEURON, training=True):
@@ -80,7 +70,7 @@ def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
         outputs, new_states = mlstm_cell(inputs,states,training=training)
         # time_length_major  -> batch_major
         outputs = tf.transpose(outputs,[1,0,2])
-        update_op = get_state_update_op(states, new_states)
+        update_op = get_state_update_op(states, new_states, NUM_LSTM)
         # TODO: reset the state to zero or the final state og training??? Now is zero.
         reset_op = get_state_reset_op(states,BATCH_SIZE,NUM_LSTM ,NUM_HIDDEN)
         outputs = tf.reshape(outputs, [-1, NUM_HIDDEN])
