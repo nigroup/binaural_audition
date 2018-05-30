@@ -50,7 +50,7 @@ class GraphModel():
             return layer
 
         def conv2d_layer_with_pooling(
-                input,
+                input, #bs, ratemap, time, channels
                 conv_ksize,
                 input_channels,
                 feature_maps_layer,
@@ -58,13 +58,11 @@ class GraphModel():
                 pool_window_size,
                 pool_strides,
                 name="conv"):
-
             shapeW = np.concatenate((conv_ksize, input_channels, feature_maps_layer), axis=0)
             w = tf.Variable(tf.random_normal(shape=shapeW, stddev=0.03), name="W")
 
             # shapeB = np.concatenate((output_size, hyperparams["feature_maps_layer"]), axis=0)
             # b = tf.Variable(tf.constant(0.1, shape=(None, 30, 48, 10)), name="B")
-
             conv = tf.nn.conv2d(
                 input=input,
                 filter=w,
@@ -74,6 +72,7 @@ class GraphModel():
                 data_format='NHWC',
                 name=name
             )
+
 
             activation = tf.nn.relu(conv)
 
@@ -140,12 +139,12 @@ class GraphModel():
                 else:
                     previous_layer = conv_layers[i-1]
                     input_channels =np.array([previous_layer.shape[3].value])
-
-
-                layer = conv2d_layer_with_pooling(previous_layer, hyperparams["ratemap_ksize"], input_channels,
+                layer = conv2d_layer_with_pooling(previous_layer, hyperparams["ratemap_filter_sequence"][i], input_channels,
                                               hyperparams["feature_maps_layer"],
                                               np.array([30, 48]), hyperparams["sequence_ratemap_pool_window_size"][i],
                                               hyperparams["sequence_ratemap_pool_strides"][i])
+
+
                 conv_layers.append(layer)
 
             return conv_layers[hyperparams["nr_conv_layers_ratemap"]-1]
@@ -198,7 +197,7 @@ class GraphModel():
                     input_channels =np.array([previous_layer.shape[4].value])
 
 
-                layer = conv3d_layer_with_pooling(previous_layer, hyperparams["ams_ksize"], input_channels,
+                layer = conv3d_layer_with_pooling(previous_layer, hyperparams["ams_filter_sequence"][i], input_channels,
                                               hyperparams["feature_maps_layer"],
                                               None, hyperparams["sequence_ams_pool_window_size"][i],
                                               hyperparams["sequence_ams_pool_strides"][i])
