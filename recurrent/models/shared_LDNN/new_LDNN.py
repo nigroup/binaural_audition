@@ -16,14 +16,14 @@ import logging
 import time
 import datetime
 from dataloader import *
-from model_loader import MultiRNN
+from model_loader1 import MultiRNN
 from utils import setup_logger
 import numpy as np
 '''
 For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -49,7 +49,7 @@ class HyperParameters:
             self.SESSION_DIR = self.LOG_FOLDER + str(VAL_FOLD) + '/'
 
         # How many scenes include in this model.
-        self.SCENES = ['scene'+str(i) for i in range(1,81)]
+        self.SCENES = ['scene'+str(i) for i in range(1,2)]
         # Parameters for stacked-LSTM layer
         self.NUM_HIDDEN = 581
         self.NUM_LSTM = 3
@@ -58,17 +58,17 @@ class HyperParameters:
         self.NUM_MLP = 0
 
         # regularization
-        self.LAMBDA_L2 = 0.001717511348445849
+        self.LAMBDA_L2 = 0.009377659295529634
         self.OUTPUT_KEEP_PROB = 0.9
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
         self.BATCH_SIZE = 100
-        self.VALIDATION_BATCH_SIZE = 20
-        self.EPOCHS = 30
+        self.VALIDATION_BATCH_SIZE = 10
+        self.EPOCHS = 20
         self.TIMELENGTH = 500
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
-        self.LEARNING_RATE = 0.003
+        self.LEARNING_RATE = 0.001
         # Pre-processing dataset to get rectangle or paths(for validation)
         self.VAL_FOLD = VAL_FOLD
         self.TRAIN_SET, self.PATHS = get_train_data(self.VAL_FOLD,self.SCENES,self.EPOCHS,self.TIMELENGTH)
@@ -98,7 +98,7 @@ class HyperParameters:
             valid_iterator = valid_batch.make_initializable_iterator()
             logits, update_op, reset_op = MultiRNN(X, batch_size, seq, self.NUM_CLASSES,
                                          self.NUM_LSTM, self.NUM_HIDDEN, self.OUTPUT_KEEP_PROB,
-                                         self.NUM_MLP, self.NUM_NEURON)
+                                         self.NUM_MLP, self.NUM_NEURON, training=False)
 
             predicted = tf.to_int32(tf.sigmoid(logits) > self.OUTPUT_THRESHOLD)
             # mask padding, zero_frames part
@@ -143,23 +143,30 @@ class HyperParameters:
             train_iterator = train_batch.make_initializable_iterator()
             logits, update_op, _ = MultiRNN(X, batch_size, seq, self.NUM_CLASSES,
                                          self.NUM_LSTM, self.NUM_HIDDEN, self.OUTPUT_KEEP_PROB,
-                                         self.NUM_MLP, self.NUM_NEURON)
+                                         self.NUM_MLP, self.NUM_NEURON, training=True)
 
             # Get weight for weighted cross entory
             w = get_scenes_weight(self.SCENES, self.VAL_FOLD)
             # Define loss and optimizer
             with tf.variable_scope('loss'):
-                # assign 0 frames zero cost
-                number_zero_frame = tf.reduce_sum(tf.cast(tf.equal(Y, -1), tf.int32))
                 loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32), logits, tf.constant(w))
                 # number of frames without zero_frame
-                total = tf.cast(tf.reduce_sum(seq) - number_zero_frame, tf.float32)
+                counted_non_zeros = tf.cast(tf.reduce_sum(mask_zero_frames), tf.float32)
                 # eliminate zero_frame loss
-                loss_op = tf.reduce_sum(loss_op * tf.cast(mask_zero_frames, tf.float32)) / total
+                loss_op = tf.reduce_sum(loss_op * tf.cast(mask_zero_frames, tf.float32)) / counted_non_zeros
                 # L2
-                # for unreg in [tf_var.name for tf_var in tf.trainable_variables() if
-                #               ("noreg" in tf_var.name or "Bias" in tf_var.name)]:
+                # for unreg in [tf_var.name for tf_var in tf.trainable_variables() if not ("bias" in tf_var.name)]:
                 #     print(unreg)
+                # LDNN / lstm / rnn / multi_rnn_cell / cell_0 / basic_lstm_cell / kernel: 0
+                # LDNN / lstm / rnn / multi_rnn_cell / cell_1 / basic_lstm_cell / kernel: 0
+                # LDNN / lstm / rnn / multi_rnn_cell / cell_2 / basic_lstm_cell / kernel: 0
+                # LDNN / mlp / out: 0
+                # LDNN / mlp / h1: 0
+                # LDNN / mlp / h2: 0
+                # LDNN / mlp / h3: 0
+                # LDNN / mlp / mlpout: 0
+
+                # LDNN/lstm/cudnn_lstm/opaque_kernel:0
                 l2 = self.LAMBDA_L2 * sum(
                     tf.nn.l2_loss(tf_var)
                     for tf_var in tf.trainable_variables()
@@ -266,9 +273,9 @@ class HyperParameters:
                     loss, _, se, sp, tempf1, _ = sess.run([loss_op, train_op, sensitivity, specificity, f1, update_op],
                                                           feed_dict={handle: train_handle})
 
-                    logger.debug(
-                        'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
-                        loss, (se + sp) / 2, se, sp, tempf1)
+                    # logger.debug(
+                    #     'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
+                    #     loss, (se + sp) / 2, se, sp, tempf1)
                     train_cost = train_cost + loss
                     sen = sen + se
                     spe = spe + sp
@@ -340,8 +347,8 @@ class HyperParameters:
 
 if __name__ == "__main__":
     # fname = datetime.datetime.now().strftime("%Y%m%d")
-    fname ='20180516_setting2'
-    for i in range(4,7):
+    fname ='test'
+    for i in range(1,2):
         with tf.Graph().as_default():
             hyperparameters = HyperParameters(VAL_FOLD=i, FOLD_NAME= fname)
             hyperparameters.main()

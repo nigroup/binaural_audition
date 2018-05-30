@@ -43,9 +43,9 @@ class GraphModel():
 
     def convCoreModel(self, hyperparams, x):
 
-        def fc_layer(input):
+        def fc_layer(input, neuronsize):
 
-            w = tf.Variable(tf.random_normal(shape=(input.shape[1].value, n_labels), stddev=0.03), name='w')
+            w = tf.Variable(tf.random_normal(shape=(input.shape[1].value, neuronsize), stddev=0.03), name='w')
             layer = tf.matmul(input, w)  # (800, 13)
             return layer
 
@@ -131,6 +131,30 @@ class GraphModel():
             """Return the output for the fully connected layer (Moritz drawing first line)"""
             x_ratemap = tf.slice(x, [0, 0, 0, 0], [-1, n_ratemap_features, -1, -1])
             # todo:np.array([30,48] - for bias only important!
+
+            conv_layers = []
+            for i in np.arange(hyperparams["nr_conv_layers_ratemap"]):
+                if i == 0:
+                    previous_layer = x_ratemap
+                    input_channels=np.array([1])
+                else:
+                    previous_layer = conv_layers[i-1]
+                    input_channels =np.array([previous_layer.shape[3].value])
+
+
+                layer = conv2d_layer_with_pooling(previous_layer, hyperparams["ratemap_ksize"], input_channels,
+                                              hyperparams["feature_maps_layer"],
+                                              np.array([30, 48]), hyperparams["sequence_ratemap_pool_window_size"][i],
+                                              hyperparams["sequence_ratemap_pool_strides"][i])
+                conv_layers.append(layer)
+
+            return conv_layers[hyperparams["nr_conv_layers_ratemap"]-1]
+
+
+
+
+
+            '''
             conv1 = conv2d_layer_with_pooling(x_ratemap, hyperparams["ratemap_ksize"], np.array([1]),
                                               hyperparams["feature_maps_layer"],
                                               np.array([30, 48]), hyperparams["sequence_ratemap_pool_window_size"][0],
@@ -151,37 +175,37 @@ class GraphModel():
                                                   hyperparams["feature_maps_layer"], np.array([30, 48]),
                                                   hyperparams["sequence_ratemap_pool_window_size"][3],
                                                   hyperparams["sequence_ratemap_pool_strides"][3])
+
+
                 return conv4
 
             return conv3
+            '''
 
         def buildAMSConvolution(x):
             """Return the output for the fully connected layer"""
             x_ams = tf.slice(x, [0, n_ratemap_features, 0, 0], [-1, -1, -1, -1])
             x_split_ams = tf.reshape(x_ams, [-1, n_ams_features_cf, n_ams_features_mf, x_ams.shape[2], 1])
 
-            conv1 = conv3d_layer_with_pooling(x_split_ams, hyperparams["ams_ksize"], np.array([1]),
-                                              hyperparams["feature_maps_layer"], None,
-                                              hyperparams["sequence_ams_pool_window_size"][0],
-                                              hyperparams["sequence_ams_pool_strides"][0])
 
-            conv2 = conv3d_layer_with_pooling(conv1, hyperparams["ams_ksize"], np.array([conv1.shape[4].value]),
-                                              hyperparams["feature_maps_layer"], None,
-                                              hyperparams["sequence_ams_pool_window_size"][1],
-                                              hyperparams["sequence_ams_pool_strides"][1])
-            conv3 = conv3d_layer_with_pooling(conv2, hyperparams["ams_ksize"], np.array([conv2.shape[4].value]),
-                                              hyperparams["feature_maps_layer"], None,
-                                              hyperparams["sequence_ams_pool_window_size"][2],
-                                              hyperparams["sequence_ams_pool_strides"][2])
+            conv_layers = []
+            for i in np.arange(hyperparams["nr_conv_layers_ams"]):
+                if i == 0:
+                    previous_layer = x_split_ams
+                    input_channels=np.array([1])
+                else:
+                    previous_layer = conv_layers[i-1]
+                    input_channels =np.array([previous_layer.shape[4].value])
 
-            if hyperparams["nr_conv_layers_ratemap"] == 4:
-                conv4 = conv3d_layer_with_pooling(conv3, hyperparams["ams_ksize"], np.array([conv3.shape[4].value]),
-                                                  hyperparams["feature_maps_layer"],
-                                                  None, hyperparams["sequence_ams_pool_window_size"][3],
-                                                  hyperparams["sequence_ams_pool_strides"][3])
-                return conv4
 
-            return conv3
+                layer = conv3d_layer_with_pooling(previous_layer, hyperparams["ams_ksize"], input_channels,
+                                              hyperparams["feature_maps_layer"],
+                                              None, hyperparams["sequence_ams_pool_window_size"][i],
+                                              hyperparams["sequence_ams_pool_strides"][i])
+                conv_layers.append(layer)
+
+            return conv_layers[hyperparams["nr_conv_layers_ratemap"]-1]
+
 
         # fully-connected - xavier glorad; xavier glorot
 
@@ -199,25 +223,30 @@ class GraphModel():
                                                 lastconvAMS.shape[
                                                     3].value * lastconvAMS.shape[4].value])
 
+
+        #first fully connected
         flatLayerMerged = tf.concat([flatLayerRatemap, flatLayerAMS], axis=1)
-        dense = fc_layer(flatLayerMerged)
-
-        '''
-        fcLayers = []c
-        fcLayers.append(fc_layer(flatLayerMerged))
 
 
+        fc_layers = []
+        nr_fc_layers = len(hyperparams["number_neurons_fully_connected_layers"])
+        for i in np.arange(nr_fc_layers):
+            if i == 0:
+                first_layer = flatLayerMerged
+            else:
+                first_layer = fc_layers[i-1]
 
-        for i in np.arange(number_fully_connected_layers-1):
-            fcLayers.append(fc_layer(fcLayers[i-1]))
-        '''
+            fc_layers.append(fc_layer(flatLayerMerged, neuronsize=hyperparams["number_neurons_fully_connected_layers"][i]))
+
+        #last fully connected layer, layer
+        dense = fc_layer(fc_layers[nr_fc_layers-1], neuronsize=n_labels)
+
         return dense
 
-        # y = tf.placeholder(tf.float32, shape=(None, n_labels),name="y")  # (5000, 13)
 
-        # here different between framewise and blockbased:
-        # framewise: batch_size * 13
-        # blockbased: 1 * 13
+
+
+
 
         '''
 

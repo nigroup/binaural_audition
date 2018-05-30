@@ -26,7 +26,6 @@ class DataSet:
     def __init__(self, dir, frames, folds, overlapSampleSize, batchsize=None, shortload=None):
         self.overlapSampleSize = overlapSampleSize
         self.counter = 0
-        self.batchsize = batchsize
         self.batches = 0
         self.shortload = shortload
         self.dir = dir
@@ -45,18 +44,16 @@ class DataSet:
 
         self.loaddata()
 
-    """ calculate batch Size of folds other than k fold """
+    """ calculate batch Size of folds other than k fold 
+    batchsize should be multiple of framesize"""
 
-    def getTrainBatchSize(self):
+    def calcNumberOfBatches(self, batchsize):
+        self.batchsize = batchsize
         countdata = self.trainX.shape[2]
 
         # if no batch size is given, there is only on batch containing all data
         if self.batchsize == None:
             self.batchsize = countdata
-
-
-        #we define a sample as a block:
-        #self.batchsize = self.batchsize * self.frames #wedont
 
         batches = int(countdata / self.batchsize)
 
@@ -83,7 +80,6 @@ class DataSet:
 
 
     def getDatafromPath(self, path):
-        print path
         file = np.load(path)
 
 
@@ -222,7 +218,6 @@ class DataSet:
             '''
             stride and (probably) expand the data
             '''
-
             overlaptimes = array.shape[2] *2 -1 -1 #last one cant be taken (framesize is in our case not a multiple of oversampling)
             returnArray= np.zeros([array.shape[0],array.shape[1],overlaptimes])
 
@@ -234,7 +229,6 @@ class DataSet:
                 returnArray[:,:,i] = singleSlice
 
             return returnArray
-
 
 
         # last batch
