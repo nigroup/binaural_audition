@@ -8,11 +8,11 @@ import numpy as np
 
 def unit_lstm(NUM_HIDDEN, OUTPUT_KEEP_PROB):
     lstm_cell = tf.contrib.rnn.BasicLSTMCell(NUM_HIDDEN)
-    # lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell,
-    #                                           input_keep_prob=1.0,
-    #                                           output_keep_prob=OUTPUT_KEEP_PROB,
-    #                                           variational_recurrent=True,
-    #                                           dtype=tf.float32)
+    lstm_cell = tf.contrib.rnn.DropoutWrapper(cell=lstm_cell,
+                                              input_keep_prob=1.0,
+                                              output_keep_prob=OUTPUT_KEEP_PROB,
+                                              variational_recurrent=True,
+                                              dtype=tf.float32)
     # lstm_cell = tf.contrib.rnn.LayerNormBasicLSTMCell(num_units = self.NUM_HIDDEN,
     #                                                   layer_norm = True,
     #                                                   forget_bias=self.FORGET_BIAS,
@@ -96,16 +96,14 @@ def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
                                       initializer=tf.contrib.layers.xavier_initializer())
         }
         if NUM_MLP == 0:
-            top = tf.nn.dropout(tf.matmul(outputs, weights['out']),
-                                keep_prob=OUTPUT_KEEP_PROB)
+            top = tf.matmul(outputs, weights['out'])
             original_out = tf.reshape(top, [batch_x_shape[0], -1, NUM_CLASSES])
             return original_out, update_op, reset_op
         elif NUM_MLP == 1:
             l1 = tf.nn.dropout(tf.matmul(outputs, weights['h1']),
                                keep_prob=OUTPUT_KEEP_PROB)
             l1 = tf.nn.relu(l1)
-            top = tf.nn.dropout(tf.matmul(l1, weights['mlpout']),
-                                keep_prob=OUTPUT_KEEP_PROB)
+            top = tf.matmul(l1, weights['mlpout'])
             original_out = tf.reshape(top, [batch_x_shape[0], -1, NUM_CLASSES])
             return original_out, update_op, reset_op
         elif NUM_MLP == 2:
@@ -115,8 +113,7 @@ def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
             l2 = tf.nn.dropout(tf.matmul(l1, weights['h2']),
                                keep_prob=OUTPUT_KEEP_PROB)
             l2 = tf.nn.relu(l2)
-            top = tf.nn.dropout(tf.matmul(l2, weights['mlpout']),
-                                keep_prob=OUTPUT_KEEP_PROB)
+            top = tf.matmul(l2, weights['mlpout'])
             original_out = tf.reshape(top, [batch_x_shape[0], -1, NUM_CLASSES])
             return original_out, update_op, reset_op
         elif NUM_MLP == 3:
@@ -129,7 +126,6 @@ def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
             l3 = tf.nn.dropout(tf.matmul(l2, weights['h3']),
                                keep_prob=OUTPUT_KEEP_PROB)
             l3 = tf.nn.relu(l3)
-            top = tf.nn.dropout(tf.matmul(l3, weights['mlpout']),
-                                keep_prob=OUTPUT_KEEP_PROB)
+            top = tf.matmul(l3, weights['mlpout'])
             original_out = tf.reshape(top, [batch_x_shape[0], -1, NUM_CLASSES])
             return original_out, update_op, reset_op
