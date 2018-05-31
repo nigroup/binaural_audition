@@ -104,7 +104,7 @@ def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict,
 
     scene_number_class_accuracies_metrics = np.zeros((n_scenes, n_metrics, n_classes))
     scene_number_class_accuracies = np.zeros((n_scenes, n_classes))
-    scene_number_count = dict()
+    scene_number_count = np.zeros(n_scenes)
 
     for scene_instance_id, metrics in scene_instance_ids_metrics_dict.items():
         scene_number = get_scene_number_from_scene_instance_id(scene_instance_id)
@@ -112,19 +112,22 @@ def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict,
 
         metrics_decorrelated = metrics / np.sum(metrics, axis=0)
         scene_number_class_accuracies_metrics[scene_number] += metrics_decorrelated
-        if scene_number not in scene_number_count:
-            scene_number_count[scene_number] = 1
-        else:
-            scene_number_count[scene_number] += 1
 
-    for scene_number in scene_number_count:
-        metrics = scene_number_class_accuracies_metrics[scene_number] / scene_number_count[scene_number]
-        sensitivity = metrics[0, :] / (metrics[0, :]+metrics[1, :])
-        specificity = metrics[2, :] / (metrics[2, :]+metrics[3, :])
-        if metric == 'BAC':
-            scene_number_class_accuracies[scene_number] = 0.5 * (sensitivity + specificity)
-        elif metric == 'BAC2':
-            scene_number_class_accuracies[scene_number] = 1 - (((1 - sensitivity)**2 + (1 - specificity)**2) / 2)**0.5
+        scene_number_count[scene_number] += 1
+
+    assert np.all(scene_number_class_accuracies_metrics[scene_number_count == 0] == 0), 'error in scene_number_count'
+
+    vs = scene_number_count != 0    # valid scenes
+
+    scene_number_class_accuracies_metrics[vs] /= scene_number_count[vs, np.newaxis, np.newaxis]
+    sensitivity = scene_number_class_accuracies_metrics[vs, 0, :] / \
+                  (scene_number_class_accuracies_metrics[vs, 0, :]+scene_number_class_accuracies_metrics[vs, 1, :])
+    specificity = scene_number_class_accuracies_metrics[vs, 2, :] / \
+                  (scene_number_class_accuracies_metrics[vs, 2, :]+scene_number_class_accuracies_metrics[vs, 3, :])
+    if metric == 'BAC':
+        scene_number_class_accuracies[vs] = 0.5 * (sensitivity + specificity)
+    elif metric == 'BAC2':
+        scene_number_class_accuracies[vs] = 1 - (((1 - sensitivity)**2 + (1 - specificity)**2) / 2)**0.5
 
     return scene_number_class_accuracies
 
