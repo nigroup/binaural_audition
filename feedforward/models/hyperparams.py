@@ -2,6 +2,7 @@ import socket
 import numpy as np
 import pdb
 import random
+import math
 
 class Hyperparams:
 
@@ -48,7 +49,10 @@ class Hyperparams:
 
 
 
-
+    def build_featuremap_scaling_sequence(self, nr_conv_layers):
+        f_s= np.ones(nr_conv_layers)*int(np.random.uniform(50,500))
+        f_s = map( lambda (i,e): (e* math.pow(2, i)).astype(int) ,enumerate(f_s))
+        return f_s
 
 
     def build_filter_sequence(self, nr_conv_layers):
@@ -102,14 +106,14 @@ class Hyperparams:
 
     def getworkingHyperparams(self):
         conv_layers = self.nr_conv_layers_ratemap[0]
-        pdb.set_trace()
         ams_filter_sequence, ratemap_filter_sequence = self.build_filter_sequence(conv_layers)
+        featuremap_scaling_sequence = self.build_featuremap_scaling_sequence(conv_layers)
         hyperparams = {
             "nr_conv_layers_ratemap": conv_layers,
             "sequence_ratemap_pool_window_size": self.sequence_ratemap_pool_window_size,
             "nr_conv_layers_ams": conv_layers,
             "sequence_ams_pool_window_size": self.sequence_ams_pool_window_size,
-            "feature_maps_layer": self.feature_maps_layer[0:1],
+            "featuremap_scaling_sequence": featuremap_scaling_sequence,
             "epochs_per_k_fold_cross_validation": self.epochs_per_k_fold_cross_validation,
             "ams_filter_sequence": ams_filter_sequence.astype(int), #done
             "sequence_ams_pool_strides": self.sequence_ams_pool_strides,
@@ -123,4 +127,4 @@ class Hyperparams:
 
 if __name__ == '__main__':
     hyperparamClass = Hyperparams()
-    hyperparamClass.build_filter_sequence(4)
+    hyperparamClass.build_featuremap_scaling_sequence(4)

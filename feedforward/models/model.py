@@ -91,6 +91,7 @@ class GraphModel():
                 pool_strides,
                 name="conv"):
 
+
             shapeW = np.concatenate((conv_ksize, input_channels, feature_maps_layer), axis=0)
             w = tf.Variable(tf.random_normal(shape=shapeW, stddev=0.03), name="W")
 
@@ -131,6 +132,7 @@ class GraphModel():
             x_ratemap = tf.slice(x, [0, 0, 0, 0], [-1, n_ratemap_features, -1, -1])
             # todo:np.array([30,48] - for bias only important!
 
+
             conv_layers = []
             for i in np.arange(hyperparams["nr_conv_layers_ratemap"]):
                 if i == 0:
@@ -139,8 +141,9 @@ class GraphModel():
                 else:
                     previous_layer = conv_layers[i-1]
                     input_channels =np.array([previous_layer.shape[3].value])
+
                 layer = conv2d_layer_with_pooling(previous_layer, hyperparams["ratemap_filter_sequence"][i], input_channels,
-                                              hyperparams["feature_maps_layer"],
+                                              np.array([hyperparams["featuremap_scaling_sequence"][i]]),
                                               np.array([30, 48]), hyperparams["sequence_ratemap_pool_window_size"][i],
                                               hyperparams["sequence_ratemap_pool_strides"][i])
 
@@ -150,36 +153,6 @@ class GraphModel():
             return conv_layers[hyperparams["nr_conv_layers_ratemap"]-1]
 
 
-
-
-
-            '''
-            conv1 = conv2d_layer_with_pooling(x_ratemap, hyperparams["ratemap_ksize"], np.array([1]),
-                                              hyperparams["feature_maps_layer"],
-                                              np.array([30, 48]), hyperparams["sequence_ratemap_pool_window_size"][0],
-                                              hyperparams["sequence_ratemap_pool_strides"][0])
-
-            conv2 = conv2d_layer_with_pooling(conv1, hyperparams["ratemap_ksize"], np.array([conv1.shape[3].value]),
-                                              hyperparams["feature_maps_layer"],
-                                              np.array([30, 48]), hyperparams["sequence_ratemap_pool_window_size"][1],
-                                              hyperparams["sequence_ratemap_pool_strides"][1])
-
-            conv3 = conv2d_layer_with_pooling(conv2, hyperparams["ratemap_ksize"], np.array([conv2.shape[3].value]),
-                                              hyperparams["feature_maps_layer"],
-                                              np.array([30, 48]), hyperparams["sequence_ratemap_pool_window_size"][2],
-                                              hyperparams["sequence_ratemap_pool_strides"][2])
-
-            if hyperparams["nr_conv_layers_ratemap"] == 4:
-                conv4 = conv2d_layer_with_pooling(conv3, hyperparams["ratemap_ksize"], np.array([conv3.shape[3].value]),
-                                                  hyperparams["feature_maps_layer"], np.array([30, 48]),
-                                                  hyperparams["sequence_ratemap_pool_window_size"][3],
-                                                  hyperparams["sequence_ratemap_pool_strides"][3])
-
-
-                return conv4
-
-            return conv3
-            '''
 
         def buildAMSConvolution(x):
             """Return the output for the fully connected layer"""
@@ -198,7 +171,7 @@ class GraphModel():
 
 
                 layer = conv3d_layer_with_pooling(previous_layer, hyperparams["ams_filter_sequence"][i], input_channels,
-                                              hyperparams["feature_maps_layer"],
+                                                 np.array([hyperparams["featuremap_scaling_sequence"][i]]),
                                               None, hyperparams["sequence_ams_pool_window_size"][i],
                                               hyperparams["sequence_ams_pool_strides"][i])
                 conv_layers.append(layer)
