@@ -63,21 +63,27 @@ class GraphModel():
 
             # shapeB = np.concatenate((output_size, hyperparams["feature_maps_layer"]), axis=0)
             # b = tf.Variable(tf.constant(0.1, shape=(None, 30, 48, 10)), name="B")
-            conv = tf.nn.conv2d(
-                input=input,
-                filter=w,
-                strides=[1, 1, 1, 1],
-                padding="VALID",
-                use_cudnn_on_gpu=True,
-                data_format='NHWC',
-                name=name
-            )
+            try:
+                conv = tf.nn.conv2d(
+                    input=input,
+                    filter=w,
+                    strides=[1, 1, 1, 1],
+                    padding="VALID",
+                    use_cudnn_on_gpu=True,
+                    data_format='NHWC',
+                    name=name
+                )
+            except Exception:
+                pdb.set_trace()
 
 
-            activation = tf.nn.relu(conv)
 
-            maxpool = tf.nn.max_pool(activation, ksize=pool_window_size.tolist(), strides=pool_strides.tolist(),
-                                     padding="SAME")
+            activation = tf.nn.relu(conv) #bs, ratemap, time, channels
+            pool_strides = np.concatenate(([1],pool_strides,[1]),axis=0) #1 = batch_size // 1 = feature_map
+            pool_window_size = np.concatenate(([1],pool_window_size,[1]),axis=0) #1 = batch_size // 1 = feature_map
+
+            maxpool = tf.nn.max_pool(activation, ksize=pool_window_size.tolist(), strides=pool_strides.tolist(), padding="SAME")
+
 
             return maxpool
 
@@ -110,20 +116,25 @@ class GraphModel():
             # bs*cf*mf*time*channel
             activation = tf.nn.relu(conv)
 
-            # reshape:reduce dimension (max pooling 4d) and swop dimension (MaxPoolingGrad is not yet supported on the depth dimension.)
-            #  (bs*channel)* cf* time*mf
-            activation_reshaped = tf.reshape(activation,
-                                             [-1, activation.shape[1], activation.shape[3], activation.shape[2]])
+            # reshape:reduce dimension (max pooling 4d) and swop dimension (MaxPoolingGrad is not yet supported on the depth (last) dimension.)
+            #  mf* cf* time*(bs*channel)
 
-            # (bs*channel)* cf* time*mf
+            activation_reshaped = tf.reshape(activation, [activation.shape[2], activation.shape[1], activation.shape[3], -1])
+
+
+
+            pool_window_size = np.concatenate( (pool_window_size,[1]) , axis = 0)
+            pool_strides = np.concatenate( (pool_strides, [1]), axis=0)
+
+            # mf* cf* time*(bs*channel)
             maxpool = tf.nn.max_pool(activation_reshaped, ksize=pool_window_size.tolist(),
                                      strides=pool_strides.tolist(),
                                      padding="SAME")
 
+
             # bs*cf*mf*time*channel - back to shape bevore reshaping
             maxpool_reshaped = tf.reshape(maxpool,
-                                          [-1, maxpool.shape[1], maxpool.shape[3], maxpool.shape[2],
-                                           activation.shape[4]])
+                                          [-1, maxpool.shape[1], maxpool.shape[0], maxpool.shape[2],activation.shape[4]])
 
             return maxpool_reshaped
 
@@ -145,7 +156,7 @@ class GraphModel():
                 layer = conv2d_layer_with_pooling(previous_layer, hyperparams["ratemap_filter_sequence"][i], input_channels,
                                               np.array([hyperparams["featuremap_scaling_sequence"][i]]),
                                               np.array([30, 48]), hyperparams["sequence_ratemap_pool_window_size"][i],
-                                              hyperparams["sequence_ratemap_pool_strides"][i])
+                                              hyperparams["sequence_ratemap_pool_window_size"][i])
 
 
                 conv_layers.append(layer)
@@ -173,7 +184,7 @@ class GraphModel():
                 layer = conv3d_layer_with_pooling(previous_layer, hyperparams["ams_filter_sequence"][i], input_channels,
                                                  np.array([hyperparams["featuremap_scaling_sequence"][i]]),
                                               None, hyperparams["sequence_ams_pool_window_size"][i],
-                                              hyperparams["sequence_ams_pool_strides"][i])
+                                              hyperparams["sequence_ams_pool_window_size"][i])
                 conv_layers.append(layer)
 
             return conv_layers[hyperparams["nr_conv_layers_ratemap"]-1]
