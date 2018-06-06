@@ -10,6 +10,8 @@ def _make_train_and_predict_function(model):
         if model.uses_learning_phase and not isinstance(K.learning_phase(), int):
             inputs += [K.learning_phase()]
 
+        # TODO: DropConnect may be applied here
+
         with K.name_scope('training'):
             with K.name_scope(model.optimizer.__class__.__name__):
                 training_updates = model.optimizer.get_updates(
