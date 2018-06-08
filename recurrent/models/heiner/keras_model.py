@@ -2,51 +2,61 @@ from sys import exit
 
 from heiner import utils
 from heiner import train_utils as tr_utils
-from heiner.hyperparameters import H
+import heiner.hyperparameters as hp
 
 from keras.models import Model
 from keras.layers import Dense, Input, CuDNNLSTM
 from keras.callbacks import ModelCheckpoint
 import numpy as np
-import datetime
 
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 
 
+# TODO: sample hyperparameter combinations at the beginning and delete duplicates (e.g., via set)
 
-################################################# MODEL LOG AND CHECKPOINT SETUP
+
+################################################# MODEL LOG AND CHECKPOINT SETUP DEPENDENT ON HYPERPARAMETERS
 
 model_name = 'LDNN_v1'
-timestamp = datetime.datetime.now().isoformat()
+save_path = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name)
+os.makedirs(save_path, exist_ok=True)
 
-save_path = '/home/spiess/twoears_proj/models/heiner/model_directories'
-model_dir = save_path + '/' + model_name + '_' + timestamp
-os.makedirs(model_dir, exist_ok=True)
+hcm = hp.HCombListManager(save_path)
+
+# TODO: write plotting functions for losses, final accs and class accs -> create plots folder if not exist
+# also write in plot if finished or intermediate -> overwrite old plots
+INTERMEDIATE_PLOTS = True
 
 ################################################# HYPERPARAMETERS
 
-h = H()
-exit()
+h = hp.H()
+
+ID, already_finished = hcm.get_hcomb_id(h)
+if already_finished:
+    print('Hyperparameter Combination for this model version already evaluated. ABORT.')
+    # TODO: when refactoring to a function replace by some return value
+    exit()
+
+model_dir = os.path.join(save_path, 'hcomb_' + str(ID))
+os.makedirs(model_dir, exist_ok=True)
 
 ################################################# CROSS VALIDATION
-# TODO: just changed for convenience
-ALL_FOLDS = list(range(1, 4))   # folds: 1 - 3
 
 val_class_accuracies_over_folds = []
 val_acc_over_folds = []
 
 print(5*'\n'+'Starting Cross Validation...\n')
 
-for i_val_fold, val_fold in enumerate(ALL_FOLDS):
+for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
 
     model_save_dir = os.path.join(model_dir, 'val_fold{}'.format(val_fold))
     os.makedirs(model_save_dir, exist_ok=True)
 
     VAL_FOLDS = [val_fold]
-    TRAIN_FOLDS = list(set(ALL_FOLDS).difference(set(VAL_FOLDS)))
+    TRAIN_FOLDS = list(set(h.ALL_FOLDS).difference(set(VAL_FOLDS)))
 
-    val_fold_str = 'val_folds: {} ({} / {})'.format(val_fold, i_val_fold + 1, len(ALL_FOLDS))
+    val_fold_str = 'val_folds: {} ({} / {})'.format(val_fold, i_val_fold + 1, len(h.ALL_FOLDS))
 
     ################################################# MODEL DEFINITION
 
@@ -106,6 +116,7 @@ val_class_accuracies_var_over_folds = np.var(np.array(val_class_accuracies_over_
 val_acc_mean_over_folds = np.mean(val_acc_over_folds)
 val_acc_var_over_folds = np.var(val_acc_over_folds)
 
-# TODO: LOGGING
-# TODO: i think hyperas is doable
+hcm.finished_hcomb(h)
+
+# TODO write final plots
 

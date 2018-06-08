@@ -7,7 +7,7 @@ from tensorflow.python.ops.nn_impl import weighted_cross_entropy_with_logits
 
 
 def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
-                         location='train', name='train_weights'):
+                     location='train', name='train_weights'):
     name += '_' + label_mode + '.npy'
     save_path = path.join(path_pattern, location, name)
     if not path.exists(save_path):
