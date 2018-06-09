@@ -150,6 +150,7 @@ class Hyperparams:
         featuremap_scaling_sequence = self.build_featuremap_scaling_sequence(conv_layers)
         ams_pool_sequence, ratemap_pool_sequence = self.build_pooling_sequences(conv_layers, ams_filter_sequence[0][2],ratemap_filter_sequence[0][0], ams_filter_sequence[0][0], ams_filter_sequence[0][1]) #ams_filter_sequence[0][1] - because heightest time filter
 
+
         hyperparams = {
             "nr_conv_layers_ratemap": conv_layers, #done - but see above
             "sequence_ratemap_pool_window_size": ratemap_pool_sequence, #done
@@ -170,4 +171,3 @@ if __name__ == '__main__':
     nr_conv_layers = 4
     ams_seq, ratemap_seq = hyperparamClass.build_filter_sequences(nr_conv_layers)
     ams_pool_seq, ratemap_pool_seq = hyperparamClass.build_pooling_sequences(nr_conv_layers,ams_seq[0][2],ratemap_seq[0][0],ams_seq[0][0],ams_seq[0][1])
-    pdb.set_trace()
