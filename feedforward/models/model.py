@@ -24,7 +24,8 @@ class GraphModel():
 
         cross_entropy = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=self.y, logits=self.y_, pos_weight=self.cross_entropy_class_weights))
         #cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.y, logits=y_)
-        self.optimiser = tf.train.AdamOptimizer(learning_rate=0.4).minimize(cross_entropy)
+        self.optimiser = tf.train.AdamOptimizer(learning_rate=self.hyperparams["learning_rate"]).minimize(cross_entropy)
+        pdb.set_trace()
 
         ############################################################
         # val

@@ -94,5 +94,10 @@ def in_succession_pooling(tensor, ksize, strides, padding, data_format, name):
     return tensor
 
 
+def loguniform(low=0, high=1, size=None):
+    low = np.exp(low)
+    high = np.exp(high)
+    return np.log(np.random.uniform(low, high, size))
+
 
 
