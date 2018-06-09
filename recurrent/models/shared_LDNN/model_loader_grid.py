@@ -1,10 +1,6 @@
 import tensorflow as tf
-import os
-import sys
-import logging
-import time
-import datetime
-import numpy as np
+from tensorflow.contrib.grid_rnn.python.ops import grid_rnn_cell
+from tensorflow.python.ops import rnn_cell
 
 
 def get_state_variables(NUM_LSTM,BATCH_SIZE,NUM_HIDDEN):
@@ -37,6 +33,24 @@ def get_state_reset_op(state_variables,  BATCH_SIZE, NUM_LSTM ,NUM_HIDDEN ):
 
 def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
              NUM_HIDDEN, OUTPUT_KEEP_PROB, NUM_MLP,NUM_NEURON, training=True):
+    with tf.variable_scope('grid_lstm'):
+        # https: // github.com / tensorflow / tensorflow / blob / master / tensorflow / contrib / grid_rnn / python / ops / grid_rnn_cell.py
+        NUM_GRID_HIDDEN =128
+        input = tf.reshape(x, [BATCH_SIZE, -1, 160])
+
+        # grid_lstm_cell = grid_rnn_cell.Grid2BasicLSTMCell(num_units=NUM_GRID_HIDDEN)
+        grid_lstm_cell = tf.contrib.rnn.BidirectionalGridLSTMCell(num_units=NUM_GRID_HIDDEN,
+                                                                  feature_size=80,
+                                                                  num_frequency_blocks=[1,1],
+                                                                  start_freqindex_list=[0,80],
+                                                                  end_freqindex_list=[80,160],
+                                                                  frequency_skip=1
+                                                                  )
+        grid_lstm_cell = rnn_cell.DropoutWrapper(grid_lstm_cell, output_keep_prob=0.9)
+        grid_output, _ = tf.nn.dynamic_rnn(cell=grid_lstm_cell,
+                                      inputs=input,
+                                      time_major=False,
+                                      dtype=tf.float32)
     """model a LDNN Network,
                 Args:
                   x: feature, shape = [batch_size, time_length,160]
@@ -63,10 +77,9 @@ def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
                                                     NUM_HIDDEN)
         states = get_state_variables(NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)
         # get shape, and add inputs input_shape attributes
-        # batch_x_shape = tf.shape(x)
-        x = tf.reshape(x, [BATCH_SIZE, -1, 160])
+        # grid_output = tf.reshape(grid_output, [BATCH_SIZE, -1, NUM_GRID_HIDDEN])
         # batch_major -> time_length_major
-        inputs = tf.transpose(x,[1,0,2])
+        inputs = tf.transpose(grid_output,[1,0,2])
         outputs, new_states = mlstm_cell(inputs,states,training=training)
         # time_length_major  -> batch_major
         outputs = tf.transpose(outputs,[1,0,2])
