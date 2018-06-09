@@ -64,11 +64,12 @@ class GraphModel():
 
             # shapeB = np.concatenate((output_size, hyperparams["feature_maps_layer"]), axis=0)
             # b = tf.Variable(tf.constant(0.1, shape=(None, 30, 48, 10)), name="B")
+
             conv = tf.nn.conv2d(
                 input=input,
                 filter=w,
                 strides=[1, 1, 1, 1],
-                padding="VALID",
+                padding="SAME",
                 use_cudnn_on_gpu=True,
                 data_format='NHWC',
                 name=name
@@ -98,15 +99,17 @@ class GraphModel():
 
             shapeW = np.concatenate((conv_ksize, input_channels, feature_maps_layer), axis=0)
             w = tf.Variable(tf.random_normal(shape=shapeW, stddev=0.03), name="W")
+            testw=w
 
             # shapeB = np.concatenate((output_size, hyperparams["feature_maps_layer"]), axis=0)
             # b = tf.Variable(tf.constant(0.1, shape=(None, 30, 48, 10)), name="B")
+
 
             conv = tf.nn.conv3d(
                 input=input,
                 filter=w,
                 strides=[1, 1, 1, 1, 1],
-                padding="VALID",
+                padding="SAME",
                 data_format='NDHWC',
                 name=name
             )
