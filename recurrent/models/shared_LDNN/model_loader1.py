@@ -61,6 +61,9 @@ def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
         """
         mlstm_cell = tf.contrib.cudnn_rnn.CudnnLSTM(NUM_LSTM,
                                                     NUM_HIDDEN)
+        # dropout connect
+        for w in mlstm_cell.variables:
+            tf.assign(w,tf.dropout(w,OUTPUT_KEEP_PROB))
         states = get_state_variables(NUM_LSTM,BATCH_SIZE,NUM_HIDDEN)
         # get shape, and add inputs input_shape attributes
         # batch_x_shape = tf.shape(x)
