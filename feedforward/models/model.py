@@ -3,6 +3,7 @@ from settings import *
 import time
 import numpy as np
 import pdb
+from util import  *
 
 
 
@@ -23,7 +24,8 @@ class GraphModel():
 
         cross_entropy = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(targets=self.y, logits=self.y_, pos_weight=self.cross_entropy_class_weights))
         #cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.y, logits=y_)
-        self.optimiser = tf.train.AdamOptimizer(learning_rate=0.4).minimize(cross_entropy)
+        self.optimiser = tf.train.AdamOptimizer(learning_rate=self.hyperparams["learning_rate"]).minimize(cross_entropy)
+        pdb.set_trace()
 
         ############################################################
         # val
@@ -63,18 +65,16 @@ class GraphModel():
 
             # shapeB = np.concatenate((output_size, hyperparams["feature_maps_layer"]), axis=0)
             # b = tf.Variable(tf.constant(0.1, shape=(None, 30, 48, 10)), name="B")
-            try:
-                conv = tf.nn.conv2d(
-                    input=input,
-                    filter=w,
-                    strides=[1, 1, 1, 1],
-                    padding="VALID",
-                    use_cudnn_on_gpu=True,
-                    data_format='NHWC',
-                    name=name
-                )
-            except Exception:
-                pdb.set_trace()
+
+            conv = tf.nn.conv2d(
+                input=input,
+                filter=w,
+                strides=[1, 1, 1, 1],
+                padding="SAME",
+                use_cudnn_on_gpu=True,
+                data_format='NHWC',
+                name=name
+            )
 
 
 
@@ -100,15 +100,17 @@ class GraphModel():
 
             shapeW = np.concatenate((conv_ksize, input_channels, feature_maps_layer), axis=0)
             w = tf.Variable(tf.random_normal(shape=shapeW, stddev=0.03), name="W")
+            testw=w
 
             # shapeB = np.concatenate((output_size, hyperparams["feature_maps_layer"]), axis=0)
             # b = tf.Variable(tf.constant(0.1, shape=(None, 30, 48, 10)), name="B")
+
 
             conv = tf.nn.conv3d(
                 input=input,
                 filter=w,
                 strides=[1, 1, 1, 1, 1],
-                padding="VALID",
+                padding="SAME",
                 data_format='NDHWC',
                 name=name
             )
@@ -117,24 +119,23 @@ class GraphModel():
             activation = tf.nn.relu(conv)
 
             # reshape:reduce dimension (max pooling 4d) and swop dimension (MaxPoolingGrad is not yet supported on the depth (last) dimension.)
-            #  mf* cf* time*(bs*channel)
-
-            activation_reshaped = tf.reshape(activation, [activation.shape[2], activation.shape[1], activation.shape[3], -1])
-
+            #new solution in_succession_pooling
+            #  (bs*channel)* cf* time*mf
 
 
-            pool_window_size = np.concatenate( (pool_window_size,[1]) , axis = 0)
-            pool_strides = np.concatenate( (pool_strides, [1]), axis=0)
+            activation_reshaped = tf.reshape(activation, [-1, activation.shape[1], activation.shape[3], activation.shape[2] ])
 
-            # mf* cf* time*(bs*channel)
-            maxpool = tf.nn.max_pool(activation_reshaped, ksize=pool_window_size.tolist(),
-                                     strides=pool_strides.tolist(),
-                                     padding="SAME")
+            pool_window_size = np.concatenate( ([1],pool_window_size) , axis = 0)
+            pool_strides = np.concatenate( ([1],pool_strides), axis=0)
+
+
+            #  (bs*channel)* cf* time*mf
+
+            maxpool = in_succession_pooling(activation_reshaped,pool_window_size.tolist(), pool_strides.tolist(), "SAME", "NHWC","emptyname")
 
 
             # bs*cf*mf*time*channel - back to shape bevore reshaping
-            maxpool_reshaped = tf.reshape(maxpool,
-                                          [-1, maxpool.shape[1], maxpool.shape[0], maxpool.shape[2],activation.shape[4]])
+            maxpool_reshaped = tf.reshape(maxpool, [-1, maxpool.shape[1], maxpool.shape[3], maxpool.shape[2],activation.shape[4]])
 
             return maxpool_reshaped
 

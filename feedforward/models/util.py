@@ -1,7 +1,7 @@
 import os, shutil
 import numpy as np
 import pdb
-
+import tensorflow as tf
 
 def clear_folder(folder):
     for the_file in os.listdir(folder):
@@ -51,6 +51,53 @@ def crossentropy(oy, oy_, weights=None):
 
 
 
+
+
+def swapTensor(firstIndex, secondIndex, ksize, tensor):
+    tensor_ = tensor
+
+    indices = np.arange(len(ksize)).tolist()
+
+    indices[firstIndex] = secondIndex
+    indices[secondIndex] = firstIndex
+
+    return tf.transpose(tensor_, indices)
+
+
+def in_succession_pooling(tensor, ksize, strides, padding, data_format, name):
+
+    # find all indices of ksize that are greater than one
+    indices_not_null = np.argwhere(np.where(np.array(ksize) > 1, True, False))
+    indices_not_null = np.squeeze(indices_not_null, 1)
+
+    for running_i, i in enumerate(indices_not_null):
+
+        tensor = swapTensor(i,1,ksize,tensor)
+
+        ksize_only_one_dim = np.ones(len(ksize))
+        ksize_only_one_dim[1] = ksize[i]
+
+
+        strides_only_one_dim = np.ones(len(ksize))
+        strides_only_one_dim[1] = strides[i]
+
+
+        tensor = tf.nn.max_pool(
+            value=tensor,
+            ksize=ksize_only_one_dim.tolist(),
+            strides=strides_only_one_dim.tolist(),
+            padding=padding,
+            data_format=data_format,
+            name=name
+        )
+        tensor = swapTensor(1,i,ksize,tensor)
+    return tensor
+
+
+def loguniform(low=0, high=1, size=None):
+    low = np.exp(low)
+    high = np.exp(high)
+    return np.log(np.random.uniform(low, high, size))
 
 
 

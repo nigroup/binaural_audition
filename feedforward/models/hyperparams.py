@@ -3,6 +3,7 @@ import numpy as np
 import pdb
 import random
 import math
+from util import  *
 
 class Hyperparams:
 
@@ -145,12 +146,14 @@ class Hyperparams:
 
 
     def getworkingHyperparams(self):
-        conv_layers = self.nr_conv_layers_ratemap[0] #TODO
+        conv_layers = np.random.choice(self.nr_conv_layers_ams)
         ams_filter_sequence, ratemap_filter_sequence = self.build_filter_sequences(conv_layers)
         featuremap_scaling_sequence = self.build_featuremap_scaling_sequence(conv_layers)
         ams_pool_sequence, ratemap_pool_sequence = self.build_pooling_sequences(conv_layers, ams_filter_sequence[0][2],ratemap_filter_sequence[0][0], ams_filter_sequence[0][0], ams_filter_sequence[0][1]) #ams_filter_sequence[0][1] - because heightest time filter
 
+
         hyperparams = {
+            "learning_rate" : loguniform(low=0.0001, high=0.01, size=None),
             "nr_conv_layers_ratemap": conv_layers, #done - but see above
             "sequence_ratemap_pool_window_size": ratemap_pool_sequence, #done
             "nr_conv_layers_ams": conv_layers, #done  - but see above
@@ -170,4 +173,3 @@ if __name__ == '__main__':
     nr_conv_layers = 4
     ams_seq, ratemap_seq = hyperparamClass.build_filter_sequences(nr_conv_layers)
     ams_pool_seq, ratemap_pool_seq = hyperparamClass.build_pooling_sequences(nr_conv_layers,ams_seq[0][2],ratemap_seq[0][0],ams_seq[0][0],ams_seq[0][1])
-    pdb.set_trace()
