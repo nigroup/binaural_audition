@@ -1,17 +1,16 @@
+import os
 from sys import exit
 
-from heiner import utils
-from heiner import train_utils as tr_utils
-import heiner.hyperparameters as hp
-
-from keras.models import Model
-from keras.layers import Dense, Input, CuDNNLSTM
-from keras.callbacks import ModelCheckpoint
 import numpy as np
+from keras.callbacks import ModelCheckpoint
+from keras.layers import Dense, Input, CuDNNLSTM
+from keras.models import Model
 
-import os
+import heiner.hyperparameters as hp
+from heiner import train_utils as tr_utils
+from heiner import utils
+
 os.environ['CUDA_VISIBLE_DEVICES'] = '2'
-
 
 # TODO: sample hyperparameter combinations at the beginning and delete duplicates (e.g., via set)
 
@@ -32,21 +31,22 @@ INTERMEDIATE_PLOTS = True
 
 h = hp.H()
 
-ID, already_finished = hcm.get_hcomb_id(h)
-if already_finished:
+ID, h.__dict__ = hcm.get_hcomb_id(h)
+if h.finished:
     print('Hyperparameter Combination for this model version already evaluated. ABORT.')
     # TODO: when refactoring to a function replace by some return value
     exit()
 
 model_dir = os.path.join(save_path, 'hcomb_' + str(ID))
 os.makedirs(model_dir, exist_ok=True)
+h.save_to_dir(model_dir)
 
 ################################################# CROSS VALIDATION
 
 val_class_accuracies_over_folds = []
 val_acc_over_folds = []
 
-print(5*'\n'+'Starting Cross Validation...\n')
+print(5 * '\n' + 'Starting Cross Validation...\n')
 
 for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
 
@@ -72,14 +72,27 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
     model = Model(x, y)
 
     model.summary()
-    print(5*'\n')
+    print(5 * '\n')
 
     my_loss = utils.my_loss_builder(h.MASK_VAL, utils.get_loss_weights(TRAIN_FOLDS, h.TRAIN_SCENES, h.LABEL_MODE))
+
+    ################################################# LOAD CHECKPOINTED MODEL
+
+    latest_weights_path, epochs_finished, val_acc = utils.latest_training_state(model_save_dir)
+    if latest_weights_path is not None:
+        model.load_weights(latest_weights_path)
+
+        if h.epochs_finished[i_val_fold] != epochs_finished:
+            print('MISMATCH: Latest state in hyperparameter combination list is different to checkpointed state.')
+            h.epochs_finished[i_val_fold] = epochs_finished
+            h.val_acc[i_val_fold] = val_acc
+            hcm.replace_at_id(ID, h)
+
+    ################################################# COMPILE MODEL
 
     model.compile(optimizer='adam', loss=my_loss, metrics=None)
 
     print('\nModel compiled.\n')
-
 
     ################################################# DATA LOADER
     train_loader, val_loader = tr_utils.create_dataloaders(h.LABEL_MODE, TRAIN_FOLDS, h.TRAIN_SCENES, h.BATCHSIZE,
@@ -87,7 +100,8 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
                                                            h.VAL_STATEFUL)
 
     ################################################# CALLBACKS
-    model_ckp = ModelCheckpoint(os.path.join(model_save_dir, 'model_ckp_{epoch:02d}-{val_final_acc:.2f}.hdf5'),
+    model_ckp = ModelCheckpoint(os.path.join(model_save_dir,
+                                             'model_ckp_epoch_{epoch:02d}-val_acc_{val_final_acc:.3f}.hdf5'),
                                 verbose=1, monitor='val_final_acc')
     model_ckp.set_model(model)
 
@@ -99,15 +113,23 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
     # validation phase
     val_phase = tr_utils.Phase('val', model, val_loader, *args)
 
-    for e in range(h.EPOCHS):
+    for e in range(h.epochs_finished[i_val_fold], h.EPOCHS):
         train_phase.run()
         val_phase.run()
 
         model_ckp.on_epoch_end(e, logs={'val_final_acc': val_phase.accs[-1]})
 
+        utils.pickle_metrics({'train_losses': train_phase.losses, 'train_accs': train_phase.accs,
+                              'val_losses': val_phase.losses, 'val_accs': val_phase.accs,
+                              'val_class_accs': val_phase.class_accs}, model_save_dir)
+
+        hcm.finish_epoch(ID, h, val_phase.accs[-1], i_val_fold)
+
     val_class_accuracies_over_folds.append(val_phase.class_accs[-1])
     val_acc_over_folds.append(val_phase.accs[-1])
 
+    utils.pickle_metrics({'val_class_accs_over_folds': val_class_accuracies_over_folds,
+                          'val_acc_over_folds': val_acc_over_folds}, model_dir)
 
 ################################################# CROSS VALIDATION: MEAN AND VARIANCE
 
@@ -116,7 +138,13 @@ val_class_accuracies_var_over_folds = np.var(np.array(val_class_accuracies_over_
 val_acc_mean_over_folds = np.mean(val_acc_over_folds)
 val_acc_var_over_folds = np.var(val_acc_over_folds)
 
-hcm.finished_hcomb(h)
+utils.pickle_metrics({'val_class_accs_over_folds': val_class_accuracies_over_folds,
+                      'val_class_accs_mean_over_folds': val_class_accuracies_mean_over_folds,
+                      'val_class_accs_var_over_folds': val_class_accuracies_var_over_folds,
+                      'val_acc_over_folds': val_acc_over_folds,
+                      'val_acc_mean_over_folds': val_acc_mean_over_folds,
+                      'val_acc_var_over_folds': val_acc_var_over_folds}, model_dir)
+
+hcm.finish_hcomb(ID, h, val_acc_mean_over_folds)
 
 # TODO write final plots
-

@@ -5,6 +5,8 @@ from tqdm import tqdm
 from keras import backend as K
 from tensorflow.python.ops.nn_impl import weighted_cross_entropy_with_logits
 
+import pickle
+
 
 def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
                      location='train', name='train_weights'):
@@ -114,3 +116,29 @@ def get_index_in_loader_len(loader_len, epoch, iteration):
     while act_e < epoch-1:
         index += loader_len[act_e]
     index += iteration
+
+
+def pickle_metrics(metrics_dict, folder_path):
+    with open(path.join(folder_path, 'metrics.pickle'), 'wb') as handle:
+        pickle.dump(metrics_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def latest_training_state(model_save_dir):
+    all_available_weights = glob.glob(path.join(model_save_dir, 'model_ckp_*.hdf5'))
+
+    if len(all_available_weights) == 0:
+        return None, None, None
+
+    all_available_weights.sort()
+    latest_weights_path = all_available_weights[-1]
+
+    def find_start(filename, key):
+        return filename.rfind(key) + len(key) + 1
+
+    epoch_start = find_start(latest_weights_path, 'epoch')
+    val_acc_start = find_start(latest_weights_path, 'val_acc')
+    epochs_finished = int(latest_weights_path[epoch_start:epoch_start + 2])
+    val_acc = float(latest_weights_path[val_acc_start:val_acc_start + 5])
+
+    return latest_weights_path, epochs_finished, val_acc
+

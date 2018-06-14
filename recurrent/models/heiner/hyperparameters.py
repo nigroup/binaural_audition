@@ -30,12 +30,18 @@ class H:
         self.TRAIN_SCENES = [1]
 
         # TODO: just changed for convenience
-        self.ALL_FOLDS = list(range(1, 2))  # folds: 1 - 3
+        self.ALL_FOLDS = list(range(1, 3))  # folds: 1 - 2
 
         self.LABEL_MODE = 'blockbased'
         self.MASK_VAL = -1
 
         self.VAL_STATEFUL = False
+
+        self.epochs_finished = [0] * len(self.ALL_FOLDS)
+
+        self.val_acc = [-1] * len(self.ALL_FOLDS)
+
+        self.val_acc_mean = -1
 
         # indicates whether this combination is already finished
         self.finished = False
@@ -66,33 +72,67 @@ class HCombListManager:
         pickle_name = 'hyperparameter_combinations.pickle'
         self.filepath = path.join(save_path, pickle_name)
         if path.exists(self.filepath):
-            with open(self.filepath, 'wb') as handle:
+            with open(self.filepath, 'rb') as handle:
                 self.hcomb_list = pickle.load(handle)
         else:
             # create empty hcomb list
             self.hcomb_list = []
 
     def get_hcomb_id(self, h):
-        already_finished = False
+        h = h.__dict__
+
         hcomb_list_copy = deepcopy(self.hcomb_list)
         for hcomb in hcomb_list_copy:
             hcomb['finished'] = False
+            hcomb['epochs_finished'] = [0] * len(hcomb['ALL_FOLDS'])
+            hcomb['val_acc'] = [-1] * len(hcomb['ALL_FOLDS'])
+            hcomb['val_acc_mean'] = -1
         if h in hcomb_list_copy:
             index = hcomb_list_copy.index(h)
-            already_finished = self.hcomb_list[index]['finished']
         else:
             self.hcomb_list.append(h)
             index = self.hcomb_list.index(h)
-        return index, already_finished
 
-    def finished_hcomb(self, h):
-        hcomb_list_copy = deepcopy(self.hcomb_list)
-        for hcomb in hcomb_list_copy:
-            hcomb['finished'] = False
-        index = hcomb_list_copy.index(h)
-        self.hcomb_list[index]['finished'] = True
+        self._write_hcomb_list()
+
+        return index, self.hcomb_list[index]
+
+    def finish_hcomb(self, id_, h, val_acc):
+        h = h.__dict__
+
+        h['finished'] = True
+        self._update_val_acc_mean(h, val_acc)
+
+        self.replace_at_id(id_, h)
+
+        self._write_hcomb_list()
+
+    def finish_epoch(self, id_, h, val_acc, fold_ind):
+        h = h.__dict__
+
+        h['epochs_finished'][fold_ind] += 1
+        self._update_val_acc(h, val_acc, fold_ind)
+
+        self.replace_at_id(id_, h)
+
+        self._write_hcomb_list()
+
+    def _update_val_acc(self, h, val_acc, fold_ind):
+        h = h.__dict__
+
+        h['val_acc'][fold_ind] = val_acc
+
+    def _update_val_acc_mean(self, h, val_acc_mean):
+        h = h.__dict__
+
+        h['val_acc_mean'] = val_acc_mean
+
+    def replace_at_id(self, id_, h):
+        h = h.__dict__
+
+        self.hcomb_list[id_] = h
         self._write_hcomb_list()
 
     def _write_hcomb_list(self):
-        with open(self.filepath, 'rb') as handle:
+        with open(self.filepath, 'wb') as handle:
             pickle.dump(self.hcomb_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
