@@ -119,17 +119,21 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
 
         model_ckp.on_epoch_end(e, logs={'val_final_acc': val_phase.accs[-1]})
 
-        utils.pickle_metrics({'train_losses': train_phase.losses, 'train_accs': train_phase.accs,
-                              'val_losses': val_phase.losses, 'val_accs': val_phase.accs,
-                              'val_class_accs': val_phase.class_accs}, model_save_dir)
+        metrics = {'train_losses': np.array(train_phase.losses), 'train_accs': np.array(train_phase.accs),
+                   'val_losses': np.array(val_phase.losses), 'val_accs': np.array(val_phase.accs),
+                   'val_class_accs': np.array(val_phase.class_accs)}
+        utils.pickle_metrics(metrics, model_save_dir)
 
         hcm.finish_epoch(ID, h, val_phase.accs[-1], i_val_fold)
 
     val_class_accuracies_over_folds.append(val_phase.class_accs[-1])
     val_acc_over_folds.append(val_phase.accs[-1])
 
-    utils.pickle_metrics({'val_class_accs_over_folds': val_class_accuracies_over_folds,
-                          'val_acc_over_folds': val_acc_over_folds}, model_dir)
+    metrics = {'val_class_accs_over_folds': np.array(val_class_accuracies_over_folds),
+               'val_acc_over_folds': np.array(val_acc_over_folds)}
+    utils.pickle_metrics(metrics, model_dir)
+
+# TODO: think about when and what to plot 'over_folds'
 
 ################################################# CROSS VALIDATION: MEAN AND VARIANCE
 
@@ -138,13 +142,12 @@ val_class_accuracies_var_over_folds = np.var(np.array(val_class_accuracies_over_
 val_acc_mean_over_folds = np.mean(val_acc_over_folds)
 val_acc_var_over_folds = np.var(val_acc_over_folds)
 
-utils.pickle_metrics({'val_class_accs_over_folds': val_class_accuracies_over_folds,
-                      'val_class_accs_mean_over_folds': val_class_accuracies_mean_over_folds,
-                      'val_class_accs_var_over_folds': val_class_accuracies_var_over_folds,
-                      'val_acc_over_folds': val_acc_over_folds,
-                      'val_acc_mean_over_folds': val_acc_mean_over_folds,
-                      'val_acc_var_over_folds': val_acc_var_over_folds}, model_dir)
+metrics = {'val_class_accs_over_folds': np.array(val_class_accuracies_over_folds),
+           'val_class_accs_mean_over_folds': np.array(val_class_accuracies_mean_over_folds),
+           'val_class_accs_var_over_folds': np.array(val_class_accuracies_var_over_folds),
+           'val_acc_over_folds': np.array(val_acc_over_folds),
+           'val_acc_mean_over_folds': np.array(val_acc_mean_over_folds),
+           'val_acc_var_over_folds': np.array(val_acc_var_over_folds)}
+utils.pickle_metrics(metrics, model_dir)
 
 hcm.finish_hcomb(ID, h, val_acc_mean_over_folds)
-
-# TODO write final plots

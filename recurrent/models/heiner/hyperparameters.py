@@ -118,17 +118,14 @@ class HCombListManager:
         self._write_hcomb_list()
 
     def _update_val_acc(self, h, val_acc, fold_ind):
-        h = h.__dict__
-
         h['val_acc'][fold_ind] = val_acc
 
     def _update_val_acc_mean(self, h, val_acc_mean):
-        h = h.__dict__
-
         h['val_acc_mean'] = val_acc_mean
 
     def replace_at_id(self, id_, h):
-        h = h.__dict__
+        if type(h) is not dict:
+            h = h.__dict__
 
         self.hcomb_list[id_] = h
         self._write_hcomb_list()
