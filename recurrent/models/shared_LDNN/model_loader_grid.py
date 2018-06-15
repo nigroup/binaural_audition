@@ -32,19 +32,18 @@ def get_state_reset_op(state_variables,  BATCH_SIZE, NUM_LSTM ,NUM_HIDDEN ):
     return get_state_update_op(state_variables, zero_states,NUM_LSTM)
 
 def MultiRNN(x, BATCH_SIZE, seq, NUM_CLASSES, NUM_LSTM,
-             NUM_HIDDEN, OUTPUT_KEEP_PROB, NUM_MLP,NUM_NEURON, training=True):
+             NUM_HIDDEN, OUTPUT_KEEP_PROB, NUM_MLP,NUM_NEURON, NUM_GRID, STRIDE, FILTESIZE, training=True, SHARING = False):
     with tf.variable_scope('grid_lstm'):
         # https: // github.com / tensorflow / tensorflow / blob / master / tensorflow / contrib / grid_rnn / python / ops / grid_rnn_cell.py
-        NUM_GRID_HIDDEN =128
         input = tf.reshape(x, [BATCH_SIZE, -1, 160])
 
         # grid_lstm_cell = grid_rnn_cell.Grid2BasicLSTMCell(num_units=NUM_GRID_HIDDEN)
-        grid_lstm_cell = tf.contrib.rnn.BidirectionalGridLSTMCell(num_units=NUM_GRID_HIDDEN,
-                                                                  feature_size=80,
-                                                                  num_frequency_blocks=[1,1],
-                                                                  start_freqindex_list=[0,80],
-                                                                  end_freqindex_list=[80,160],
-                                                                  frequency_skip=1
+        num_shifts = int((160 - FILTESIZE) / STRIDE + 1)
+        grid_lstm_cell = tf.contrib.rnn.BidirectionalGridLSTMCell(num_units=NUM_GRID,
+                                                                  feature_size=FILTESIZE,
+                                                                  num_frequency_blocks=[num_shifts],
+                                                                  frequency_skip=STRIDE,
+                                                                  share_time_frequency_weights= SHARING
                                                                   )
         grid_lstm_cell = rnn_cell.DropoutWrapper(grid_lstm_cell, output_keep_prob=0.9)
         grid_output, _ = tf.nn.dynamic_rnn(cell=grid_lstm_cell,
