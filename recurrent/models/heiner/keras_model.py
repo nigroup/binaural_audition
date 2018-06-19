@@ -9,6 +9,7 @@ from keras.models import Model
 import heiner.hyperparameters as hp
 from heiner import train_utils as tr_utils
 from heiner import utils
+from heiner import plotting as plot
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 
@@ -23,8 +24,6 @@ os.makedirs(save_path, exist_ok=True)
 
 hcm = hp.HCombListManager(save_path)
 
-# TODO: write plotting functions for losses, final accs and class accs -> create plots folder if not exist
-# also write in plot if finished or intermediate -> overwrite old plots
 INTERMEDIATE_PLOTS = True
 
 ################################################# HYPERPARAMETERS
@@ -126,6 +125,9 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
 
         hcm.finish_epoch(ID, h, val_phase.accs[-1], i_val_fold)
 
+        if INTERMEDIATE_PLOTS:
+            plot.plot_metrics(metrics, model_save_dir)
+
     val_class_accuracies_over_folds.append(val_phase.class_accs[-1])
     val_acc_over_folds.append(val_phase.accs[-1])
 
@@ -133,7 +135,8 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
                'val_acc_over_folds': np.array(val_acc_over_folds)}
     utils.pickle_metrics(metrics, model_dir)
 
-# TODO: think about when and what to plot 'over_folds'
+    if INTERMEDIATE_PLOTS:
+        plot.plot_metrics(metrics, model_save_dir)
 
 ################################################# CROSS VALIDATION: MEAN AND VARIANCE
 
@@ -151,3 +154,6 @@ metrics = {'val_class_accs_over_folds': np.array(val_class_accuracies_over_folds
 utils.pickle_metrics(metrics, model_dir)
 
 hcm.finish_hcomb(ID, h, val_acc_mean_over_folds)
+
+if INTERMEDIATE_PLOTS:
+    plot.plot_metrics(metrics, model_dir)
