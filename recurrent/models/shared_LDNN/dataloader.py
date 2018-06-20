@@ -9,6 +9,13 @@ import sys
 import tensorflow as tf
 import pandas as pd
 # training loader-----------------------
+'''
+NaN is +1
+Assign 0 frames zero cost in training
+ON      = +1
+OFF     = 0
+UNCLEAR = -1
+'''
 def _read_py_function(filename):
     filename = filename.decode(sys.getdefaultencoding())
     fx, fy = np.array([]).reshape(0, 160), np.array([]).reshape(0, 13)
@@ -33,6 +40,14 @@ def read_trainset(path_set, batchsize):
 
 
 # validation loader-------------------------------
+'''
+ Assign 0 frames zero cost in testing
+ Because we have to evaluate each scene instance, thus here use batc padding. 
+ Padding value = 0
+ ON            = 1
+ OFF           = 2
+ NAN: validation use training data set, NaN is already transformed to 1
+'''
 def _read_py_function1(filename):
     filename = filename.decode(sys.getdefaultencoding())
     data = np.load(filename)
@@ -58,7 +73,7 @@ def _read_py_function1(filename):
     # for padding value 0, change OFF'0'-> 2
     y[y == 0] = 2
     #  and assign NaN frames zero cost in testing (for easier acoustic interpretation of the results)
-    y[y == 'nan'] = 2
+    # y[y == 'nan'] = 2
     l = np.array([x.shape[0]])
     return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
 def read_validationset(path_set, batchsize):
@@ -68,10 +83,13 @@ def read_validationset(path_set, batchsize):
         lambda filename: tuple(tf.py_func(_read_py_function1, [filename], [tf.float32, tf.int32, tf.int32])))
     batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     return batch
+
+
 # related function for rectangle-----------------------------------------
+MACRO_PATH = ''
 def get_index(paths):
     result = []
-    pkl_file = open('/mnt/raid/data/ni/twoears/scenes2018/train/file_lengths.pickle','rb')
+    pkl_file = open(MACRO_PATH+'/mnt/raid/data/ni/twoears/scenes2018/train/file_lengths.pickle','rb')
     data = pickle.load(pkl_file)
     for i,p in enumerate(paths):
         result.append([i,data[p],p])
@@ -153,7 +171,7 @@ def get_train_data(cv_id, scenes, epochs, timelengths):
     for s in scenes:
         for f in range(1, 7):
             if f == cv_id: continue
-            p = '/mnt/raid/data/ni/twoears/scenes2018/train/fold' + str(f) + '/' + s
+            p = MACRO_PATH+'/mnt/raid/data/ni/twoears/scenes2018/train/fold' + str(f) + '/' + s
             path = glob(p + '/**/**/*.npz', recursive=True)
             paths += path
 
@@ -165,7 +183,7 @@ def get_train_data(cv_id, scenes, epochs, timelengths):
 def get_valid_data(cv_id, scenes, epochs, timelengths):
     paths = []
     for s in scenes:
-        p = '/mnt/raid/data/ni/twoears/scenes2018/train/fold'+ str(cv_id)+ '/' + s
+        p = MACRO_PATH+'/mnt/raid/data/ni/twoears/scenes2018/train/fold'+ str(cv_id)+ '/' + s
         path = glob(p + '/**/**/*.npz', recursive=True)
         paths += path
     INDEX_PATH = get_index(paths)
@@ -173,7 +191,7 @@ def get_valid_data(cv_id, scenes, epochs, timelengths):
 def get_validation_data(cv_id, scenes, epochs, timelengths):
     paths = []
     for s in scenes:
-        p = '/mnt/raid/data/ni/twoears/scenes2018/train/fold'+ str(cv_id)+ '/' + s
+        p = MACRO_PATH+'/mnt/raid/data/ni/twoears/scenes2018/train/fold'+ str(cv_id)+ '/' + s
         path = glob(p + '/**/**/*.npz', recursive=True)
         paths += path
     # get index, length, path
@@ -194,7 +212,7 @@ def get_scenes_weight(scene_list,cv_id):
             weights: [class1,class2,...,class13]
 
         """
-    weight_dir = '/mnt/raid/data/ni/twoears/trainweight.npy'
+    weight_dir = MACRO_PATH+'/mnt/raid/data/ni/twoears/trainweight.npy'
     #  folder, scene, w_postive, w_negative
     w = np.load(weight_dir)
     count_pos = count_neg = [0] * 13
@@ -203,7 +221,7 @@ def get_scenes_weight(scene_list,cv_id):
             if j[0] != str(cv_id) and j[1] == i:
                 count_pos = [x + int(y) for x, y in zip(count_pos, j[2:15])]
                 count_neg = [x + int(y) for x, y in zip(count_neg, j[15:28])]
-
+    # the same as :weight on positive = negative count / positive count * total/toal
     total = (sum(count_pos) + sum(count_neg))
     pos = [x / total for x in count_pos]
     neg = [x / total for x in count_neg]
@@ -261,7 +279,7 @@ def average_performance(list,dir,epoch_num,folder):
               'class13tp', 'class13tn', 'class13fp', 'class13fn']
     df = pd.DataFrame(list,columns=header)
     dir += 'folder'+ str(folder) + '_' +str(epoch_num) + '.pkl'
-    df.to_pickle(dir)
+    # df.to_pickle(dir)
     df1 = df.groupby('sceneID').mean()
     four_list = df1.mean().tolist()
     classes_performance = []
