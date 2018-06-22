@@ -5,11 +5,14 @@ import numpy as np
 from keras.callbacks import ModelCheckpoint
 from keras.layers import Dense, Input, CuDNNLSTM
 from keras.models import Model
+from keras.optimizers import Adam
 
 import heiner.hyperparameters as hp
 from heiner import train_utils as tr_utils
 from heiner import utils
 from heiner import plotting as plot
+
+from timeit import default_timer as timer
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 
@@ -41,11 +44,15 @@ os.makedirs(model_dir, exist_ok=True)
 h.save_to_dir(model_dir)
 
 ################################################# CROSS VALIDATION
+start = timer()
+
 
 val_class_accuracies_over_folds = []
 val_acc_over_folds = []
 
 print(5 * '\n' + 'Starting Cross Validation...\n')
+
+#TODO: use early stopping
 
 for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
 
@@ -61,10 +68,10 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
 
     print('\nBuild model...\n')
 
-    x = Input(batch_shape=(h.BATCHSIZE, None, h.NFEATURES), name='Input', dtype='float32')
+    x = Input(batch_shape=(h.BATCH_SIZE, None, h.N_FEATURES), name='Input', dtype='float32')
     # here will be the conv or grid lstm
     y = x
-    for units in h.UNITS_PER_LAYER_RNN:
+    for units in h.UNITS_PER_LAYER_LSTM:
         y = CuDNNLSTM(units, return_sequences=True, stateful=True)(y)
     for units in h.UNITS_PER_LAYER_MLP:
         y = Dense(units, activation='sigmoid')(y)
@@ -89,14 +96,15 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
 
     ################################################# COMPILE MODEL
 
-    model.compile(optimizer='adam', loss=my_loss, metrics=None)
+    adam = Adam(lr=h.LEARNING_RATE)
+    model.compile(optimizer=adam, loss=my_loss, metrics=None)
 
     print('\nModel compiled.\n')
 
     ################################################# DATA LOADER
-    train_loader, val_loader = tr_utils.create_dataloaders(h.LABEL_MODE, TRAIN_FOLDS, h.TRAIN_SCENES, h.BATCHSIZE,
-                                                           h.TIMESTEPS, h.EPOCHS, h.NFEATURES, h.NCLASSES, VAL_FOLDS,
-                                                           h.VAL_STATEFUL)
+    train_loader, val_loader = tr_utils.create_dataloaders(h.LABEL_MODE, TRAIN_FOLDS, h.TRAIN_SCENES, h.BATCH_SIZE,
+                                                           h.TIME_STEPS, h.MAX_EPOCHS, h.N_FEATURES, h.N_CLASSES,
+                                                           VAL_FOLDS, h.VAL_STATEFUL)
 
     ################################################# CALLBACKS
     model_ckp = ModelCheckpoint(os.path.join(model_save_dir,
@@ -104,7 +112,7 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
                                 verbose=1, monitor='val_final_acc')
     model_ckp.set_model(model)
 
-    args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.EPOCHS, val_fold_str]
+    args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str]
 
     # training phase
     train_phase = tr_utils.Phase('train', model, train_loader, *args)
@@ -112,7 +120,7 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
     # validation phase
     val_phase = tr_utils.Phase('val', model, val_loader, *args)
 
-    for e in range(h.epochs_finished[i_val_fold], h.EPOCHS):
+    for e in range(h.epochs_finished[i_val_fold], h.MAX_EPOCHS):
         train_phase.run()
         val_phase.run()
 
@@ -123,7 +131,7 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
                    'val_class_accs': np.array(val_phase.class_accs)}
         utils.pickle_metrics(metrics, model_save_dir)
 
-        hcm.finish_epoch(ID, h, val_phase.accs[-1], i_val_fold)
+        hcm.finish_epoch(ID, h, val_phase.accs[-1], i_val_fold, timer()-start)
 
         if INTERMEDIATE_PLOTS:
             plot.plot_metrics(metrics, model_save_dir)
@@ -153,7 +161,7 @@ metrics = {'val_class_accs_over_folds': np.array(val_class_accuracies_over_folds
            'val_acc_var_over_folds': np.array(val_acc_var_over_folds)}
 utils.pickle_metrics(metrics, model_dir)
 
-hcm.finish_hcomb(ID, h, val_acc_mean_over_folds)
+hcm.finish_hcomb(ID, h, val_acc_mean_over_folds, np.sqrt(val_class_accuracies_var_over_folds), timer()-start)
 
 if INTERMEDIATE_PLOTS:
     plot.plot_metrics(metrics, model_dir)

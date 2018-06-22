@@ -1,50 +1,75 @@
-import pandas as pd
-from os import path
 import pickle
-from typing import List
 from copy import deepcopy
+from os import path
+
+import numpy as np
 
 
 class H:
 
-    def __init__(self):
-        self.NCLASSES = 13
-        self.TIMESTEPS = 4000
-        self.NFEATURES = 160
-        self.BATCHSIZE = 40
+    def __init__(self, N_CLASSES=13, TIME_STEPS=4000, N_FEATURES=160, BATCH_SIZE=40, MAX_EPOCHS=2,
+                 UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=(200, 200, 13), LEARNING_RATE=0.001,
+                 OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 2), ALL_FOLDS=range(1, 3), LABEL_MODE='blockbased',
+                 MASK_VAL=-1, VAL_STATEFUL=False):
+        ################################################################################################################
+
+        # Not by Random Search
+        self.N_CLASSES = N_CLASSES
+        self.N_FEATURES = N_FEATURES
+
+        self.TIME_STEPS = TIME_STEPS
+        self.BATCH_SIZE = BATCH_SIZE
 
         # TODO: just changed for convenience
-        self.EPOCHS = 2
+        self.MAX_EPOCHS = MAX_EPOCHS
 
-        # TODO: Use MIN_EPOCHS and MAX_EPOCHS when using early stopping
-
-        self.UNITS_PER_LAYER_RNN = [200, 200, 200]
-        self.UNITS_PER_LAYER_MLP = [200, 200, 13]
-
-        assert self.UNITS_PER_LAYER_MLP[-1] == self.NCLASSES, \
-            'last output layer should have %d (number of classes) units' % self.NCLASSES
-
-        self.OUTPUT_THRESHOLD = 0.5
+        self.OUTPUT_THRESHOLD = OUTPUT_THRESHOLD
 
         # TRAIN_SCENES = list(range(1, 41))
-        self.TRAIN_SCENES = [1]
+        self.TRAIN_SCENES = list(TRAIN_SCENES)
 
         # TODO: just changed for convenience
-        self.ALL_FOLDS = list(range(1, 3))  # folds: 1 - 2
+        self.ALL_FOLDS = list(ALL_FOLDS)  # folds: 1 - 2
 
-        self.LABEL_MODE = 'blockbased'
-        self.MASK_VAL = -1
+        self.LABEL_MODE = LABEL_MODE
+        self.MASK_VAL = MASK_VAL
 
-        self.VAL_STATEFUL = False
+        self.VAL_STATEFUL = VAL_STATEFUL
 
+        ################################################################################################################
+
+        # Random Search
+        if UNITS_PER_LAYER_LSTM is None:
+            self.UNITS_PER_LAYER_LSTM = [200, 200, 200]
+        else:
+            self.UNITS_PER_LAYER_LSTM = UNITS_PER_LAYER_LSTM
+
+        if UNITS_PER_LAYER_MLP is None:
+            self.UNITS_PER_LAYER_MLP = []
+        else:
+            self.UNITS_PER_LAYER_MLP = UNITS_PER_LAYER_MLP
+        self.UNITS_PER_LAYER_MLP.append(self.N_CLASSES)
+
+        assert self.UNITS_PER_LAYER_MLP[-1] == self.N_CLASSES, \
+            'last output layer should have %d (number of classes) units' % self.N_CLASSES
+
+        self.LEARNING_RATE = LEARNING_RATE
+
+        ################################################################################################################
+
+        # Metrics
         self.epochs_finished = [0] * len(self.ALL_FOLDS)
 
         self.val_acc = [-1] * len(self.ALL_FOLDS)
 
         self.val_acc_mean = -1
 
+        self.val_acc_std = -1
+
         # indicates whether this combination is already finished
         self.finished = False
+
+        self.elapsed_time = -1
 
     def save_to_dir(self, model_dir):
         filepath = path.join(model_dir, 'hyperparameters.pickle')
@@ -97,20 +122,22 @@ class HCombListManager:
 
         return index, self.hcomb_list[index]
 
-    def finish_hcomb(self, id_, h, val_acc):
+    def finish_hcomb(self, id_, h, val_acc_mean, val_acc_std, elapsed_time):
         h = h.__dict__
 
         h['finished'] = True
-        self._update_val_acc_mean(h, val_acc)
+        h['elapsed_time'] = elapsed_time
+        self._update_val_acc_mean_std(h, val_acc_mean, val_acc_std)
 
         self.replace_at_id(id_, h)
 
         self._write_hcomb_list()
 
-    def finish_epoch(self, id_, h, val_acc, fold_ind):
+    def finish_epoch(self, id_, h, val_acc, fold_ind, elapsed_time):
         h = h.__dict__
 
         h['epochs_finished'][fold_ind] += 1
+        h['elapsed_time'] = elapsed_time
         self._update_val_acc(h, val_acc, fold_ind)
 
         self.replace_at_id(id_, h)
@@ -120,8 +147,9 @@ class HCombListManager:
     def _update_val_acc(self, h, val_acc, fold_ind):
         h['val_acc'][fold_ind] = val_acc
 
-    def _update_val_acc_mean(self, h, val_acc_mean):
+    def _update_val_acc_mean_std(self, h, val_acc_mean, val_acc_std):
         h['val_acc_mean'] = val_acc_mean
+        h['val_acc_std'] = val_acc_std
 
     def replace_at_id(self, id_, h):
         if type(h) is not dict:
@@ -133,3 +161,49 @@ class HCombListManager:
     def _write_hcomb_list(self):
         with open(self.filepath, 'wb') as handle:
             pickle.dump(self.hcomb_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+class RandomSearch:
+
+    def __init__(self):
+        # LSTM
+        self.RANGE_NUMBER_OF_LSTM_LAYERS = (1, 5)  # 1 - 4
+        self.RANGE_LOG_NUMBER_OF_LSTM_CELLS = (np.log10(50), np.log10(1000))  # same for each layer
+
+        # MLP
+        self.RANGE_NUMBER_OF_MLP_LAYERS = (0, 4)  # 0 - 3
+        self.RANGE_LOG_NUMBER_OF_MLP_CELLS = (np.log10(50), np.log10(1000))  # same for each layer
+
+        # Initialization of Layers: Glorot
+
+        # Regularization TODO: implement in model
+        # self.RANGE_DROPOUT_RATE = (0.25, 0.9)
+        # self.RANGE_L2 = None # TODO: check values
+        # gradient clipping
+
+        # Optimization
+        self.RANGE_LEARNING_RATE = (-4, -2)
+
+        # Data characteristics TODO: find size limit -> check when sampling the product of both
+        # self.RANGE_TIME_STEPS = None
+        # self.RANGE_BATCH_SIZE = None
+
+    def _sample_hcomb(self):
+        units_per_layer_lstm = [int(10 ** np.random.uniform(*self.RANGE_LOG_NUMBER_OF_LSTM_CELLS))] * \
+                               np.random.randint(*self.RANGE_NUMBER_OF_LSTM_LAYERS)
+
+        units_per_layer_mlp = [int(10 ** np.random.uniform(*self.RANGE_LOG_NUMBER_OF_MLP_CELLS))] * \
+                              np.random.randint(*self.RANGE_NUMBER_OF_MLP_LAYERS)
+
+        learning_rate = 10 ** np.random.uniform(*self.RANGE_LEARNING_RATE)
+
+        return H(UNITS_PER_LAYER_LSTM=units_per_layer_lstm, UNITS_PER_LAYER_MLP=units_per_layer_mlp,
+                 LEARNING_RATE=learning_rate)
+
+    def get_hcomb_list(self, available_gpus, number_of_hcombs):
+        hcomb_list = list(set([self._sample_hcomb() for _ in range(0, number_of_hcombs)]))
+        hcomb_list = [(available_gpus[i % len(available_gpus)], hcomb_list[i]) for i in range(0, len(hcomb_list))]
+        return hcomb_list
+
+        # TODO: multiple lists better for multiprocessing i think
+

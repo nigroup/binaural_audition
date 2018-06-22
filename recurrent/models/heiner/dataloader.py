@@ -47,12 +47,12 @@ class DataLoader:
         self.path_pattern = path.join(self.path_pattern, '*.npz')
         self.pickle_path_pattern = path.join(self.pickle_path_pattern, '*.npz')
 
-        if not (label_mode is 'instant' or label_mode is 'blockbased'):
+        if not (label_mode == 'instant' or label_mode == 'blockbased'):
             raise ValueError("label_mode has to be 'instant' or 'blockbased'")
 
         self.instant_mode = True
 
-        if label_mode is 'blockbased':
+        if label_mode == 'blockbased':
             self.instant_mode = False
 
         self.filenames = glob.glob(self.path_pattern)
