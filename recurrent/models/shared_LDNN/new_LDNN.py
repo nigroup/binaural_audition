@@ -73,7 +73,7 @@ class HyperParameters:
         self.VAL_FOLD = VAL_FOLD
         self.TRAIN_SET, self.PATHS = get_train_data(self.VAL_FOLD,self.SCENES,self.EPOCHS,self.TIMELENGTH)
         self.VALID_SET = get_validation_data(self.VAL_FOLD,self.SCENES, 1, self.TIMELENGTH)
-        self.TOTAL_SAMPLES = len(self.PATHS)
+        # self.TOTAL_SAMPLES = len(self.PATHS)
         self.NUM_TRAIN = len(self.TRAIN_SET)
         self.NUM_TEST = len(self.VALID_SET)
         self.SET = {'train': self.TRAIN_SET,
@@ -136,7 +136,7 @@ class HyperParameters:
                 iterator = tf.data.Iterator.from_string_handle(handle, train_batch.output_types,
                                                                train_batch.output_shapes)
                 X, Y, seq = iterator.get_next()
-            # get mask matrix
+            # get mask matrix for zero frames
             mask_zero_frames = tf.cast(tf.not_equal(Y, -1), tf.int32)
             seq = tf.reshape(seq, [batch_size])  # original sequence length, only used for RNN
 
@@ -167,6 +167,8 @@ class HyperParameters:
                 # LDNN / mlp / mlpout: 0
 
                 # LDNN/lstm/cudnn_lstm/opaque_kernel:0
+
+                # sum(t ** 2) / 2
                 l2 = self.LAMBDA_L2 * sum(
                     tf.nn.l2_loss(tf_var)
                     for tf_var in tf.trainable_variables()
@@ -234,7 +236,8 @@ class HyperParameters:
                                                                 Batch size: {}
                                                                 TIMELENGTH: {}
                                                                 Dropout: {}
-                                                                Scenes:{}'''.format(
+                                                                L2:{}
+                                                                Number of Scenes:{}'''.format(
                     self.VAL_FOLD,
                     self.EPOCHS + self.OLD_EPOCH,
                     self.LEARNING_RATE,
@@ -245,6 +248,7 @@ class HyperParameters:
                     self.BATCH_SIZE,
                     self.TIMELENGTH,
                     self.OUTPUT_KEEP_PROB,
+                    self.LAMBDA_L2,
                     len(self.SCENES)))
                 train_handle = sess.run(train_iterator.string_handle())
                 valid_handle = sess.run(valid_iterator.string_handle())
@@ -259,6 +263,7 @@ class HyperParameters:
 
                 # add previous epoch if restore the model
                 epoch_number = 1 + + self.OLD_EPOCH
+
                 # initialization for first epoch
                 train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
                 epoch_start = time.time()
