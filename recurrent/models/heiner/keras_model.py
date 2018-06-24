@@ -18,6 +18,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 
 # TODO: sample hyperparameter combinations at the beginning and delete duplicates (e.g., via set)
 
+# TODO: IMPORTANT -> see if validation accuracy weights are correct again (were changed to all ones)
 
 ################################################# MODEL LOG AND CHECKPOINT SETUP DEPENDENT ON HYPERPARAMETERS
 
@@ -104,7 +105,7 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
     ################################################# DATA LOADER
     train_loader, val_loader = tr_utils.create_dataloaders(h.LABEL_MODE, TRAIN_FOLDS, h.TRAIN_SCENES, h.BATCH_SIZE,
                                                            h.TIME_STEPS, h.MAX_EPOCHS, h.N_FEATURES, h.N_CLASSES,
-                                                           VAL_FOLDS, h.VAL_STATEFUL)
+                                                           VAL_FOLDS, h.VAL_STATEFUL, BUFFER=50)
 
     ################################################# CALLBACKS
     model_ckp = ModelCheckpoint(os.path.join(model_save_dir,

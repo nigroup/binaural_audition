@@ -12,14 +12,16 @@ def create_generator(dloader):
 
 
 def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
-                       VAL_FOLDS, VAL_STATEFUL):
+                       VAL_FOLDS, VAL_STATEFUL, BUFFER):
     train_loader = DataLoader('train', LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, batchsize=BATCHSIZE,
-                              timesteps=TIMESTEPS, epochs=EPOCHS, features=NFEATURES, classes=NCLASSES)
+                              timesteps=TIMESTEPS, epochs=EPOCHS, features=NFEATURES, classes=NCLASSES,
+                              buffer=BUFFER)
     train_loader_len = train_loader.len()
     print('Number of batches per epoch (training): ' + str(train_loader_len))
 
     val_loader = DataLoader('val', LABEL_MODE, VAL_FOLDS, TRAIN_SCENES, epochs=EPOCHS, batchsize=BATCHSIZE,
-                            timesteps=TIMESTEPS, features=NFEATURES, classes=NCLASSES, val_stateful=VAL_STATEFUL)
+                            timesteps=TIMESTEPS, features=NFEATURES, classes=NCLASSES, val_stateful=VAL_STATEFUL,
+                            buffer=BUFFER)
 
     val_loader_len = val_loader.len()
     print('Number of batches per epoch (validation): ' + str(val_loader_len))

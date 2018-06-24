@@ -6,10 +6,10 @@ import numpy as np
 
 
 class H:
-
-    def __init__(self, N_CLASSES=13, TIME_STEPS=4000, N_FEATURES=160, BATCH_SIZE=40, MAX_EPOCHS=2,
-                 UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=(200, 200, 13), LEARNING_RATE=0.001,
-                 OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 2), ALL_FOLDS=range(1, 3), LABEL_MODE='blockbased',
+    # TODO: i changed it to be comparable to changbins value -> i think timelength has to be longer though
+    def __init__(self, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=50, MAX_EPOCHS=50,
+                 UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001,
+                 OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 2), ALL_FOLDS=range(1, 7), LABEL_MODE='blockbased',
                  MASK_VAL=-1, VAL_STATEFUL=False):
         ################################################################################################################
 
@@ -25,7 +25,7 @@ class H:
 
         self.OUTPUT_THRESHOLD = OUTPUT_THRESHOLD
 
-        # TRAIN_SCENES = list(range(1, 41))
+        # TRAIN_SCENES = list(range(1, 81))
         self.TRAIN_SCENES = list(TRAIN_SCENES)
 
         # TODO: just changed for convenience
@@ -40,7 +40,7 @@ class H:
 
         # Random Search
         if UNITS_PER_LAYER_LSTM is None:
-            self.UNITS_PER_LAYER_LSTM = [200, 200, 200]
+            self.UNITS_PER_LAYER_LSTM = [581, 581, 581]
         else:
             self.UNITS_PER_LAYER_LSTM = UNITS_PER_LAYER_LSTM
 

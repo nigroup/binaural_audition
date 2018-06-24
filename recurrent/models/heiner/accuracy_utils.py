@@ -138,13 +138,14 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
         raise ValueError('unknown mode. available: {}, wanted: {}'.format(available_modes, mode))
 
     if mode == 'train' or mode == 'val':
-        # TODO: i think something is incorrect here
-        # wait for ivo's answer -> maybe do it wrt the used scenes
-        weights = 1 / np.array([21, 10, 29, 21, 29, 21, 21, 10, 20, 20, 29, 21, 29, 29, 21, 21, 10,
-                                20, 21, 29, 20, 20, 29, 29, 21, 20, 29, 29, 20, 21, 21, 29, 10, 10,
-                                29, 21, 21, 29, 29, 29, 21, 21, 29, 10, 20, 29, 29, 20, 20, 20, 29,
-                                21, 20, 29, 29, 20, 21, 29, 29, 20, 21, 29, 20, 21, 21, 29, 20, 10,
-                                10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
+        # weights = 1 / np.array([21, 10, 29, 21, 29, 21, 21, 10, 20, 20, 29, 21, 29, 29, 21, 21, 10,
+        #                         20, 21, 29, 20, 20, 29, 29, 21, 20, 29, 29, 20, 21, 21, 29, 10, 10,
+        #                         29, 21, 21, 29, 29, 29, 21, 21, 29, 10, 20, 29, 29, 20, 20, 20, 29,
+        #                         21, 20, 29, 29, 20, 21, 29, 29, 20, 21, 29, 20, 21, 21, 29, 20, 10,
+        #                         10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
+
+        # TODO: change it back then -> now just for scene 1
+        weights = np.ones(80)
     else:
         weights = 1 / np.array([3,  3,  3,  60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50,
                                 55, 60, 50, 55, 60, 50, 55, 60, 60, 50, 55, 60, 50, 55, 60, 50, 55,

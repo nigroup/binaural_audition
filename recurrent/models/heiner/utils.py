@@ -16,13 +16,11 @@ def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/raid/da
         _create_weights_array(save_path)
     weights_array = np.load(save_path)
     if type(fold_nbs) is int:
-        l = list()
-        l.append(fold_nbs)
-        fold_nbs = l
+        fold_nbs = [fold_nbs]
     if type(scene_nbs) is int:
-        l = list()
-        l.append(scene_nbs)
-        scene_nbs = l
+        scene_nbs = [scene_nbs]
+    fold_nbs = np.array(fold_nbs) - 1
+    scene_nbs = np.array(scene_nbs) - 1
     weights_array = weights_array[fold_nbs, :, :, :]
     weights_array = weights_array[:, scene_nbs, :, :]
     class_pos_neg_counts = np.sum(weights_array, axis=(0, 1))
