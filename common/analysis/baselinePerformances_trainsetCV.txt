@@ -17,6 +17,8 @@ model	                  glmnet
 'phone'                   0.73  
 'piano'                   0.83  
 
+=> average:               0.79
+
 
 
 Performance explanation: 
