@@ -10,7 +10,7 @@ class H:
     def __init__(self, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=40, MAX_EPOCHS=50,
                  UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001,
                  OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 2), ALL_FOLDS=range(1, 7), LABEL_MODE='blockbased',
-                 MASK_VAL=-1, VAL_STATEFUL=False):
+                 MASK_VAL=-1, VAL_STATEFUL=True):
         ################################################################################################################
 
         # Not by Random Search

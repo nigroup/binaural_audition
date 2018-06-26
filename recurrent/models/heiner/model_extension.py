@@ -136,3 +136,12 @@ def test_and_predict_on_batch(model, x, y, sample_weight=None):
     if len(outputs) == 1:
         return outputs[0]
     return outputs
+
+
+def reset_with_keep_states(model, keep_states):
+    for layer in model.layers:
+        if hasattr(layer, 'reset_states') and getattr(layer, 'stateful', False):
+            #alternative: with K.get_session():
+            for state in layer.states:
+                old_state = K.eval(state)   # should be a numpy array
+                K.set_value(state, old_state * keep_states)
