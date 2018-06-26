@@ -21,13 +21,13 @@ SOLUTION:
 
 I) Undersampling of the scene instances.
 
-In each episode we do not train the network using all scene 
-instances but instead take only a random fraction that is 
-regenerated after each episode:
+In each epoch we do not train the network using all scene 
+instances, but instead take only a random fraction that is 
+resampled after each epoch:
 
-For each wave file (e.g., Siren+6086_53.wav) randomly sample 
-k out of the 80 possible scenes. If k is chosen from below 
-this makes each scene be chosen for at least one (two) 
+For each wave file (e.g., Siren+6086_53.wav) of the training set 
+randomly sample k out of the 80 possible scenes. If k is chosen from 
+below this lets each scene be chosen for at least one (two) 
 wave file(s) from each class as master with a high probability. 
 See also the left figure in scene_subsampling_criterion.png
 
@@ -49,9 +49,9 @@ specific validation fold (actually corresponding to the holdout
 method), or two specific individual folds, or three specific folds 
 (of the six possible ones) 
 => per hyperparameter combination we train one, two or three models 
-and obtain, respectively one, two or three balanced
-validation accuracies that we average over when comparing the 
-goodness of the hyperparameter combinations. See the following 
+and obtain respectively one, two or three balanced
+validation accuracies that we average when comparing the 
+performance of the hyperparameter combinations. See the following 
 subsampling levels for details. 
 
 III) Subsampling Levels:
@@ -63,35 +63,34 @@ Level 1) -- cheap training, inaccurate validation
         of combinations)
     => training: k=12
     => validation: k=80 (all scenes [*])
-    => cross-validation splits: 1 x 5-1 (validation fold no.: TODO/Ivo)
+    => cross-validation splits: 1 x 5-1 (validation fold no.: 3)
     => early stopping on this _one_ validation fold's balanced accuracy
             
 Level 2) -- still cheap training, refining the validation performance
-    => remove all non-working hyperparameter combinations from level 1
+    => remove all non-working hyperparameter combinations from Level 1
        (i.e., exploding/non-converging solutions etc.)
-    => training: k=12 (same as in level1)
+    => training: k=12 (same as in Level 1)
     => validation: k=80 (all scenes [*])
-    => cross-validation splits: 2 x 5-1 (first validation fold no as 
-       in level 1, second validation fold no.: TODO/Ivo; note that the 
-       performance result from the validation fold from Level 1 should be 
-       reused here, no need to recompute it)
-    => early stopping on this _one_ validation fold's balanced accuracy
+    => cross-validation splits: 2 x 5-1 (first validation fold same as 
+       in Level 1, second validation fold no.: 4.
+	   Note that the performance result from the validation fold from 
+	   Level 1 should be reused here, no need to recompute it)
+    => early stopping on this _one additional_ validation fold's balanced accuracy
        (note that this means the number of epochs might differ from the 
        first fold from level1 but that's ok)
 
 Level 3) -- refining the training (better scene coverage) & more accurate validation
-    => keep only "good" hyperparameter combinations from level2 w.r.t. 
+    => keep only "good" hyperparameter combinations from Level 2 w.r.t. 
        BAC (potentially we will later also examine BAC2, so please 
        always save sensitivity and specificity for each fold and level. 
     => training: k=20
     => validation: k=80 (all scenes [*])
-    => cross-validation splits: 3 x 5-1 (first validation fold no as 
-       in level 1, second validation fold as in level 3, third no.: TODO/Ivo; 
+    => cross-validation splits: 3 x 5-1 (first validation fold same as 
+       in Level 1, second validation fold same as in Level 2, third validation fold no.: 2; 
        note that here the performance results from the levels 1 and 2 
        are NOT reusable due to the different training scene sampling resolution, 
-       i.e., for _all_ three splits the training and validation is required)
-    => early stopping on the average of the three validation fold's balanced accuracy
-       (in levels 1 and 2 only one validation set is used)
+       i.e., for _all_ three CV-splits training and validation is required!
+    => early stopping on the _average_ of the three validation folds' balanced accuracies
 
         
 [*] The speedup by subsampling the scenes for the validation set 
