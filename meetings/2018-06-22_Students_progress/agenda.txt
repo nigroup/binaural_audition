@@ -1,0 +1,72 @@
+AGENDA
+
+
+@all:
+
+- each student: report current state & issues/questions
+    * Changbin: 
+        - hyperparam order for all folds & mean/std of validBAC for all hyperparam
+        - training dynmics examples 
+    * Heiner: 
+        - data loader
+    * Alessandro:
+        - adoption of data loader
+        
+- ensure: materials in meetings folder and repo up2date?
+
+- code sharing: data loader & accuracy calculation? [note if skip>1 convnet needs to be recalculated]
+
+- computation time optimization
+    - new subsampling (scenes + CV folds) scheme
+    - Alessandro: skip > 1
+
+- early stopping
+
+- models saving: at last "good" epoch & validBAC save (use that for the subsequent folds) & store the finally chosen epoch number for later!
+
+    
+- BAC & BAC2 => save sensitivity & specificity (not only BAC as it does not allow BAC2 calculation)
+
+- next meetings: 
+    - all: in three weeks = Mon 16th July 15:30 (with Changbin via Skype)
+    - Heiner/Alessandro => at least once in between / make appointment
+    
+- availability: holidays/treatment of each, plan to submit
+    - Moritz: 22th July - 5th August, 17th - 27th October
+    - Ivo: ?
+    - Heiner: 10th - 28th of September
+    - Alessandro: not in August/September?
+    - Changbin: submission on Oct 30th 2018 & short return earlier possible
+
+
+    
+@Changbin: 
+
+- gridlstm 
+    * which implementation used? hopefully following:  tf.contrib.rnn.GridLSTMCell
+    * share_time_frequency_weights = true !!
+    * with which features to start?
+    * examples: 
+        - Li et al 2017 (Google Home): feature_dim=128(?), stride=16, filtersize=16 (=> non-overlapping)
+        - Sainath et al 2016:, feature_dim=128, stride=4, filter size=24 
+
+- supervision from remote
+
+- thesis submission: 31th Oct?
+
+
+    
+@Alessandro:
+
+- separation between B.S. thesis & NI project? 
+    => order & content expectation [we can provide]
+    => thesis & project due dates
+
+    
+
+@Heiner:
+- check prioritization of contents
+
+- project submission date: end of Sept?
+
+- expectations
