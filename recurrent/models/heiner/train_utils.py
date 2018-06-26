@@ -5,10 +5,11 @@ from heiner.dataloader import DataLoader
 
 def create_generator(dloader):
     while True:
-        b_x, b_y = dloader.next_batch()
-        if b_x is None or b_y is None:
+        # ret is either b_x, b_y or b_x, b_y, keep_states
+        ret = dloader.next_batch()
+        if ret[0] is None or ret[1] is None:
             return
-        yield b_x, b_y
+        yield ret
 
 
 def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,

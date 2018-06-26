@@ -7,7 +7,7 @@ import numpy as np
 
 class H:
     # TODO: i changed it to be comparable to changbins value -> i think timelength has to be longer though
-    def __init__(self, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=50, MAX_EPOCHS=50,
+    def __init__(self, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=40, MAX_EPOCHS=50,
                  UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001,
                  OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 2), ALL_FOLDS=range(1, 7), LABEL_MODE='blockbased',
                  MASK_VAL=-1, VAL_STATEFUL=False):
