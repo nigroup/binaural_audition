@@ -1,0 +1,108 @@
+============================================================
+ISSUE:
+
+Currently one hyperparameter combination takes per cross 
+validation split approximately 10-100 hours training time 
+[one single 5(train)-1(valid) split for as many episodes 
+until the _validation_ balanced accuracy does not improve 
+anymore, i.e., early stopping].
+
+In addition, when considering the full cross validation, 
+i.e., not one but all 6 train-validation-splitting 
+combinations, this would require 6x the above training time. 
+
+This is too expensive and would lead to dramatic 
+undersampling of the hyperparameter space when searching 
+for the best model configuration.
+
+
+============================================================
+SOLUTION:
+
+I) Undersampling of the scene instances.
+
+In each episode we do not train the network using all scene 
+instances but instead take only a random fraction that is 
+regenerated after each episode:
+
+For each wave file (e.g., Siren+6086_53.wav) randomly sample 
+k out of the 80 possible scenes. If k is chosen from below 
+this makes each scene be chosen for at least one (two) 
+wave file(s) from each class as master with a high probability. 
+See also the left figure in scene_subsampling_criterion.png
+
+For 5 folds (any training set) this amounts to: 
+k = 12 to have a scene at least once per class
+k = 20 to have a scene at least twice per class
+
+The particular case that should be used for training (for 
+example whether k=12 or k=20) depends on the subsampling 
+levels as defined below in part III of the solution.
+
+
+II) Reduced cross validation.
+
+Instead of a full 6-fold cross validation (taking each of the 
+6 folds once as validation set and the respectively reamining 
+5 folds as training set) we reduce and take either only one 
+specific validation fold (actually corresponding to the holdout 
+method), or two specific individual folds, or three specific folds 
+(of the six possible ones) 
+=> per hyperparameter combination we train one, two or three models 
+and obtain, respectively one, two or three balanced
+validation accuracies that we average over when comparing the 
+goodness of the hyperparameter combinations. See the following 
+subsampling levels for details. 
+
+III) Subsampling Levels:
+
+Level 1) -- cheap training, inaccurate validation
+    => a large number of hyperparameter combinations are sampled
+       (e.g. as many as the computing resources allow to complete 
+        within some fixed time, should be hundreds, better thousand(s) 
+        of combinations)
+    => training: k=12
+    => validation: k=80 (all scenes [*])
+    => cross-validation splits: 1 x 5-1 (validation fold no.: TODO/Ivo)
+    => early stopping on this _one_ validation fold's balanced accuracy
+            
+Level 2) -- still cheap training, refining the validation performance
+    => remove all non-working hyperparameter combinations from level 1
+       (i.e., exploding/non-converging solutions etc.)
+    => training: k=12 (same as in level1)
+    => validation: k=80 (all scenes [*])
+    => cross-validation splits: 2 x 5-1 (first validation fold no as 
+       in level 1, second validation fold no.: TODO/Ivo; note that the 
+       performance result from the validation fold from Level 1 should be 
+       reused here, no need to recompute it)
+    => early stopping on this _one_ validation fold's balanced accuracy
+       (note that this means the number of epochs might differ from the 
+       first fold from level1 but that's ok)
+
+Level 3) -- refining the training (better scene coverage) & more accurate validation
+    => keep only "good" hyperparameter combinations from level2 w.r.t. 
+       BAC (potentially we will later also examine BAC2, so please 
+       always save sensitivity and specificity for each fold and level. 
+    => training: k=20
+    => validation: k=80 (all scenes [*])
+    => cross-validation splits: 3 x 5-1 (first validation fold no as 
+       in level 1, second validation fold as in level 3, third no.: TODO/Ivo; 
+       note that here the performance results from the levels 1 and 2 
+       are NOT reusable due to the different training scene sampling resolution, 
+       i.e., for _all_ three splits the training and validation is required)
+    => early stopping on the average of the three validation fold's balanced accuracy
+       (in levels 1 and 2 only one validation set is used)
+
+        
+[*] The speedup by subsampling the scenes for the validation set 
+is quite small (factor 80/50 or 80/60 only) -- cf. right figure 
+in file scene_subsampling_criterion.png). Additionally, 
+fluctuations in the validation set are more difficult to motivate 
+than for the training set. Together Ivo and Moritz have decided 
+to use the full validation set, i.e., all 80 scenes, no sampling. 
+
+However, if the validation cost against our current intuition 
+becomes the dominant part of the whole training process, we can 
+go to the following scene subsampling (but please discuss first):
+k = 50 to have a scene at least once per class
+k = 60 to have a scene at least twice per class
