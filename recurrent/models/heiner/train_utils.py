@@ -64,7 +64,7 @@ class Phase:
 
     @property
     def epoch_str(self):
-        return 'epoch: {} / {}'.format(self.e + 1, self.EPOCHS)
+        return 'epoch: {:{prec}} / {:{prec}}'.format(self.e + 1, self.EPOCHS, prec=len(str(self.EPOCHS)))
 
     def run(self):
         self.model.reset_states()
@@ -73,7 +73,8 @@ class Phase:
         scene_instance_id_metrics_dict = dict()
 
         for iteration in range(1, self.dloader_len[self.e] + 1):
-            it_str = '{}_iteration: {} / {}'.format(self.prefix, iteration, self.dloader_len[self.e])
+            it_str = '{}_iteration: {:{prec}} / {:{prec}}'.format(self.prefix, iteration, self.dloader_len[self.e],
+                                                                  prec=len(str(self.dloader_len[self.e])))
 
             is_val_loader_stateful = not self.train and self.dloader.val_stateful
 
