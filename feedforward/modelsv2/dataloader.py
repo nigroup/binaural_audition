@@ -7,11 +7,13 @@ import pickle
 import heapq
 import re
 
+import settings
+
 
 class DataLoader:
 
     def __init__(self, mode, label_mode, fold_nbs, scene_nbs, batchsize=50, timesteps=4000, epochs=10,
-                 buffer=10, features=160, classes=13, path_pattern='/Users/alessandroschneider/Desktop/TuBerlin/bachelor/data_good_short/',
+                 buffer=10, features=160, classes=13, path_pattern=settings.dir,
                  seed=1, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=-1.0,
                  val_stateful=False):
 

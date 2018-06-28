@@ -102,7 +102,6 @@ class Phase:
             b_y = take_block_based_label(b_y)
             b_y_no_sceneIds = b_y[:,:,:,0].reshape((-1, settings.n_labels))
 
-
             if self.train:
                 #train
                 _,loss =  self.session.run([self.graphModel.optimiser,self.graphModel.cross_entropy], feed_dict={self.graphModel.x_dataloader: b_x, self.graphModel.y_dataloader: b_y_no_sceneIds }) #self.graphModel.cross_entropy_class_weights : data.cross_entropy_class_weights})
