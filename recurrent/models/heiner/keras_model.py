@@ -131,10 +131,8 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
                    'train_accs': np.array(train_phase.accs),
                    'val_losses': np.array(val_phase.losses), 'val_accs': np.array(val_phase.accs),
                    'val_class_accs': np.array(val_phase.class_accs),
-                   'train_class_sens': np.array(train_phase.class_sens),
-                   'train_class_spec': np.array(train_phase.class_spec),
-                   'val_class_sens': np.array(val_phase.class_sens),
-                   'val_class_spec': np.array(val_phase.class_spec)}
+                   'train_class_sens_spec': np.array(train_phase.class_sens_spec),
+                   'val_class_sens_spec': np.array(val_phase.class_sens_spec)}
         utils.pickle_metrics(metrics, model_save_dir)
 
         hcm.finish_epoch(ID, h, val_phase.accs[-1], i_val_fold, timer()-start)

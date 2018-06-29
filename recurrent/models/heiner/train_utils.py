@@ -62,8 +62,7 @@ class Phase:
         self.accs = []
         self.class_accs = []
 
-        self.class_sens = []
-        self.class_spec = []
+        self.class_sens_spec = []
 
     @property
     def epoch_str(self):
@@ -108,15 +107,14 @@ class Phase:
                     m_ext.reset_with_keep_states(self.model, keep_states)
 
         if self.train:
-            final_acc, sens_class, spec_class = acc_u.train_accuracy(scene_instance_id_metrics_dict, metric=self.metric)
+            final_acc, sens_spec_class = acc_u.train_accuracy(scene_instance_id_metrics_dict, metric=self.metric)
         else:
             # TODO: can get a mismatch here, as number of returned values may change depending on parameter 'ret'
-            final_acc, class_accuracies, sens_class, spec_class = acc_u.val_accuracy(scene_instance_id_metrics_dict,
-                                                                                     metric=self.metric, ret=self.ret)
+            final_acc, class_accuracies, sens_spec_class = acc_u.val_accuracy(scene_instance_id_metrics_dict,
+                                                                              metric=self.metric, ret=self.ret)
             self.class_accs.append(class_accuracies)
         self.accs.append(final_acc)
-        self.class_sens.append(sens_class)
-        self.class_spec.append(spec_class)
+        self.class_sens_spec.append(sens_spec_class)
 
         acc_str = '{}_accuracy: {}'.format(self.prefix, final_acc)
         acc_log_str = '{:<20}  {:<20}  {:<20}  {:<20}'.format(self.val_fold_str, self.epoch_str, '', acc_str)

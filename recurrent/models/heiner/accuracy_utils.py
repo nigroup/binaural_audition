@@ -23,7 +23,7 @@ def train_accuracy(scene_instance_id_metrics_dict, metric='BAC'):
     del scene_instance_id_metrics_dict
     class_accuracies = calculate_class_accuracies_weighted_average(scene_number_class_accuracies, mode)
     del scene_number_class_accuracies
-    return calculate_accuracy_final(class_accuracies), sens_class, spec_class
+    return calculate_accuracy_final(class_accuracies), np.stack((sens_class, spec_class), axis=2)
 
 
 def val_accuracy(scene_instance_id_metrics_dict, metric='BAC', ret=('final', 'per_class')):
@@ -49,7 +49,7 @@ def val_accuracy(scene_instance_id_metrics_dict, metric='BAC', ret=('final', 'pe
     r_v = []
     for r in ret:
         r_v.append(ret_dict[r])
-    r_v += [sens_class, spec_class]
+    r_v.append(np.stack((sens_class, spec_class), axis=2))
 
     return r_v[0] if len(r_v) == 1 else tuple(r_v)
 

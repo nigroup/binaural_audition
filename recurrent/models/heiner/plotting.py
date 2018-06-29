@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import numpy as np
-import pickle
+
 from os import path
 
 
@@ -9,8 +10,13 @@ def plot_metrics(metrics, save_dir):
         _plot_acc_over_folds(metrics, save_dir)
     else:
         for metric_name, data in metrics.items():
+            if type(data) is str:
+                continue
             if 'class' in metric_name:
-                _plot_loss_and_acc(metric_name, data, save_dir, over_classes=True)
+                if 'sens' or 'spec' in metric_name:
+                    _plot_sens_spec(metric_name, data, save_dir)
+                else:
+                    _plot_loss_and_acc(metric_name, data, save_dir, over_classes=True)
             else:
                 _plot_loss_and_acc(metric_name, data, save_dir, over_classes=False)
 
@@ -79,7 +85,6 @@ def _plot_acc_over_folds(metrics, save_dir):
     plt.close()
 
 
-
 def _plot_loss_and_acc(metric_name, data, save_dir, over_classes=False):
     x = np.arange(0, len(data), 1)
     plt.figure(figsize=(15, 15))
@@ -107,6 +112,40 @@ def _plot_loss_and_acc(metric_name, data, save_dir, over_classes=False):
     plt.savefig(path.join(save_dir, metric_name) + '.pdf')
     plt.close()
 
+
+def _plot_sens_spec(metric_name, data, save_dir):
+    x = np.arange(0, data.shape[0], 1)
+
+    gridshape = (5, 4)
+    gridsize = gridshape[0] * gridshape[1]
+
+    n_plots = data.shape[1] // gridsize
+
+    labels = ['alarm', 'baby', 'crash', 'dog', 'engine', 'femaleScreammaleScream', 'femaleSpeech', 'fire',
+              'footsteps',
+              'knock', 'maleSpeech', 'phone', 'piano']
+    colors = np.linspace(0, 1, len(labels))
+    cmap = plt.get_cmap('inferno')
+    colors = [cmap(val) for val in colors]
+
+    gs = gridspec.GridSpec(*gridshape)
+
+    for n in range(n_plots):
+        fig = plt.figure(figsize=(5 * gridshape[0], 5 * gridshape[1]))
+
+        for n_sp in range(gridsize):
+            ax = plt.subplot(gs[n_sp])
+
+            scene_ind = n*gridsize + n_sp
+            for label_ind in range(data.shape[2]):
+                ax.plot(x, data[:, scene_ind, label_ind, 0], label='sensitivity: ' + labels[label_ind],
+                        c=colors[label_ind])
+                ax.plot(x, data[:, scene_ind, label_ind, 1], '--', label='specificity: ' + labels[label_ind],
+                        c=colors[label_ind])
+            ax.set_title('Scene: ' + str(scene_ind+1))
+
+        plt.savefig(path.join(save_dir, metric_name) + '_' + str(n) + '.pdf')
+        plt.close()
 
 # with open('/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/hcomb_0/val_fold1/metrics.pickle',
 #           'rb') as handle:

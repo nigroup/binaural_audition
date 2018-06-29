@@ -29,7 +29,9 @@ class H:
         self.TRAIN_SCENES = list(TRAIN_SCENES)
 
         # TODO: just changed for convenience
-        self.ALL_FOLDS = list(ALL_FOLDS)  # folds: 1 - 2
+        ALL_FOLDS = range(1, 3)     # folds: 1 - 3
+
+        self.ALL_FOLDS = list(ALL_FOLDS)
 
         self.LABEL_MODE = LABEL_MODE
         self.MASK_VAL = MASK_VAL
@@ -112,9 +114,11 @@ class HCombListManager:
         for hcomb in hcomb_list_copy:
             hcomb['finished'] = False
             hcomb['epochs_finished'] = [0] * len(hcomb['ALL_FOLDS'])
+            hcomb['METRIC'] = h['METRIC']
             hcomb['val_acc'] = [-1] * len(hcomb['ALL_FOLDS'])
             hcomb['val_acc_mean'] = -1
             hcomb['val_acc_std'] = -1
+            hcomb['elapsed_time'] = -1
         if h in hcomb_list_copy:
             index = hcomb_list_copy.index(h)
         else:
