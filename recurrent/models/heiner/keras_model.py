@@ -47,7 +47,7 @@ h.save_to_dir(model_dir)
 ################################################# CROSS VALIDATION
 start = timer()
 
-
+#METRICS
 val_class_accuracies_over_folds = []
 val_acc_over_folds = []
 
@@ -113,7 +113,7 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
                                 verbose=1, monitor='val_final_acc')
     model_ckp.set_model(model)
 
-    args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str]
+    args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str, h.METRIC]
 
     # training phase
     train_phase = tr_utils.Phase('train', model, train_loader, *args)
@@ -127,9 +127,14 @@ for i_val_fold, val_fold in enumerate(h.ALL_FOLDS):
 
         model_ckp.on_epoch_end(e, logs={'val_final_acc': val_phase.accs[-1]})
 
-        metrics = {'train_losses': np.array(train_phase.losses), 'train_accs': np.array(train_phase.accs),
+        metrics = {'train_losses': np.array(train_phase.losses), 'metric': h.METRIC,
+                   'train_accs': np.array(train_phase.accs),
                    'val_losses': np.array(val_phase.losses), 'val_accs': np.array(val_phase.accs),
-                   'val_class_accs': np.array(val_phase.class_accs)}
+                   'val_class_accs': np.array(val_phase.class_accs),
+                   'train_class_sens': np.array(train_phase.class_sens),
+                   'train_class_spec': np.array(train_phase.class_spec),
+                   'val_class_sens': np.array(val_phase.class_sens),
+                   'val_class_spec': np.array(val_phase.class_spec)}
         utils.pickle_metrics(metrics, model_save_dir)
 
         hcm.finish_epoch(ID, h, val_phase.accs[-1], i_val_fold, timer()-start)

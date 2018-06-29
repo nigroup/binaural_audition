@@ -10,7 +10,7 @@ class H:
     def __init__(self, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=40, MAX_EPOCHS=50,
                  UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001,
                  OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 2), ALL_FOLDS=range(1, 7), LABEL_MODE='blockbased',
-                 MASK_VAL=-1, VAL_STATEFUL=True):
+                 MASK_VAL=-1, VAL_STATEFUL=True, METRIC='BAC'):
         ################################################################################################################
 
         # Not by Random Search
@@ -59,6 +59,8 @@ class H:
 
         # Metrics
         self.epochs_finished = [0] * len(self.ALL_FOLDS)
+
+        self.METRIC = METRIC
 
         self.val_acc = [-1] * len(self.ALL_FOLDS)
 
@@ -112,6 +114,7 @@ class HCombListManager:
             hcomb['epochs_finished'] = [0] * len(hcomb['ALL_FOLDS'])
             hcomb['val_acc'] = [-1] * len(hcomb['ALL_FOLDS'])
             hcomb['val_acc_mean'] = -1
+            hcomb['val_acc_std'] = -1
         if h in hcomb_list_copy:
             index = hcomb_list_copy.index(h)
         else:
@@ -127,7 +130,7 @@ class HCombListManager:
 
         h['finished'] = True
         h['elapsed_time'] = elapsed_time
-        self._update_val_acc_mean_std(h, val_acc_mean, val_acc_std)
+        self._update_val_metrics_mean_std(h, val_acc_mean, val_acc_std)
 
         self.replace_at_id(id_, h)
 
@@ -138,16 +141,16 @@ class HCombListManager:
 
         h['epochs_finished'][fold_ind] += 1
         h['elapsed_time'] = elapsed_time
-        self._update_val_acc(h, val_acc, fold_ind)
+        self._update_val_metrics(h, val_acc, fold_ind)
 
         self.replace_at_id(id_, h)
 
         self._write_hcomb_list()
 
-    def _update_val_acc(self, h, val_acc, fold_ind):
+    def _update_val_metrics(self, h, val_acc, fold_ind):
         h['val_acc'][fold_ind] = val_acc
 
-    def _update_val_acc_mean_std(self, h, val_acc_mean, val_acc_std):
+    def _update_val_metrics_mean_std(self, h, val_acc_mean, val_acc_std):
         h['val_acc_mean'] = val_acc_mean
         h['val_acc_std'] = val_acc_std
 
@@ -165,7 +168,7 @@ class HCombListManager:
 
 class RandomSearch:
 
-    def __init__(self):
+    def __init__(self, metric_used='BAC'):
         # LSTM
         self.RANGE_NUMBER_OF_LSTM_LAYERS = (1, 5)  # 1 - 4
         self.RANGE_LOG_NUMBER_OF_LSTM_CELLS = (np.log10(50), np.log10(1000))  # same for each layer
@@ -188,6 +191,8 @@ class RandomSearch:
         # self.RANGE_TIME_STEPS = None
         # self.RANGE_BATCH_SIZE = None
 
+        self.metric_used = metric_used
+
     def _sample_hcomb(self):
         units_per_layer_lstm = [int(10 ** np.random.uniform(*self.RANGE_LOG_NUMBER_OF_LSTM_CELLS))] * \
                                np.random.randint(*self.RANGE_NUMBER_OF_LSTM_LAYERS)
@@ -198,7 +203,7 @@ class RandomSearch:
         learning_rate = 10 ** np.random.uniform(*self.RANGE_LEARNING_RATE)
 
         return H(UNITS_PER_LAYER_LSTM=units_per_layer_lstm, UNITS_PER_LAYER_MLP=units_per_layer_mlp,
-                 LEARNING_RATE=learning_rate)
+                 LEARNING_RATE=learning_rate, METRIC=self.metric_used)
 
     def get_hcomb_list(self, available_gpus, number_of_hcombs):
         hcomb_list = list(set([self._sample_hcomb() for _ in range(0, number_of_hcombs)]))
