@@ -1,6 +1,5 @@
 import numpy as np
 import math
-import time
 import random
 import heapq
 from glob import glob
@@ -29,6 +28,7 @@ def _read_py_function(filename):
         fx = np.concatenate((fx, x[int(start):int(end)]), axis=0)
         fy = np.concatenate((fy, y[int(start):int(end)]), axis=0)
     l = np.array([fx.shape[0]])
+    # print('multi processes:',time.ctime())
     return fx.astype(np.float32), fy.astype(np.int32), l.astype(np.int32)
 def read_trainset(path_set, batchsize):
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
@@ -36,6 +36,7 @@ def read_trainset(path_set, batchsize):
         lambda filename: tuple(tf.py_func(_read_py_function, [filename], [tf.float32, tf.int32, tf.int32])))
     # batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     batch = dataset.batch(batchsize)
+
     return batch
 
 
@@ -154,7 +155,7 @@ def get_filepaths(Total_epochs, Batch_timelength,paths, mode):
             output.append(string)
 
     return output
-
+# old- random search
 def get_train_data(cv_id, scenes, epochs, timelengths):
     """Get a training set that has become a list
 
@@ -179,6 +180,35 @@ def get_train_data(cv_id, scenes, epochs, timelengths):
     out = get_filepaths(epochs, timelengths, INDEX_PATH,mode='train')
     return out, paths
 
+def get_train_subdata(cv_id, K, epochs, timelengths):
+    """Get a training set that has become a list
+
+        subsampling:
+        K: the number of sample
+
+    """
+    paths = []
+
+    # get valid path set
+    for fold in range(1,7):
+        if fold == cv_id: continue
+        # get scene instances name
+        abosolute_paths = []
+        p = MACRO_PATH + '/mnt/raid/data/ni/twoears/scenes2018/train/fold' +str(fold) +'/scene1'
+        temp = glob(p + '/*.npz', recursive=True)
+        for i in temp:
+            abs_path = i.split('/')[-1]
+            abosolute_paths.append(abs_path)
+
+        for i in abosolute_paths:
+            random_index = random.sample(range(1, 81), K)
+            for index in random_index:
+                construct_path = MACRO_PATH + '/mnt/raid/data/ni/twoears/scenes2018/train/fold' + str(fold) + '/scene' + str(index) + '/' + i
+                paths.append(construct_path)
+
+    INDEX_PATH = get_index(paths)
+    out = get_filepaths(epochs, timelengths, INDEX_PATH,mode='train')
+    return out, paths
 
 def get_valid_data(cv_id, scenes, epochs, timelengths):
     paths = []
