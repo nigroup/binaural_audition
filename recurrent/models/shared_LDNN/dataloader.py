@@ -230,9 +230,33 @@ def get_validation_data(cv_id, scenes, epochs, timelengths):
     x = INDEX_PATH[INDEX_PATH[:, 1].argsort()]
     result = x[:,2].tolist()
     return result
+# def get_scenes_weight(scene_list,cv_id):
+#     """Fetches postive_count and negative counts.
 
-def get_scenes_weight(scene_list,cv_id):
-    """Fetches postive_count and negative counts.
+#         Args:
+#             scene_list: A list contains scene ID.
+#             cv_id: which folder be used as validation set.
+
+#         Returns:
+#             weights: [class1,class2,...,class13]
+
+#         """
+#     weight_dir = MACRO_PATH+'/mnt/raid/data/ni/twoears/trainweight.npy'
+#     #  folder, scene, w_postive, w_negative
+#     w = np.load(weight_dir)
+#     count_pos = count_neg = [0] * 13
+#     for i in scene_list:
+#         for j in w:
+#             if j[0] != str(cv_id) and j[1] == i:
+#                 count_pos = [x + int(y) for x, y in zip(count_pos, j[2:15])]
+#                 count_neg = [x + int(y) for x, y in zip(count_neg, j[15:28])]
+#     # the same as :weight on positive = negative count / positive count * total/toal
+#     total = (sum(count_pos) + sum(count_neg))
+#     pos = [x / total for x in count_pos]
+#     neg = [x / total for x in count_neg]
+#     return [y / x for x, y in zip(pos, neg)]
+def get_scenes_weight(path_list):
+    """especially for subsampling
 
         Args:
             scene_list: A list contains scene ID.
@@ -242,15 +266,16 @@ def get_scenes_weight(scene_list,cv_id):
             weights: [class1,class2,...,class13]
 
         """
-    weight_dir = MACRO_PATH+'/mnt/raid/data/ni/twoears/trainweight.npy'
-    #  folder, scene, w_postive, w_negative
-    w = np.load(weight_dir)
+    pkl_file = open(MACRO_PATH + '/mnt/raid/data/ni/twoears/scenes2018/train/trainweight_subsampling.pickle', 'rb')
+    data = pickle.load(pkl_file)
+    #  path, w_postive, w_negative
+
     count_pos = count_neg = [0] * 13
-    for i in scene_list:
-        for j in w:
-            if j[0] != str(cv_id) and j[1] == i:
-                count_pos = [x + int(y) for x, y in zip(count_pos, j[2:15])]
-                count_neg = [x + int(y) for x, y in zip(count_neg, j[15:28])]
+    for i in path_list:
+        j = data[i]
+        count_pos = [x + int(y) for x, y in zip(count_pos, j[2:15])]
+        count_neg = [x + int(y) for x, y in zip(count_neg, j[15:28])]
+
     # the same as :weight on positive = negative count / positive count * total/toal
     total = (sum(count_pos) + sum(count_neg))
     pos = [x / total for x in count_pos]
