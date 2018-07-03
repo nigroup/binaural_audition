@@ -1,8 +1,7 @@
 """
-Created on June.29th 2018
+Created on May.6th 2018
 @author: Changbin Lu
 
-objective: support sub sampling training
 Usage: Makes train and validation support different bath size(50 vs 1),
        but still share variables(weights).
 
@@ -49,31 +48,32 @@ class HyperParameters:
             self.LOG_FOLDER = './log/' + self.RESTORE_DATE + '/'
             self.SESSION_DIR = self.LOG_FOLDER + str(VAL_FOLD) + '/'
 
+
         # How many scenes include in this model.
         self.SCENES = ['scene'+str(i) for i in range(1,81)]
         self.K = 12
         # Parameters for stacked-LSTM layer
-        self.NUM_HIDDEN = 75
-        self.NUM_LSTM = 2
+        self.NUM_HIDDEN = 581
+        self.NUM_LSTM = 3
         # Parameters for MLP
-        self.NUM_NEURON = 1063
-        self.NUM_MLP = 1
+        self.NUM_NEURON = 192
+        self.NUM_MLP = 2
 
         # regularization
-        self.LAMBDA_L2 = 0.0000016198372112904
-        self.OUTPUT_KEEP_PROB = 0.493142239981473
+        self.LAMBDA_L2 = 0
+        self.OUTPUT_KEEP_PROB = 0.9
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
-        self.BATCH_SIZE = 20
+        self.BATCH_SIZE = 40
         self.VALIDATION_BATCH_SIZE = 20
-        self.EPOCHS = 5
-        self.TIMELENGTH = 2000
+        self.EPOCHS = 100
+        self.TIMELENGTH = 2500
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
         self.LEARNING_RATE = 0.000210872537549392
         # Pre-processing dataset to get rectangle or paths(for validation)
         self.VAL_FOLD = VAL_FOLD
-        self.TRAIN_SET, self.PATHS = get_train_subdata(self.VAL_FOLD,self.K, 1,self.TIMELENGTH)
+        self.TRAIN_SET, self.PATHS = get_train_subdata(self.VAL_FOLD, self.K, 1, self.TIMELENGTH)
         self.VALID_SET = get_validation_data(self.VAL_FOLD,self.SCENES, 1, self.TIMELENGTH)
         self.TOTAL_SAMPLES = len(self.PATHS)
         self.NUM_TRAIN = len(self.TRAIN_SET)
@@ -139,6 +139,7 @@ class HyperParameters:
                 X, Y, seq = iterator.get_next()
             # get mask matrix
             mask_zero_frames = tf.cast(tf.not_equal(Y, -1), tf.int32)
+
             seq = tf.reshape(seq, [batch_size])  # original sequence length, only used for RNN
 
             train_iterator = train_batch.make_initializable_iterator()
@@ -147,8 +148,9 @@ class HyperParameters:
                                          self.NUM_MLP, self.NUM_NEURON, training=True)
 
             # Get weight for weighted cross entory
-            w = get_scenes_weight(self.SCENES, self.VAL_FOLD)
-            w = tf.constant(w,dtype=tf.float32)
+            weight = get_sub_scenes_weight(self.PATHS)
+            w = tf.Variable(weight,dtype=tf.float32)
+            weight_update = tf.assign(w,weight)
             # Define loss and optimizer
             with tf.variable_scope('loss'):
                 loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32), logits, w)
@@ -187,13 +189,13 @@ class HyperParameters:
                 # TPR = TP/(TP+FN)
                 sensitivity = recall
                 specificity = TN / (TN + FP)
-            return train_iterator, loss_op, train_op, sensitivity, specificity, f1, update_op, handle
+            return train_iterator, loss_op, train_op, sensitivity, specificity, f1, update_op, handle,TP,TN,FP,FN,weight_update
 
 
     def main(self):
         with tf.variable_scope('LDNN') as scope:
             # -----------------------train graph---------
-            train_iterator, loss_op, train_op, sensitivity, specificity, f1, update_op, handle = self.train(self.BATCH_SIZE)
+            train_iterator, loss_op, train_op, sensitivity, specificity, f1, update_op, handle,train_tp,train_tn,train_fp,train_fn,weight_update = self.train(self.BATCH_SIZE)
             # connect shared variable
             scope.reuse_variables()
             # -----------------------validation graph---------
@@ -256,6 +258,7 @@ class HyperParameters:
                 epoch_number = 1 + + self.OLD_EPOCH
                 # initialization for first epoch
                 train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
+                total_tp, total_tn, total_fp,total_fn = 0.0, 0.0, 0.0, 0.0
                 epoch_start = time.time()
                 # Trainset first initialization
                 sess.run(train_iterator.initializer,feed_dict={self.path_placeholder:self.SET['train']})
@@ -265,30 +268,34 @@ class HyperParameters:
                 batch_per_epoch = int(n_batches / self.EPOCHS)
                 for num in range(1, n_batches + 1):
 
-                    loss, _, se, sp, tempf1, _ = sess.run([loss_op, train_op, sensitivity, specificity, f1, update_op],
+                    loss, _, se, sp, tempf1,tp,tn,fp,fn, _ = sess.run([loss_op, train_op, sensitivity, specificity, f1,train_tp,train_tn,train_fp,train_fn ,update_op],
                                                           feed_dict={handle: train_handle})
 
                     # logger.debug(
                     #     'Train cost: %.2f | Accuracy: %.2f | Sensitivity: %.2f | Specificity: %.2f| F1-score: %.2f',
                     #     loss, (se + sp) / 2, se, sp, tempf1)
                     train_cost = train_cost + loss
-                    sen = sen + se
-                    spe = spe + sp
                     f = tempf1 + f
-                    # num % batch_per_epoch == 0
+                    total_tp += tp
+                    total_tn += tn
+                    total_fp += fp
+                    total_fn += fn
                     if (num % batch_per_epoch == 0):
                         # regenerate trainset for next epoch
                         self.TRAIN_SET, self.PATHS = get_train_subdata(self.VAL_FOLD, self.K, 1, self.TIMELENGTH)
+                        sess.run(weight_update)
                         sess.run(train_iterator.initializer, feed_dict={self.path_placeholder: self.TRAIN_SET})
                         # -------------------------------------------------------------
+                        sen = total_tp/(total_tp + total_fn)
+                        spe = total_tn/ (total_tn + total_fp)
                         epoch_duration0 = time.time() - epoch_start
                         logger.info(
                             '''Epochs: {},train_cost: {:.3f},Train_accuracy: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1-score: {:.3f},time: {:.2f} sec'''
                                 .format(epoch_number,
-                                        train_cost / batch_per_epoch,
-                                        ((sen + spe) / 2) / batch_per_epoch,
-                                        sen / batch_per_epoch,
-                                        spe / batch_per_epoch,
+                                        train_cost/batch_per_epoch,
+                                        ((sen + spe) / 2),
+                                        sen,
+                                        spe,
                                         f / batch_per_epoch,
                                         epoch_duration0))
 
@@ -333,6 +340,7 @@ class HyperParameters:
                         print(epoch_number)
                         epoch_number += 1
                         train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
+                        total_tp, total_tn, total_fp, total_fn = 0.0, 0.0, 0.0, 0.0
                         epoch_start = time.time()
 
                 if self.MODEL_SAVE:
@@ -346,7 +354,7 @@ class HyperParameters:
 
 if __name__ == "__main__":
     # fname = datetime.datetime.now().strftime("%Y%m%d")
-    fname ='test15'
+    fname ='sub_5'
     for i in range(1,2):
         with tf.Graph().as_default():
             hyperparameters = HyperParameters(VAL_FOLD=i, FOLD_NAME= fname)
