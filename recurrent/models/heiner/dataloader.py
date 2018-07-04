@@ -13,7 +13,7 @@ class DataLoader:
     def __init__(self, mode, label_mode, fold_nbs, scene_nbs, batchsize=50, timesteps=4000, epochs=10,
                  buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
                  seed=1, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=-1.0,
-                 val_stateful=False):
+                 val_stateful=False, k_scenes_to_subsample=-1):
 
         self.mode = mode
         self.path_pattern = path_pattern
@@ -55,13 +55,16 @@ class DataLoader:
         if label_mode == 'blockbased':
             self.instant_mode = False
 
-        self.filenames = glob.glob(self.path_pattern)
+        self.filenames_all = glob.glob(self.path_pattern)
+        self.filenames = self.filenames_all.copy()
 
         self.mask_val = mask_val
         self.val_stateful = val_stateful
 
         self.length_dict = None
         self.scene_instance_ids_dict = None
+
+        self.k_scenes_to_subsample = k_scenes_to_subsample
 
         # whether to create last batches by padding the rows which are not long enough
         self.use_every_timestep = use_every_timestep
@@ -71,6 +74,14 @@ class DataLoader:
         # default for validation and test data
         if self.mode == 'val' or self.mode == 'test':
             self.use_every_timestep = True
+            self.k_scenes_to_subsample = -1
+
+        if self.k_scenes_to_subsample != -1:
+            available_ks = [12, 20]
+            if self.k_scenes_to_subsample not in available_ks:
+                raise ValueError('k (number) of scenes to subsample for training should be in {}. '
+                                 'Got: {}'.format(available_ks, self.k_scenes_to_subsample))
+            self.subsample_filenames()
 
         if self.mode == 'train' or (self.mode == 'val' and val_stateful):
             if self.mode == 'train':
@@ -121,6 +132,23 @@ class DataLoader:
                 length_tuples = [(self._length_dict()[fn], fn) for fn in self.filenames]
                 self.filenames = [tup[1] for tup in sorted(length_tuples, key=lambda x: x[0], reverse=True)]
                 self.filenames_deque = deque(self.filenames)
+
+    def reset_filenames(self):
+        if self.k_scenes_to_subsample != -1:
+            self.filenames = self.filenames_all.copy()
+            self.subsample_filenames()
+
+    def subsample_filenames(self):
+        all_scenes = ['scene'+str(s)+'/' for s in range(1, 81)]
+        random.shuffle(all_scenes)
+        subsampled_scenes = all_scenes[0:self.k_scenes_to_subsample]
+        filenames_after_subsampling = []
+        for filename in self.filenames:
+            for ok_scene in subsampled_scenes:
+                if ok_scene in filename:
+                    filenames_after_subsampling.append(filename)
+                    break
+        self.filenames = filenames_after_subsampling
 
     def data_efficiency(self):
         if self._data_efficiency is not None:
@@ -262,6 +290,7 @@ class DataLoader:
         if self.act_epoch > self.epochs:
             success = False
             return success
+        self.reset_filenames()
         self._reset_buffers()
         return success
 
@@ -284,7 +313,6 @@ class DataLoader:
             self.row_start += self.timesteps
             if self.val_stateful:
                 if last_ind + 1 < self.buffer_size:
-                    # TODO: has to be the last valid
                     last_scene_instance_ids_in_act_batch = self.buffer_y[:, last_ind, 0, 1]
                     first_scene_instance_ids_in_next_batch = self.buffer_y[:, last_ind + 1, 0, 1]
                     next_in_batch_same = last_scene_instance_ids_in_act_batch == first_scene_instance_ids_in_next_batch
@@ -390,13 +418,21 @@ class DataLoader:
                 if self.val_stateful and sim_lengths[row] < self.buffer_size:
                     old_length = sim_lengths[row]
                     sim_lengths[row] = (sim_lengths[row] // self.timesteps + 1) * self.timesteps
-                    return 0, sim_lengths[row] - old_length # second value are the skipped steps
+                    return 0, sim_lengths[row] - old_length     # second value are the skipped steps
                 return 0
 
         self.length = []
         self.effective_length = []
         length_dict = self._length_dict()
         for epoch in range(1, self.epochs+1):
+            self.reset_filenames()
+            if self.k_scenes_to_subsample != -1:
+                available_ks = [12, 20]
+                if self.k_scenes_to_subsample not in available_ks:
+                    raise ValueError('k (number) of scenes to subsample for training should be in {}. '
+                                     'Got: {}'.format(available_ks, self.k_scenes_to_subsample))
+                self.subsample_filenames()
+
             length = 0
             self._seed(epoch)
             if self.mode == 'train':
