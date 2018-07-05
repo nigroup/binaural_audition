@@ -169,8 +169,8 @@ class DropConnectCuDNNLSTM(Wrapper):
         return self.layer.compute_output_shape(input_shape)
 
     def call(self, inputs, **kwargs):
-        if 0. < self.prob < 1.:
+        if 0. <= self.prob <= 1.:
             # TODO: not clear on which weights DropConnect should be applied
-            self.layer.kernel = K.in_train_phase(K.dropout(self.layer.kernel, self.prob), self.layer.kernel)
-            self.layer.bias = K.in_train_phase(K.dropout(self.layer.bias, self.prob), self.layer.bias)
+            self.layer.recurrent_kernel = K.in_train_phase(K.dropout(self.layer.recurrent_kernel, self.prob),
+                                                           self.layer.recurrent_kernel)
         return self.layer.call(inputs, **kwargs)

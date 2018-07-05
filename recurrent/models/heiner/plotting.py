@@ -130,6 +130,8 @@ def _plot_sens_spec(metric_name, data, save_dir):
 
     gs = gridspec.GridSpec(*gridshape)
 
+    # TODO: somehow nothing shows up on the grid
+
     for n in range(n_plots):
         fig = plt.figure(figsize=(5 * gridshape[0], 5 * gridshape[1]))
 
