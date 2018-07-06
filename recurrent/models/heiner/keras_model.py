@@ -1,5 +1,6 @@
 import os
 from sys import exit
+import shutil
 
 import numpy as np
 from keras.callbacks import ModelCheckpoint
@@ -15,33 +16,54 @@ from heiner.model_extension import DropConnectCuDNNLSTM
 
 from timeit import default_timer as timer
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 
-# TODO: sample hyperparameter combinations at the beginning and delete duplicates (e.g., via set)
+# TODO: log std out
+
+################################################# RANDOM SEARCH SETUP
+
+STAGE = 1
+
+metric_used = 'BAC'
+
+available_gpus = ['2']
+
+number_of_hcombs = 1
+
+rs = hp.RandomSearch(metric_used=metric_used, STAGE=STAGE)
+hcombs_to_run = rs.get_hcombs_to_run(number_of_hcombs=number_of_hcombs)
 
 # TODO: IMPORTANT -> see if validation accuracy weights are correct again (were changed to all ones)
 
 ################################################# MODEL LOG AND CHECKPOINT SETUP DEPENDENT ON HYPERPARAMETERS
 
+overwrite_hcombs = True
+reset_hcombs = True
+
+INTERMEDIATE_PLOTS = True
+
 model_name = 'LDNN_v1'
 save_path = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name)
 os.makedirs(save_path, exist_ok=True)
 
-hcm = hp.HCombListManager(save_path)
+hcm = hp.HCombManager(save_path, hcombs_to_run=hcombs_to_run, available_gpus=available_gpus)
 
-INTERMEDIATE_PLOTS = True
+# TODO: add multiprocessing from here
 
-################################################# HYPERPARAMETERS
+gpu, h = hcm.poll_hcomb()
 
-h = hp.H()
+os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 
-ID, h.__dict__ = hcm.get_hcomb_id(h)
+ID, h.__dict__, is_overwrite = hcm.get_hcomb_id(h)
 if h.finished:
     print('Hyperparameter Combination for this model version already evaluated. ABORT.')
     # TODO: when refactoring to a function replace by some return value
     exit()
 
 model_dir = os.path.join(save_path, 'stage' + str(h.STAGE), 'hcomb_' + str(ID))
+
+if reset_hcombs and is_overwrite and os.path.exists(model_dir):
+    shutil.rmtree(model_dir)
+
 os.makedirs(model_dir, exist_ok=True)
 h.save_to_dir(model_dir)
 
@@ -72,8 +94,10 @@ for i_val_fold, val_fold in enumerate(h.VAL_FOLDS):
     # here will be the conv or grid lstm
     y = x
     for units in h.UNITS_PER_LAYER_LSTM:
+        # Dropout (trenne input dropout rate, check if same for every timestep)
         y = DropConnectCuDNNLSTM(CuDNNLSTM(units, return_sequences=True, stateful=True), prob=0.0)(y)
     for units in h.UNITS_PER_LAYER_MLP:
+        # Dropout (check if same for every timestep)
         y = Dense(units, activation='sigmoid')(y)
     model = Model(x, y)
 

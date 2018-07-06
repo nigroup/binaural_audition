@@ -148,7 +148,7 @@ def reset_with_keep_states(model, keep_states):
                 K.set_value(state, old_state * keep_states)
 
 
-class DropConnectCuDNNLSTM(Wrapper):
+class RecurrentDropoutCuDNNLSTM(Wrapper):
     def __init__(self, layer, prob=1., **kwargs):
         self.prob = prob
         self.layer = layer
@@ -156,7 +156,8 @@ class DropConnectCuDNNLSTM(Wrapper):
             raise ValueError('DropConnectCuDNNLSTM can just be wrapped around CuDNNLSTM, '
                              'got: {}'.format(type(self.layer)))
         super(DropConnectCuDNNLSTM, self).__init__(layer, **kwargs)
-        if 0. < self.prob < 1.:
+        if 0. < self.prob <= 1.:
+            # TODO: check
             self.uses_learning_phase = True
 
     def build(self, input_shape=None):
@@ -169,8 +170,8 @@ class DropConnectCuDNNLSTM(Wrapper):
         return self.layer.compute_output_shape(input_shape)
 
     def call(self, inputs, **kwargs):
-        if 0. <= self.prob <= 1.:
+        if 0. < self.prob <= 1.:
             # TODO: not clear on which weights DropConnect should be applied
-            self.layer.recurrent_kernel = K.in_train_phase(K.dropout(self.layer.recurrent_kernel, self.prob),
+             = K.in_train_phase(K.dropout(one_vector, self.prob),
                                                            self.layer.recurrent_kernel)
         return self.layer.call(inputs, **kwargs)

@@ -2,6 +2,7 @@ import pickle
 from copy import deepcopy
 from os import path
 from operator import add
+from collections import deque
 
 import numpy as np
 
@@ -122,9 +123,9 @@ class H:
             return 20
 
 
-class HCombListManager:
+class HCombManager:
 
-    def __init__(self, save_path):
+    def __init__(self, save_path, hcombs_to_run, available_gpus):
         pickle_name = 'hyperparameter_combinations.pickle'
         self.filepath = path.join(save_path, pickle_name)
         if path.exists(self.filepath):
@@ -133,22 +134,33 @@ class HCombListManager:
         else:
             # create empty hcomb list
             self.hcomb_list = []
+        self.hcombs_to_run_queue = deque(hcombs_to_run)
+        self.available_gpus_queue = deque(available_gpus)
 
-    def get_hcomb_id(self, h):
+    def poll_hcomb(self):
+        if len(self.hcombs_to_run_queue) == 0:
+            return None, None
+        if len(self.available_gpus_queue) == 0:
+            raise ValueError('No GPU available, but should always be available if added back to queue in finish_hcomb.')
+        return self.available_gpus_queue.pop(), self.hcombs_to_run_queue.pop()
+
+    def get_hcomb_id(self, h, overwrite_hcombs=True):
         h = h.__dict__
 
         hcomb_list_copy = deepcopy(self.hcomb_list)
         for hcomb in hcomb_list_copy:
             self._make_comparable(hcomb, h)
-        if h in hcomb_list_copy:
+        if h in hcomb_list_copy and overwrite_hcombs:
             index = hcomb_list_copy.index(h)
+            is_overwrite = True
         else:
             self.hcomb_list.append(h)
             index = self.hcomb_list.index(h)
+            is_overwrite = False
 
         self._write_hcomb_list()
 
-        return index, self.hcomb_list[index]
+        return index, self.hcomb_list[index], is_overwrite
 
     def _make_comparable(self, hcomb, h):
         hcomb['finished'] = h['finished']
@@ -159,7 +171,7 @@ class HCombListManager:
         hcomb['val_acc_std'] = h['val_acc_std']
         hcomb['elapsed_time'] = h['elapsed_time']
 
-    def finish_hcomb(self, id_, h, val_acc_mean, val_acc_std, elapsed_time):
+    def finish_hcomb(self, id_, h, val_acc_mean, val_acc_std, elapsed_time, used_gpu):
         h = h.__dict__
 
         h['finished'] = True
@@ -172,6 +184,8 @@ class HCombListManager:
         self.replace_at_id(id_, h)
 
         self._write_hcomb_list()
+
+        self.available_gpus_queue.append(used_gpu)
 
     def finish_epoch(self, id_, h, val_acc, fold_ind, elapsed_time):
         h = h.__dict__
@@ -264,9 +278,7 @@ class RandomSearch:
                  LEARNING_RATE=learning_rate, PATIENCE_IN_EPOCHS=self.PATIENCE_IN_EPOCHS,
                  METRIC=self.metric_used, STAGE=self.STAGE)
 
-    # TODO: improvement: just poll them -> have a counter (maybe reset it back, if hcomb was already drawn)
-    def get_hcomb_list(self, available_gpus, number_of_hcombs):
-        hcomb_list = list(set([self._sample_hcomb() for _ in range(0, number_of_hcombs)]))
-        hcomb_list = [(available_gpus[i % len(available_gpus)], hcomb_list[i]) for i in range(0, len(hcomb_list))]
-        return hcomb_list
+    def get_hcombs_to_run(self, number_of_hcombs):
+        hcombs_to_run = list(set([self._sample_hcomb() for _ in range(0, number_of_hcombs)]))
+        return hcombs_to_run
 
