@@ -23,7 +23,7 @@ import numpy as np
 For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -148,12 +148,11 @@ class HyperParameters:
                                          self.NUM_MLP, self.NUM_NEURON, training=True)
 
             # Get weight for weighted cross entory
-            weight = get_sub_scenes_weight(self.PATHS)
-            w = tf.Variable(weight,dtype=tf.float32)
-            weight_update = tf.assign(w,weight)
+            w = get_scenes_weight(self.SCENES, self.VAL_FOLD)
+
             # Define loss and optimizer
             with tf.variable_scope('loss'):
-                loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32), logits, w)
+                loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32), logits, tf.constant(w))
                 # number of frames without zero_frame
                 counted_non_zeros = tf.cast(tf.reduce_sum(mask_zero_frames), tf.float32)
                 # eliminate zero_frame loss
@@ -189,13 +188,13 @@ class HyperParameters:
                 # TPR = TP/(TP+FN)
                 sensitivity = recall
                 specificity = TN / (TN + FP)
-            return train_iterator, loss_op, train_op, sensitivity, specificity, f1, update_op, handle,TP,TN,FP,FN,weight_update
+            return train_iterator, loss_op, train_op, sensitivity, specificity, f1, update_op, handle,TP,TN,FP,FN
 
 
     def main(self):
         with tf.variable_scope('LDNN') as scope:
             # -----------------------train graph---------
-            train_iterator, loss_op, train_op, sensitivity, specificity, f1, update_op, handle,train_tp,train_tn,train_fp,train_fn,weight_update = self.train(self.BATCH_SIZE)
+            train_iterator, loss_op, train_op, sensitivity, specificity, f1, update_op, handle,train_tp,train_tn,train_fp,train_fn = self.train(self.BATCH_SIZE)
             # connect shared variable
             scope.reuse_variables()
             # -----------------------validation graph---------
@@ -283,7 +282,6 @@ class HyperParameters:
                     if (num % batch_per_epoch == 0):
                         # regenerate trainset for next epoch
                         self.TRAIN_SET, self.PATHS = get_train_subdata(self.VAL_FOLD, self.K, 1, self.TIMELENGTH)
-                        sess.run(weight_update)
                         sess.run(train_iterator.initializer, feed_dict={self.path_placeholder: self.TRAIN_SET})
                         # -------------------------------------------------------------
                         sen = total_tp/(total_tp + total_fn)
@@ -354,7 +352,7 @@ class HyperParameters:
 
 if __name__ == "__main__":
     # fname = datetime.datetime.now().strftime("%Y%m%d")
-    fname ='sub_5'
+    fname ='sub_test'
     for i in range(1,2):
         with tf.Graph().as_default():
             hyperparameters = HyperParameters(VAL_FOLD=i, FOLD_NAME= fname)
