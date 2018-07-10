@@ -8,6 +8,10 @@ There exist two variants of labels; cf. label_methods.jpg. Both provide one labe
 
 Heiner: added in brackets the respective labels after conversion (changed due to easier computation of binary cross entropy)
 
+Heiner: LABEL order
+
+['alarm', 'baby', 'femaleSpeech',  'fire', 'crash', 'dog', 'engine', 'footsteps', 'knock', 'phone', 'piano', 'maleSpeech', 'femaleScreammaleScream']
+
  Instant-labels
 ----------------
 Matlab (Python)
