@@ -19,6 +19,7 @@ femaleScreammaleScream             CV BAC2: 	0.81 +- 0.02
 	
 class-averaged                     CV BAC2: 	0.795 +- 0.01
 (individual folds)				      BAC2:     0.787 0.80 0.797 0.793 0.786 0.81
+(priority in validation procedure)                    2.   1.    4.
 
 Performance explanation: 
  - BlockInterprete Labels
