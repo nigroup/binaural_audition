@@ -3,23 +3,22 @@ baseline trainset CV performance
 
 model	                  glmnet
 --------------------------------
-'alarm'                   0.66  
-'baby'                    0.76  
-'crash'                   0.72  
-'dog'                     0.81  
-'engine'                  0.80  
-'femaleScreammaleScream'  0.80  
-'femaleSpeech'            0.85  
-'fire'                    0.81  
-'footsteps'               0.78  
-'knock'                   0.83  
-'maleSpeech'              0.88  
-'phone'                   0.73  
-'piano'                   0.83  
-
-=> average:               0.79
-
-
+alarm                              CV BAC2: 	0.67 +- 0.04
+baby                               CV BAC2: 	0.77 +- 0.03
+femaleSpeech                       CV BAC2: 	0.85 +- 0.01
+fire                               CV BAC2: 	0.82 +- 0.03
+crash                              CV BAC2: 	0.74 +- 0.03
+dog                                CV BAC2: 	0.82 +- 0.02
+engine                             CV BAC2: 	0.79 +- 0.03
+footsteps                          CV BAC2: 	0.79 +- 0.02
+knock                              CV BAC2: 	0.84 +- 0.04
+phone                              CV BAC2: 	0.74 +- 0.03
+piano                              CV BAC2: 	0.83 +- 0.01
+maleSpeech                         CV BAC2: 	0.87 +- 0.01
+femaleScreammaleScream             CV BAC2: 	0.81 +- 0.02
+	
+class-averaged                     CV BAC2: 	0.795 +- 0.01
+(individual folds)				      BAC2:     0.787 0.80 0.797 0.793 0.786 0.81
 
 Performance explanation: 
  - BlockInterprete Labels
