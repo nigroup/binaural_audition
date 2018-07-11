@@ -1,4 +1,5 @@
 from keras import backend as K
+from keras.layers import Wrapper, CuDNNLSTM
 
 
 def _make_train_and_predict_function(model):
@@ -136,3 +137,41 @@ def test_and_predict_on_batch(model, x, y, sample_weight=None):
     if len(outputs) == 1:
         return outputs[0]
     return outputs
+
+
+def reset_with_keep_states(model, keep_states):
+    for layer in model.layers:
+        if hasattr(layer, 'reset_states') and getattr(layer, 'stateful', False):
+            #alternative: with K.get_session():
+            for state in layer.states:
+                old_state = K.eval(state)   # should be a numpy array
+                K.set_value(state, old_state * keep_states)
+
+
+class RecurrentDropoutCuDNNLSTM(Wrapper):
+    def __init__(self, layer, prob=1., **kwargs):
+        self.prob = prob
+        self.layer = layer
+        if type(self.layer) is not CuDNNLSTM:
+            raise ValueError('DropConnectCuDNNLSTM can just be wrapped around CuDNNLSTM, '
+                             'got: {}'.format(type(self.layer)))
+        super(DropConnectCuDNNLSTM, self).__init__(layer, **kwargs)
+        if 0. < self.prob <= 1.:
+            # TODO: check
+            self.uses_learning_phase = True
+
+    def build(self, input_shape=None):
+        if not self.layer.built:
+            self.layer.build(input_shape)
+            self.layer.built = True
+        super(DropConnectCuDNNLSTM, self).build()
+
+    def compute_output_shape(self, input_shape):
+        return self.layer.compute_output_shape(input_shape)
+
+    def call(self, inputs, **kwargs):
+        if 0. < self.prob <= 1.:
+            # TODO: not clear on which weights DropConnect should be applied
+             = K.in_train_phase(K.dropout(one_vector, self.prob),
+                                                           self.layer.recurrent_kernel)
+        return self.layer.call(inputs, **kwargs)

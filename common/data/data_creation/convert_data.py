@@ -13,8 +13,7 @@ from tqdm import tqdm
 
 
 def get_label_paths():
-    events = ['alarm', 'baby', 'crash', 'dog', 'engine', 'femaleScreammaleScream', 'femaleSpeech', 'fire', 'footsteps',
-              'knock', 'maleSpeech', 'phone', 'piano']
+    events = ['alarm', 'baby', 'femaleSpeech',  'fire', 'crash', 'dog', 'engine', 'footsteps', 'knock', 'phone', 'piano', 'maleSpeech', 'femaleScreammaleScream']
     label_path = '/mnt/raid/data/ni/twoears/reposX/idPipeCache/MultiEventTypeTimeSeriesLabeler({})/'
     return [label_path.format(event) for event in events]
 

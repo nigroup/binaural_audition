@@ -5,10 +5,11 @@ from heiner.dataloader import DataLoader
 
 def create_generator(dloader):
     while True:
-        b_x, b_y = dloader.next_batch()
-        if b_x is None or b_y is None:
+        # ret is either b_x, b_y or b_x, b_y, keep_states
+        ret = dloader.next_batch()
+        if ret[0] is None or ret[1] is None:
             return
-        yield b_x, b_y
+        yield ret
 
 
 def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
@@ -61,9 +62,11 @@ class Phase:
         self.accs = []
         self.class_accs = []
 
+        self.class_sens_spec = []
+
     @property
     def epoch_str(self):
-        return 'epoch: {} / {}'.format(self.e + 1, self.EPOCHS)
+        return 'epoch: {:{prec}} / {:{prec}}'.format(self.e + 1, self.EPOCHS, prec=len(str(self.EPOCHS)))
 
     def run(self):
         self.model.reset_states()
@@ -72,9 +75,17 @@ class Phase:
         scene_instance_id_metrics_dict = dict()
 
         for iteration in range(1, self.dloader_len[self.e] + 1):
-            it_str = '{}_iteration: {} / {}'.format(self.prefix, iteration, self.dloader_len[self.e])
+            it_str = '{}_iteration: {:{prec}} / {:{prec}}'.format(self.prefix, iteration, self.dloader_len[self.e],
+                                                                  prec=len(str(self.dloader_len[self.e])))
 
-            b_x, b_y = next(self.gen)
+            is_val_loader_stateful = not self.train and self.dloader.val_stateful
+
+            keep_states = None
+            if is_val_loader_stateful:
+                b_x, b_y, keep_states = next(self.gen)
+            else:
+                b_x, b_y = next(self.gen)
+
             if self.train:
                 loss, out = m_ext.train_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
             else:
@@ -89,16 +100,21 @@ class Phase:
             loss_log_str = '{:<20}  {:<20}  {:<20}  {:<20}'.format(self.val_fold_str, self.epoch_str, it_str, loss_str)
             print(loss_log_str)
 
-            if not self.train and not self.dloader.val_stateful:
-                self.model.reset_states()
+            if not self.train:
+                if not self.dloader.val_stateful:
+                    self.model.reset_states()
+                else:
+                    m_ext.reset_with_keep_states(self.model, keep_states)
 
         if self.train:
-            final_acc = acc_u.train_accuracy(scene_instance_id_metrics_dict, metric=self.metric)
+            final_acc, sens_spec_class = acc_u.train_accuracy(scene_instance_id_metrics_dict, metric=self.metric)
         else:
-            final_acc, class_accuracies = acc_u.val_accuracy(scene_instance_id_metrics_dict, metric=self.metric,
-                                                             ret=self.ret)
+            # TODO: can get a mismatch here, as number of returned values may change depending on parameter 'ret'
+            final_acc, class_accuracies, sens_spec_class = acc_u.val_accuracy(scene_instance_id_metrics_dict,
+                                                                              metric=self.metric, ret=self.ret)
             self.class_accs.append(class_accuracies)
         self.accs.append(final_acc)
+        self.class_sens_spec.append(sens_spec_class)
 
         acc_str = '{}_accuracy: {}'.format(self.prefix, final_acc)
         acc_log_str = '{:<20}  {:<20}  {:<20}  {:<20}'.format(self.val_fold_str, self.epoch_str, '', acc_str)

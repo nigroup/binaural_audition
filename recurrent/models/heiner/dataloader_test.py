@@ -12,12 +12,15 @@ class DataLoaderTester(DataLoader):
     def __init__(self, mode, filenames, batchsize=50, timesteps=4000, epochs=10,
                  buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
                  seed_by_epoch=True,
-                 priority_queue=True, use_every_timestep=False):
+                 priority_queue=True, use_every_timestep=False, val_stateful=False):
         super().__init__(mode, 'blockbased', 1, 1, batchsize=batchsize, timesteps=timesteps, epochs=epochs,
                          buffer=buffer, features=features, classes=classes, path_pattern=path_pattern,
                          seed_by_epoch=seed_by_epoch,
-                         priority_queue=priority_queue, use_every_timestep=use_every_timestep)
+                         priority_queue=priority_queue, use_every_timestep=use_every_timestep, val_stateful=val_stateful)
         self.filenames = filenames
+        self._init_buffers()
+        self.scene_instance_ids_dict = {filename: int(filename[filename.find('factor')+6:filename.find('.npz')])
+                                        for filename in self.filenames}
         self.path_pattern = path.join(path_pattern, '*.npz')
         self.pickle_path_pattern = path.join(path_pattern, '*.npz')
         self.pickle_path = path_pattern
@@ -56,30 +59,43 @@ for factor in factors:
     np.savez(save_path, x=x, y=y, y_block=y_block)
 path_pattern = tmp_dir + '/*.npz'
 filenames = glob.glob(path_pattern)
-dloader = DataLoaderTester('train', filenames, batchsize=3, timesteps=7, epochs=7, buffer=5,
+dloader = DataLoaderTester('val', filenames, batchsize=3, timesteps=7, epochs=1, buffer=5, val_stateful=True,
                            features=1, classes=1, path_pattern=tmp_dir, seed_by_epoch=False, use_every_timestep=True)
 
 def create_generator(dloader):
     act_epoch = dloader.act_epoch
+    ii = 0
 
     def log_epoch():
-        print('Epoch: ' + str(act_epoch))
+        print('End Epoch: {}, i: {}'.format(str(act_epoch), str(ii-1)))
 
-    log_epoch()
     while True:
         if dloader.act_epoch != act_epoch:
-            act_epoch = dloader.act_epoch
             log_epoch()
-        b_x, b_y = dloader.next_batch()
-        if b_x is None or b_y is None:
+            act_epoch = dloader.act_epoch
+        ret = dloader.next_batch()
+        ii += 1
+        if ret[0] is None or ret[1] is None:
+            if dloader.act_epoch != act_epoch:
+                log_epoch()
+                act_epoch = dloader.act_epoch
             return
-        yield b_x, b_y
+        yield ret
+
 
 g = create_generator(dloader)
+print('len:' + str(dloader.len()))
 #next(g)
-i = 0
-for _ in g:
-    i += 1
+c = 0
+rets = [[], [], []]
+for ret in g:
+    c += 1
+    for j, r in enumerate(ret):
+        rets[j].append(r)
+
+x = np.concatenate(rets[0], axis=1)
+y = np.concatenate(rets[1], axis=1)
+ks = np.concatenate(rets[2], axis=1)
 
 def factors_in_queue():
     if dloader.mode == 'train':

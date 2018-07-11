@@ -13,7 +13,7 @@ class DataLoader:
     def __init__(self, mode, label_mode, fold_nbs, scene_nbs, batchsize=50, timesteps=4000, epochs=10,
                  buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
                  seed=1, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=-1.0,
-                 val_stateful=False):
+                 val_stateful=False, k_scenes_to_subsample=-1):
 
         self.mode = mode
         self.path_pattern = path_pattern
@@ -55,13 +55,16 @@ class DataLoader:
         if label_mode == 'blockbased':
             self.instant_mode = False
 
-        self.filenames = glob.glob(self.path_pattern)
+        self.filenames_all = glob.glob(self.path_pattern)
+        self.filenames = self.filenames_all.copy()
 
         self.mask_val = mask_val
         self.val_stateful = val_stateful
 
         self.length_dict = None
         self.scene_instance_ids_dict = None
+
+        self.k_scenes_to_subsample = k_scenes_to_subsample
 
         # whether to create last batches by padding the rows which are not long enough
         self.use_every_timestep = use_every_timestep
@@ -71,9 +74,20 @@ class DataLoader:
         # default for validation and test data
         if self.mode == 'val' or self.mode == 'test':
             self.use_every_timestep = True
+            self.k_scenes_to_subsample = -1
+
+        if self.k_scenes_to_subsample != -1:
+            available_ks = [12, 20]
+            if self.k_scenes_to_subsample not in available_ks:
+                raise ValueError('k (number) of scenes to subsample for training should be in {}. '
+                                 'Got: {}'.format(available_ks, self.k_scenes_to_subsample))
+            self.subsample_filenames()
 
         if self.mode == 'train' or (self.mode == 'val' and val_stateful):
-            self.val_stateful = True
+            if self.mode == 'train':
+                self.val_stateful = False
+            else:
+                self.val_stateful = True
 
             self.seed = seed
             self.seed_by_epoch = seed_by_epoch
@@ -119,6 +133,23 @@ class DataLoader:
                 self.filenames = [tup[1] for tup in sorted(length_tuples, key=lambda x: x[0], reverse=True)]
                 self.filenames_deque = deque(self.filenames)
 
+    def reset_filenames(self):
+        if self.k_scenes_to_subsample != -1:
+            self.filenames = self.filenames_all.copy()
+            self.subsample_filenames()
+
+    def subsample_filenames(self):
+        all_scenes = ['scene'+str(s)+'/' for s in range(1, 81)]
+        random.shuffle(all_scenes)
+        subsampled_scenes = all_scenes[0:self.k_scenes_to_subsample]
+        filenames_after_subsampling = []
+        for filename in self.filenames:
+            for ok_scene in subsampled_scenes:
+                if ok_scene in filename:
+                    filenames_after_subsampling.append(filename)
+                    break
+        self.filenames = filenames_after_subsampling
+
     def data_efficiency(self):
         if self._data_efficiency is not None:
             return self._data_efficiency
@@ -160,7 +191,7 @@ class DataLoader:
         self.row_lengths = np.zeros(self.batchsize, np.int32)
 
         # first value: file_index which is not fully included in row
-        # second value: how much of the file is already included in row
+        # second value: which index to proceed loading the files -> file is already included up to this index - 1
         self.row_leftover = -np.ones((self.batchsize, 2), np.int32)
 
         if self.priority_queue:
@@ -179,6 +210,7 @@ class DataLoader:
         self.buffer_y[:] = self.mask_val
         self.row_start = 0
         self.row_lengths[:] = 0
+
         if self.priority_queue:
             self._build_actual_heap()
 
@@ -228,10 +260,13 @@ class DataLoader:
         scene_instance_id = self._scene_instance_ids_dict()[self.filenames[act_file_ind]]
         self.buffer_y[row_ind, start:end, :, 1] = scene_instance_id
         self.row_lengths[row_ind] = end
+        if self.val_stateful and self.row_lengths[row_ind] < self.buffer_size:
+            self.row_lengths[row_ind] = (self.row_lengths[row_ind] // self.timesteps + 1) * self.timesteps
 
     def fill_buffer(self):
         for row_ind in range(self.batchsize):
-            if not self.row_lengths[row_ind] == self.buffer_size:
+            stopping_condition = self.row_lengths[row_ind] >= self.buffer_size
+            if not stopping_condition:
                 if self.row_leftover[row_ind, 0] != -1:
                     self._fill_in_divided_sequence(row_ind)
                 else:
@@ -239,9 +274,7 @@ class DataLoader:
                         _, row_ind = heapq.heappop(self.heap)
                     self._fill_in_new_sequence(row_ind)
                     if self.priority_queue:
-                        heapq.heappush(self.heap, (self.row_lengths[row_ind] + + self.row_leftover[row_ind, 1], row_ind))
-        #if self.mode == 'train':
-        #    self.buffer_y[self.buffer_y == np.nan] = 1
+                        heapq.heappush(self.heap, (self.row_lengths[row_ind] + self.row_leftover[row_ind, 1], row_ind))
 
     def _nothing_left(self):
         queue_empty = len(self.file_ind_queue) == 0
@@ -257,25 +290,39 @@ class DataLoader:
         if self.act_epoch > self.epochs:
             success = False
             return success
+        self.reset_filenames()
         self._reset_buffers()
         return success
 
     def next_batch(self):
         if self.mode == 'train' or self.mode == 'val':
             if self.mode == 'val' and not self.val_stateful:
-                b_x, b_y = self._next_batch_val_not_stateful()
+                ret = self._next_batch_val_not_stateful()
             else:
-                b_x, b_y = self._next_batch_train_val_stateful()
+                ret = self._next_batch_train_val_stateful()
         else:
-            b_x, b_y = self._next_batch_test()
-        return b_x, b_y
+            ret = self._next_batch_test()
+        return ret
 
     def _next_batch_train_val_stateful(self):
 
-        def batches_with_timesteps(timesteps):
-            x = self.buffer_x[:, self.row_start:self.row_start + timesteps, :].copy()
-            y = self.buffer_y[:, self.row_start:self.row_start + timesteps, :, :].copy()
-            self.row_start += timesteps
+        def batches_with_timesteps():
+            last_ind = self.row_start + self.timesteps - 1
+            x = self.buffer_x[:, self.row_start:self.row_start + self.timesteps, :].copy()
+            y = self.buffer_y[:, self.row_start:self.row_start + self.timesteps, :, :].copy()
+            self.row_start += self.timesteps
+            if self.val_stateful:
+                if last_ind + 1 < self.buffer_size:
+                    last_scene_instance_ids_in_act_batch = self.buffer_y[:, last_ind, 0, 1]
+                    first_scene_instance_ids_in_next_batch = self.buffer_y[:, last_ind + 1, 0, 1]
+                    next_in_batch_same = last_scene_instance_ids_in_act_batch == first_scene_instance_ids_in_next_batch
+                    next_in_batch_same = np.logical_and(next_in_batch_same,
+                                                        last_scene_instance_ids_in_act_batch != self.mask_val)
+                    keep_states = np.logical_or((self.row_leftover[:, 0] != -1), next_in_batch_same)
+                else:
+                    keep_states = self.row_leftover[:, 0] != -1
+                keep_states = keep_states[:, np.newaxis]
+                return x, y, keep_states
             return x, y
 
         if self.row_start == self.buffer_size:
@@ -283,17 +330,17 @@ class DataLoader:
         rows_lengths_available = (self.row_lengths - self.row_start)
         rows_all_timesteps_available = rows_lengths_available >= self.timesteps
         if np.all(rows_all_timesteps_available):
-            return batches_with_timesteps(self.timesteps)
+            return batches_with_timesteps()
         else:
             if self._nothing_left():
                 if self.use_every_timestep:
-                    #longest_available = np.max(rows_lengths_available)
-                    #if longest_available > 0:
-                    #    return batches_with_timesteps(longest_available)
                     if np.any(rows_lengths_available > 0):
-                        return batches_with_timesteps(self.timesteps)
+                        return batches_with_timesteps()
                 if not self.next_epoch():
-                    return None, None
+                    if self.val_stateful:
+                        return None, None, None
+                    else:
+                        return None, None
             self.fill_buffer()
             return self._next_batch_train_val_stateful()
 
@@ -306,6 +353,7 @@ class DataLoader:
         else:
             return None, None
 
+    # not preferable: sequences are too long -> use stateful and keep specific states
     def _next_batch_val_not_stateful(self):
         '''
         Scene instances doesn't overlap -> padding is applied. With this it is possible to reset the state.
@@ -363,14 +411,28 @@ class DataLoader:
             leftover = sim_lengths[row] - self.buffer_size
             if leftover > 0:
                 sim_lengths[row] = self.buffer_size
+                if self.val_stateful:
+                    return leftover, 0
                 return leftover
             else:
+                if self.val_stateful and sim_lengths[row] < self.buffer_size:
+                    old_length = sim_lengths[row]
+                    sim_lengths[row] = (sim_lengths[row] // self.timesteps + 1) * self.timesteps
+                    return 0, sim_lengths[row] - old_length     # second value are the skipped steps
                 return 0
 
         self.length = []
         self.effective_length = []
         length_dict = self._length_dict()
         for epoch in range(1, self.epochs+1):
+            self.reset_filenames()
+            if self.k_scenes_to_subsample != -1:
+                available_ks = [12, 20]
+                if self.k_scenes_to_subsample not in available_ks:
+                    raise ValueError('k (number) of scenes to subsample for training should be in {}. '
+                                     'Got: {}'.format(available_ks, self.k_scenes_to_subsample))
+                self.subsample_filenames()
+
             length = 0
             self._seed(epoch)
             if self.mode == 'train':
@@ -385,11 +447,12 @@ class DataLoader:
                 heap = [(length + left_lengths[i], i) for i, length in enumerate(sim_lengths)]
                 heapq.heapify(heap)
 
+            skipped_steps = 0
             while not nothing_left_length(dq, left_lengths, sim_lengths):
                 filled = True
                 for row in range(0, self.batchsize):
-                    if not sim_lengths[row] == self.buffer_size:
-                        filled = False
+                    stopping_condition = sim_lengths[row] >= self.buffer_size
+                    if not stopping_condition:
                         if left_lengths[row] > 0:
                             sim_lengths[row] += left_lengths[row]
                             if sim_lengths[row] > self.buffer_size:
@@ -401,10 +464,16 @@ class DataLoader:
                                 _, row = heapq.heappop(heap)
                             curr_ind = dq.pop()
                             l = length_dict[self.filenames[curr_ind]]
-                            leftover = add_to_length_until_buffersize(l, row)
+                            if self.val_stateful:
+                                leftover, skipped = add_to_length_until_buffersize(l, row)
+                                skipped_steps += skipped
+                            else:
+                                leftover = add_to_length_until_buffersize(l, row)
                             left_lengths[row] = leftover
                             if self.priority_queue:
                                 heapq.heappush(heap, (sim_lengths[row] + left_lengths[row], row))
+                        if sim_lengths[row] < self.buffer_size:
+                            filled = False
                 if filled:
                     length += self.buffer_size // self.timesteps
                     sim_lengths[:] = 0
@@ -412,13 +481,14 @@ class DataLoader:
                         heap = [(length + left_lengths[i], i) for i, length in enumerate(sim_lengths)]
                         heapq.heapify(heap)
             effective_length = length
-            # whether the shortest row defines the number of last batches (np.all) or the longest one (np.any)
             if self.use_every_timestep:
-                effective_length += np.sum(sim_lengths) / (self.timesteps * self.batchsize)
-                last_batch_defining_row = np.max(sim_lengths)
+                sim_and_left_lengths = sim_lengths + left_lengths
+                effective_length += (np.sum(sim_and_left_lengths) - skipped_steps) / (self.timesteps * self.batchsize)
+                last_batch_defining_row = np.max(sim_and_left_lengths)
+                length += int(np.ceil(last_batch_defining_row / float(self.timesteps)))
             else:
                 last_batch_defining_row = np.min(sim_lengths)
-            length += last_batch_defining_row // self.timesteps
+                length += last_batch_defining_row // self.timesteps
             self.effective_length.append(effective_length)
             self.length.append(length)
 
