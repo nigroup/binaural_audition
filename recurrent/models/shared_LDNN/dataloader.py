@@ -7,6 +7,15 @@ import pickle
 import sys
 import tensorflow as tf
 import pandas as pd
+MACRO_PATH = ''
+# get preprocessing mean and std
+def get_scalar(cv_id):
+    pkl_file = open(MACRO_PATH + '/home/changbinli/script/rnn/basic/train_statistics.pickle', 'rb')
+    data = pickle.load(pkl_file)
+    key = 'cv_' + str(cv_id)
+    mean = data[key][:160]
+    std = data[key][160:]
+    return mean,std
 # training loader-----------------------
 '''
 NaN is +1
@@ -15,9 +24,10 @@ ON      = +1
 OFF     = 0
 UNCLEAR = -1
 '''
-def _read_py_function(filename):
+def _read_py_function(filename,cv_id):
     filename = filename.decode(sys.getdefaultencoding())
     fx, fy = np.array([]).reshape(0, 160), np.array([]).reshape(0, 13)
+    mean,std = get_scalar(cv_id)
     # each filename is : path1&start_index&end_index@path2&start_index&end_index
     # the total length was defined before
     for instance in filename.split('@'):
@@ -27,13 +37,14 @@ def _read_py_function(filename):
         y = data['y'][0]
         fx = np.concatenate((fx, x[int(start):int(end)]), axis=0)
         fy = np.concatenate((fy, y[int(start):int(end)]), axis=0)
+    fx = (fx-mean)/std
     l = np.array([fx.shape[0]])
     # print('multi processes:',time.ctime())
     return fx.astype(np.float32), fy.astype(np.int32), l.astype(np.int32)
-def read_trainset(path_set, batchsize):
+def read_trainset(path_set, batchsize,cv_id):
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(
-        lambda filename: tuple(tf.py_func(_read_py_function, [filename], [tf.float32, tf.int32, tf.int32])))
+        lambda filename: tuple(tf.py_func(_read_py_function, [filename,cv_id], [tf.float32, tf.int32, tf.int32])))
     # batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     batch = dataset.batch(batchsize)
 
@@ -49,27 +60,31 @@ def read_trainset(path_set, batchsize):
  OFF           = 2
  NAN: validation use training data set, NaN is already transformed to 1
 '''
-def _read_py_function1(filename):
+def _read_py_function1(filename,cv_id):
     filename = filename.decode(sys.getdefaultencoding())
+    mean, std = get_scalar(cv_id)
     data = np.load(filename)
     x = data['x'][0]
+    x = (x-mean)/std
     y = data['y'][0]
     # for padding value 0, change OFF'0'-> 2
     y[y == 0] = 2
     l = np.array([x.shape[0]])
     return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
-def read_validationset(path_set, batchsize):
+def read_validationset(path_set, batchsize,cv_id):
     # shuffle path_set
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(
-        lambda filename: tuple(tf.py_func(_read_py_function1, [filename], [tf.float32, tf.int32, tf.int32])))
+        lambda filename: tuple(tf.py_func(_read_py_function1, [filename,cv_id], [tf.float32, tf.int32, tf.int32])))
     batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     return batch
 # testing loader-------------------------------
-def _read_py_function1(filename):
+def _read_py_function2(filename,cv_id):
     filename = filename.decode(sys.getdefaultencoding())
+    mean, std = get_scalar(cv_id)
     data = np.load(filename)
     x = data['x'][0]
+    x = (x - mean) / std
     y = data['y'][0]
     # for padding value 0, change OFF'0'-> 2
     y[y == 0] = 2
@@ -77,17 +92,16 @@ def _read_py_function1(filename):
     # y[y == 'nan'] = 2
     l = np.array([x.shape[0]])
     return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
-def read_validationset(path_set, batchsize):
+def read_validationset2(path_set, batchsize,cv_id):
     # shuffle path_set
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(
-        lambda filename: tuple(tf.py_func(_read_py_function1, [filename], [tf.float32, tf.int32, tf.int32])))
+        lambda filename: tuple(tf.py_func(_read_py_function2, [filename,cv_id], [tf.float32, tf.int32, tf.int32])))
     batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     return batch
 
 
 # related function for rectangle-----------------------------------------
-MACRO_PATH = ''
 def get_index(paths):
     result = []
     pkl_file = open(MACRO_PATH+'/mnt/raid/data/ni/twoears/scenes2018/train/file_lengths.pickle','rb')
