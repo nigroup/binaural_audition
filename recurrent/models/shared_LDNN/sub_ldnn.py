@@ -52,6 +52,10 @@ class HyperParameters:
         # How many scenes include in this model.
         self.SCENES = ['scene'+str(i) for i in range(1,81)]
         self.K = 12
+        # early stopping--patient
+        self.PATIENT = 10
+        self.SO_FAR_BEST = 0
+        self.ACCUMULATOR = 0
         # Parameters for stacked-LSTM layer
         self.NUM_HIDDEN = 581
         self.NUM_LSTM = 3
@@ -273,7 +277,9 @@ class HyperParameters:
                 # Numbers of batch per epoch, to stop the training and do validation
                 batch_per_epoch = int(n_batches / self.EPOCHS)
                 for num in range(1, n_batches + 1):
-
+                    if self.ACCUMULATOR == self.PATIENT:
+                        logger.info(section.format('Its time to stop training.'))
+                        break
                     loss, _, se, sp, tempf1,tp,tn,fp,fn, _ = sess.run([loss_op, train_op, sensitivity, specificity, f1,train_tp,train_tn,train_fp,train_fn ,update_op],
                                                           feed_dict={handle: train_handle})
 
@@ -333,7 +339,12 @@ class HyperParameters:
                                 performence.append([scene_id,instance_name]+classes_performance.tolist())
                         # average each scene instance after validation finish
                         p = average_performance(performence,self.LOG_FOLDER,epoch_number,self.VAL_FOLD)
-
+                        # handle early stop
+                        if self.SO_FAR_BEST > p:
+                            self.ACCUMULATOR += 1
+                        else:
+                            self.SO_FAR_BEST = p
+                            self.ACCUMULATOR = 0
                         epoch_duration1 = time.time() - epoch_start
                         logger.info(
                             '''Epochs: {},Validation_accuracy: {:.3f},Validation_performance: {:.3f},Validation_loss: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
