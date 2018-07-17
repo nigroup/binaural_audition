@@ -24,10 +24,9 @@ ON      = +1
 OFF     = 0
 UNCLEAR = -1
 '''
-def _read_py_function(filename,cv_id):
+def _read_py_function(filename,mean,std):
     filename = filename.decode(sys.getdefaultencoding())
     fx, fy = np.array([]).reshape(0, 160), np.array([]).reshape(0, 13)
-    mean,std = get_scalar(cv_id)
     # each filename is : path1&start_index&end_index@path2&start_index&end_index
     # the total length was defined before
     for instance in filename.split('@'):
@@ -41,10 +40,10 @@ def _read_py_function(filename,cv_id):
     l = np.array([fx.shape[0]])
     # print('multi processes:',time.ctime())
     return fx.astype(np.float32), fy.astype(np.int32), l.astype(np.int32)
-def read_trainset(path_set, batchsize,cv_id):
+def read_trainset(path_set, batchsize,mean,std):
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(
-        lambda filename: tuple(tf.py_func(_read_py_function, [filename,cv_id], [tf.float32, tf.int32, tf.int32])))
+        lambda filename: tuple(tf.py_func(_read_py_function, [filename,mean,std], [tf.float32, tf.int32, tf.int32])))
     # batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     batch = dataset.batch(batchsize)
 
@@ -60,9 +59,8 @@ def read_trainset(path_set, batchsize,cv_id):
  OFF           = 2
  NAN: validation use training data set, NaN is already transformed to 1
 '''
-def _read_py_function1(filename,cv_id):
+def _read_py_function1(filename,mean,std):
     filename = filename.decode(sys.getdefaultencoding())
-    mean, std = get_scalar(cv_id)
     data = np.load(filename)
     x = data['x'][0]
     x = (x-mean)/std
@@ -71,17 +69,16 @@ def _read_py_function1(filename,cv_id):
     y[y == 0] = 2
     l = np.array([x.shape[0]])
     return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
-def read_validationset(path_set, batchsize,cv_id):
+def read_validationset(path_set, batchsize,mean,std):
     # shuffle path_set
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(
-        lambda filename: tuple(tf.py_func(_read_py_function1, [filename,cv_id], [tf.float32, tf.int32, tf.int32])))
+        lambda filename: tuple(tf.py_func(_read_py_function1, [filename,mean,std], [tf.float32, tf.int32, tf.int32])))
     batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     return batch
 # testing loader-------------------------------
-def _read_py_function2(filename,cv_id):
+def _read_py_function2(filename,mean,std):
     filename = filename.decode(sys.getdefaultencoding())
-    mean, std = get_scalar(cv_id)
     data = np.load(filename)
     x = data['x'][0]
     x = (x - mean) / std
@@ -92,11 +89,11 @@ def _read_py_function2(filename,cv_id):
     # y[y == 'nan'] = 2
     l = np.array([x.shape[0]])
     return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
-def read_validationset2(path_set, batchsize,cv_id):
+def read_validationset2(path_set, batchsize,mean,std):
     # shuffle path_set
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(
-        lambda filename: tuple(tf.py_func(_read_py_function2, [filename,cv_id], [tf.float32, tf.int32, tf.int32])))
+        lambda filename: tuple(tf.py_func(_read_py_function2, [filename,mean,std], [tf.float32, tf.int32, tf.int32])))
     batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     return batch
 
@@ -295,6 +292,40 @@ def get_sub_scenes_weight(path_list):
     pos = [x / total for x in count_pos]
     neg = [x / total for x in count_neg]
     return [y / x for x, y in zip(pos, neg)]
+def get_bac2(df):
+    w_xsrcs = [0.1, 0.047619047619047616, 0.034482758620689655, 0.05]
+    weight_index = [1, 0, 2, 1, 2, 1, 1, 0, 3, 3, 2, 1, 2, 2, 1, 1, 0, 3, 1, 2,
+     3, 3, 2, 2, 1, 3, 2, 2, 3, 1, 1, 2, 0, 0, 2, 1, 1, 2,2, 2, 1, 1, 2, 0, 3,
+     2, 2, 3, 3, 3, 2, 1, 3, 2, 2, 3, 1, 2, 2, 3, 1, 2, 3, 1, 1, 2, 3, 0, 0, 2,
+     0, 3, 2, 3, 2, 0,3, 2, 1, 3]
+    w = [0] * 80
+    for i in range(80):
+        w[i] = w_xsrcs[weight_index[i]]
+
+    scale_list = np.array([]).reshape(0, 52)
+    df = df.groupby('sceneID').mean()
+    for row in df.iterrows():
+        sceneid = int(row[0].replace('scene', ''))
+        weight = w[sceneid - 1]
+        temp = np.array(row[1].tolist()) * weight
+        #     (80, 52)
+        scale_list = np.append(scale_list, temp.reshape(1, 52), axis=0)
+
+    four_list = scale_list.mean(axis=0)
+    classes_performance = []
+    for i in range(13):
+        start = i * 4
+        TP = four_list[start]
+        TN = four_list[start + 1]
+        FP = four_list[start + 2]
+        FN = four_list[start + 3]
+        sensiticity = TP / (TP + FN)
+        specificity = TN / (TN + FP)
+        bac2 = 1 - (((1 - sensiticity) ** 2 + (1 - specificity) ** 2) / 2) ** 0.5
+        classes_performance.append(bac2)
+    final = sum(classes_performance) / len(classes_performance)
+    return final
+
 def get_performence(true_pos,true_neg,false_pos,false_neg, index):
     # TP = np.array(true_pos[index])
     # TN = np.array(true_neg[index])
@@ -348,17 +379,21 @@ def average_performance(list,dir,epoch_num,folder):
               'class13tp', 'class13tn', 'class13fp', 'class13fn']
     df = pd.DataFrame(list,columns=header)
     dir += 'folder'+ str(folder) + '_' +str(epoch_num) + '.pkl'
-    # df.to_pickle(dir)
-    df1 = df.groupby('sceneID').mean()
-    four_list = df1.mean().tolist()
-    classes_performance = []
-    for i in range(13):
-        start = i * 4
-        TP = four_list[start]
-        TN = four_list[start+1]
-        FP = four_list[start+2]
-        FN = four_list[start+3]
-        sensiticity = TP / (TP + FN)
-        specificity = TN / (TN + FP)
-        classes_performance.append((sensiticity+specificity)/2)
-    return sum(classes_performance) / len(classes_performance)
+    df.to_pickle(dir)
+    # bac2 performance
+    bac2 = get_bac2(df)
+    return bac2
+    # Below is for bac1
+    # df1 = df.groupby('sceneID').mean()
+    # four_list = df1.mean().tolist()
+    # classes_performance = []
+    # for i in range(13):
+    #     start = i * 4
+    #     TP = four_list[start]
+    #     TN = four_list[start+1]
+    #     FP = four_list[start+2]
+    #     FN = four_list[start+3]
+    #     sensiticity = TP / (TP + FN)
+    #     specificity = TN / (TN + FP)
+    #     classes_performance.append((sensiticity+specificity)/2)
+    # return sum(classes_performance) / len(classes_performance)

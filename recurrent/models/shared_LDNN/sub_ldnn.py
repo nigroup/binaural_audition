@@ -31,8 +31,8 @@ class HyperParameters:
     def __init__(self, VAL_FOLD, FOLD_NAME):
         # OLD_EPOCH indicates which epoch to restore from storeded model
         self.MODEL_SAVE = True
-        self.RESTORE = False
-        self.OLD_EPOCH = 0
+        self.RESTORE = True
+        self.OLD_EPOCH = 10
         if not self.RESTORE:
             # Set up log directory
             self.LOG_FOLDER = './log/' + FOLD_NAME + '/'
@@ -53,7 +53,7 @@ class HyperParameters:
         self.SCENES = ['scene'+str(i) for i in range(1,81)]
         self.K = 12
         # early stopping--patient
-        self.PATIENT = 10
+        self.PATIENCE = 5
         self.SO_FAR_BEST = 0
         self.ACCUMULATOR = 0
         # Parameters for stacked-LSTM layer
@@ -68,10 +68,10 @@ class HyperParameters:
         self.OUTPUT_KEEP_PROB = 0.9
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
-        self.BATCH_SIZE = 40
+        self.BATCH_SIZE = 32
         self.VALIDATION_BATCH_SIZE = 20
         self.EPOCHS = 100
-        self.TIMELENGTH = 2500
+        self.TIMELENGTH = 4000
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
         self.LEARNING_RATE = 0.000210872537549392
@@ -84,12 +84,20 @@ class HyperParameters:
         self.NUM_TEST = len(self.VALID_SET)
         self.SET = {'train': self.TRAIN_SET,
                'validation': self.VALID_SET}
-
+        self.MEAN,self.STD = self.get_scalar()
+    def get_scalar(self):
+        MACRO_PATH = ''
+        pkl_file = open(MACRO_PATH + '/home/changbinli/script/rnn/basic/train_statistics.pickle', 'rb')
+        data = pickle.load(pkl_file)
+        key = 'cv_' + str(self.VAL_FOLD)
+        mean = data[key][:160]
+        std = data[key][160:]
+        return mean, std
     # For construct a part of graph for inference, batch_size can be 1
     def validation(self, batch_size):
         with tf.name_scope('LDNN'):
             with tf.device('/cpu:0'):
-                valid_batch = read_validationset(self.SET['validation'], batch_size,self.VAL_FOLD)
+                valid_batch = read_validationset(self.SET['validation'], batch_size,self.MEAN,self.STD)
                 handle = tf.placeholder(tf.string, shape=[])
                 iterator = tf.data.Iterator.from_string_handle(handle, valid_batch.output_types,
                                                                valid_batch.output_shapes)
@@ -143,7 +151,7 @@ class HyperParameters:
                 # teosorflow error solution: Cannot create a tensor proto whose content is larger than 2GB\
                 numpy_path = np.array(self.SET['train'])
                 self.path_placeholder = tf.placeholder(numpy_path.dtype, numpy_path.shape)
-                train_batch = read_trainset(self.path_placeholder, self.BATCH_SIZE,self.VAL_FOLD)
+                train_batch = read_trainset(self.path_placeholder, self.BATCH_SIZE,self.MEAN,self.STD)
                 handle = tf.placeholder(tf.string, shape=[])
                 iterator = tf.data.Iterator.from_string_handle(handle, train_batch.output_types,
                                                                train_batch.output_shapes)
@@ -277,7 +285,7 @@ class HyperParameters:
                 # Numbers of batch per epoch, to stop the training and do validation
                 batch_per_epoch = int(n_batches / self.EPOCHS)
                 for num in range(1, n_batches + 1):
-                    if self.ACCUMULATOR == self.PATIENT:
+                    if self.ACCUMULATOR == self.PATIENCE:
                         logger.info(section.format('Its time to stop training.'))
                         break
                     loss, _, se, sp, tempf1,tp,tn,fp,fn, _ = sess.run([loss_op, train_op, sensitivity, specificity, f1,train_tp,train_tn,train_fp,train_fn ,update_op],
