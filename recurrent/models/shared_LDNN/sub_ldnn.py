@@ -31,8 +31,8 @@ class HyperParameters:
     def __init__(self, VAL_FOLD, FOLD_NAME):
         # OLD_EPOCH indicates which epoch to restore from storeded model
         self.MODEL_SAVE = True
-        self.RESTORE = False
-        self.OLD_EPOCH = 0
+        self.RESTORE = True
+        self.OLD_EPOCH = 10
         if not self.RESTORE:
             # Set up log directory
             self.LOG_FOLDER = './log/' + FOLD_NAME + '/'
@@ -52,6 +52,10 @@ class HyperParameters:
         # How many scenes include in this model.
         self.SCENES = ['scene'+str(i) for i in range(1,81)]
         self.K = 12
+        # early stopping--patient
+        self.PATIENCE = 5
+        self.SO_FAR_BEST = 0
+        self.ACCUMULATOR = 0
         # Parameters for stacked-LSTM layer
         self.NUM_HIDDEN = 581
         self.NUM_LSTM = 3
@@ -64,10 +68,10 @@ class HyperParameters:
         self.OUTPUT_KEEP_PROB = 0.9
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
-        self.BATCH_SIZE = 40
+        self.BATCH_SIZE = 32
         self.VALIDATION_BATCH_SIZE = 20
         self.EPOCHS = 100
-        self.TIMELENGTH = 2500
+        self.TIMELENGTH = 4000
         self.MAX_GRAD_NORM = 5.0
         self.NUM_CLASSES = 13
         self.LEARNING_RATE = 0.000210872537549392
@@ -80,12 +84,20 @@ class HyperParameters:
         self.NUM_TEST = len(self.VALID_SET)
         self.SET = {'train': self.TRAIN_SET,
                'validation': self.VALID_SET}
-
+        self.MEAN,self.STD = self.get_scalar()
+    def get_scalar(self):
+        MACRO_PATH = ''
+        pkl_file = open(MACRO_PATH + '/home/changbinli/script/rnn/basic/train_statistics.pickle', 'rb')
+        data = pickle.load(pkl_file)
+        key = 'cv_' + str(self.VAL_FOLD)
+        mean = data[key][:160]
+        std = data[key][160:]
+        return mean, std
     # For construct a part of graph for inference, batch_size can be 1
     def validation(self, batch_size):
         with tf.name_scope('LDNN'):
             with tf.device('/cpu:0'):
-                valid_batch = read_validationset(self.SET['validation'], batch_size)
+                valid_batch = read_validationset(self.SET['validation'], batch_size,self.MEAN,self.STD)
                 handle = tf.placeholder(tf.string, shape=[])
                 iterator = tf.data.Iterator.from_string_handle(handle, valid_batch.output_types,
                                                                valid_batch.output_shapes)
@@ -101,6 +113,13 @@ class HyperParameters:
             logits, update_op, reset_op = MultiRNN(X, batch_size, seq, self.NUM_CLASSES,
                                          self.NUM_LSTM, self.NUM_HIDDEN, self.OUTPUT_KEEP_PROB,
                                          self.NUM_MLP, self.NUM_NEURON, training=False)
+            w = get_scenes_weight(self.SCENES, self.VAL_FOLD)
+            with tf.variable_scope('loss'):
+                loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32), logits, tf.constant(w))
+                # number of frames without zero_frame
+                counted_non_zeros = tf.cast(tf.reduce_sum(mask_zero_frames), tf.float32)
+                # eliminate zero_frame loss
+                loss_op = tf.reduce_sum(loss_op * tf.cast(mask_zero_frames, tf.float32)) / counted_non_zeros
 
             predicted = tf.to_int32(tf.sigmoid(logits) > self.OUTPUT_THRESHOLD)
             # mask padding, zero_frames part
@@ -123,7 +142,7 @@ class HyperParameters:
             FP1 = tf.count_nonzero(predicted * (Y - 1) * mask_zero_frames* mask_padding,axis=1)
 
             FN1 = tf.count_nonzero((predicted - 1) * Y * mask_zero_frames* mask_padding,axis=1)
-            return valid_iterator, sensitivity, specificity, f1, reset_op,handle,TP1,TN1,FP1,FN1
+            return valid_iterator, sensitivity, specificity, f1, reset_op,handle,TP1,TN1,FP1,FN1,loss_op
 
 
     def train(self, batch_size):
@@ -132,7 +151,7 @@ class HyperParameters:
                 # teosorflow error solution: Cannot create a tensor proto whose content is larger than 2GB\
                 numpy_path = np.array(self.SET['train'])
                 self.path_placeholder = tf.placeholder(numpy_path.dtype, numpy_path.shape)
-                train_batch = read_trainset(self.path_placeholder, self.BATCH_SIZE)
+                train_batch = read_trainset(self.path_placeholder, self.BATCH_SIZE,self.MEAN,self.STD)
                 handle = tf.placeholder(tf.string, shape=[])
                 iterator = tf.data.Iterator.from_string_handle(handle, train_batch.output_types,
                                                                train_batch.output_shapes)
@@ -198,7 +217,7 @@ class HyperParameters:
             # connect shared variable
             scope.reuse_variables()
             # -----------------------validation graph---------
-            valid_iterator, valid_sensitivy, valid_specifict, valid_f1, reset_op, handle_valid,TP,TN,FP,FN = self.validation(self.VALIDATION_BATCH_SIZE)
+            valid_iterator, valid_sensitivy, valid_specifict, valid_f1, reset_op, handle_valid,TP,TN,FP,FN,loss_validation = self.validation(self.VALIDATION_BATCH_SIZE)
 
             # Initialize the variables (i.e. assign their default value)
             init = tf.global_variables_initializer()
@@ -266,7 +285,9 @@ class HyperParameters:
                 # Numbers of batch per epoch, to stop the training and do validation
                 batch_per_epoch = int(n_batches / self.EPOCHS)
                 for num in range(1, n_batches + 1):
-
+                    if self.ACCUMULATOR == self.PATIENCE:
+                        logger.info(section.format('Its time to stop training.'))
+                        break
                     loss, _, se, sp, tempf1,tp,tn,fp,fn, _ = sess.run([loss_op, train_op, sensitivity, specificity, f1,train_tp,train_tn,train_fp,train_fn ,update_op],
                                                           feed_dict={handle: train_handle})
 
@@ -305,14 +326,16 @@ class HyperParameters:
                         sess.run(valid_iterator.initializer)
                         # Create a list to collect performence
                         performence = []
+                        validation_loss = 0.0
                         for index in range(v_batches_per_epoch):
                             # Reset the state to zero before feeding input
                             sess.run([reset_op])
-                            se, sp, tempf1,true_pos,true_neg,false_pos,false_neg = sess.run([valid_sensitivy, valid_specifict, valid_f1,TP,TN,FP,FN],
+                            se, sp, tempf1,true_pos,true_neg,false_pos,false_neg,loss_valid = sess.run([valid_sensitivy, valid_specifict, valid_f1,TP,TN,FP,FN,loss_validation],
                                                       feed_dict={handle_valid: valid_handle})
                             sen = sen + se
                             spe = spe + sp
                             f = tempf1 + f
+                            validation_loss += loss_valid
                             # print(true_pos,true_neg,false_pos,false_neg)
                             # store performance
                             current_scene_instances = self.SET['validation'][index*self.VALIDATION_BATCH_SIZE:(index+1)*self.VALIDATION_BATCH_SIZE]
@@ -324,13 +347,19 @@ class HyperParameters:
                                 performence.append([scene_id,instance_name]+classes_performance.tolist())
                         # average each scene instance after validation finish
                         p = average_performance(performence,self.LOG_FOLDER,epoch_number,self.VAL_FOLD)
-
+                        # handle early stop
+                        if self.SO_FAR_BEST > p:
+                            self.ACCUMULATOR += 1
+                        else:
+                            self.SO_FAR_BEST = p
+                            self.ACCUMULATOR = 0
                         epoch_duration1 = time.time() - epoch_start
                         logger.info(
-                            '''Epochs: {},Validation_accuracy: {:.3f},Validation_performance: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
+                            '''Epochs: {},Validation_accuracy: {:.3f},Validation_performance: {:.3f},Validation_loss: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
                                 .format(epoch_number,
                                         ((sen + spe) / 2) / v_batches_per_epoch,
                                         p,
+                                        validation_loss/v_batches_per_epoch,
                                         sen / v_batches_per_epoch,
                                         spe / v_batches_per_epoch,
                                         f / v_batches_per_epoch,
@@ -353,7 +382,8 @@ class HyperParameters:
 if __name__ == "__main__":
     # fname = datetime.datetime.now().strftime("%Y%m%d")
     fname ='sub_test'
-    for i in range(1,2):
+    # use cv_folder3 as first level
+    for i in range(3,4):
         with tf.Graph().as_default():
             hyperparameters = HyperParameters(VAL_FOLD=i, FOLD_NAME= fname)
             hyperparameters.main()

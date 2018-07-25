@@ -1,3 +1,17 @@
+ERRATA: 
+the below procedure is outdated: 
+- subsampling should be omitted since it does not bring really an improvement
+- however the three levels should still be used as they are with one important difference:
+     level3 simply adds another fold for the best hyperparam combinations, 
+     since subsampling is omitted this means the validation BAC from levels1 and 2 can be reused!
+     => this procedure saves two unnecessary trainings, instead of 5 (1*level1+1*level2+3*level3) to 3 (1*level1+1*level2+1*level3)
+- note early stopping to be aplied in each level individually for the respective validation fold
+
+
+
+
+
+
 ============================================================
 ISSUE:
 
