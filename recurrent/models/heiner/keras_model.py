@@ -1,4 +1,5 @@
 import os
+import sys
 from sys import exit
 import shutil
 
@@ -12,12 +13,11 @@ import heiner.hyperparameters as hp
 from heiner import train_utils as tr_utils
 from heiner import utils
 from heiner import plotting as plot
-from heiner.model_extension import DropConnectCuDNNLSTM
+from heiner.model_extension import RecurrentDropoutCuDNNLSTM
 
 from timeit import default_timer as timer
 
 
-# TODO: log std out
 
 ################################################# RANDOM SEARCH SETUP
 
@@ -67,6 +67,9 @@ if reset_hcombs and is_overwrite and os.path.exists(model_dir):
 os.makedirs(model_dir, exist_ok=True)
 h.save_to_dir(model_dir)
 
+# LOGGING
+sys.stdout = utils.UnbufferedLogAndPrint(os.path.join(model_dir, 'logfile'))
+
 ################################################# CROSS VALIDATION
 start = timer()
 
@@ -94,10 +97,9 @@ for i_val_fold, val_fold in enumerate(h.VAL_FOLDS):
     # here will be the conv or grid lstm
     y = x
     for units in h.UNITS_PER_LAYER_LSTM:
-        # Dropout (trenne input dropout rate, check if same for every timestep)
-        y = DropConnectCuDNNLSTM(CuDNNLSTM(units, return_sequences=True, stateful=True), prob=0.0)(y)
+        y = RecurrentDropoutCuDNNLSTM(CuDNNLSTM(units, return_sequences=True, stateful=True), prob=0.4)(y)
     for units in h.UNITS_PER_LAYER_MLP:
-        # Dropout (check if same for every timestep)
+        # TODO: Dropout (check if same for every timestep)
         y = Dense(units, activation='sigmoid')(y)
     model = Model(x, y)
 

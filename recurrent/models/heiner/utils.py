@@ -6,6 +6,27 @@ from keras import backend as K
 from tensorflow.python.ops.nn_impl import weighted_cross_entropy_with_logits
 
 import pickle
+import sys
+
+
+class UnbufferedLogAndPrint:
+
+   def __init__(self, logfile):
+
+       self.stream = sys.stdout
+       self.te = open(logfile+'.txt', 'w')  # File where you need to keep the logs
+
+   def write(self, data):
+
+       self.stream.write(data)
+       self.stream.flush()
+       self.te.write(data)    # Write the data of stdout here to a text file as well
+
+   def flush(self):
+       # this flush method is needed for python 3 compatibility.
+       # this handles the flush command by doing nothing.
+       # you might want to specify some extra behavior here.
+       pass
 
 
 def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',

@@ -463,7 +463,7 @@ class DataLoader:
                             if self.priority_queue:
                                 _, row = heapq.heappop(heap)
                             curr_ind = dq.pop()
-                            l = length_dict[self.filenames[curr_ind]]
+                            l = self._length_dict()[self.filenames[curr_ind]]
                             if self.val_stateful:
                                 leftover, skipped = add_to_length_until_buffersize(l, row)
                                 skipped_steps += skipped

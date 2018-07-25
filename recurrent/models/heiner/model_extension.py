@@ -11,8 +11,6 @@ def _make_train_and_predict_function(model):
         if model.uses_learning_phase and not isinstance(K.learning_phase(), int):
             inputs += [K.learning_phase()]
 
-        # TODO: DropConnect may be applied here
-
         with K.name_scope('training'):
             with K.name_scope(model.optimizer.__class__.__name__):
                 training_updates = model.optimizer.get_updates(
@@ -153,25 +151,39 @@ class RecurrentDropoutCuDNNLSTM(Wrapper):
         self.prob = prob
         self.layer = layer
         if type(self.layer) is not CuDNNLSTM:
-            raise ValueError('DropConnectCuDNNLSTM can just be wrapped around CuDNNLSTM, '
+            raise ValueError('RecurrentDropoutCuDNNLSTM can just be wrapped around CuDNNLSTM, '
                              'got: {}'.format(type(self.layer)))
-        super(DropConnectCuDNNLSTM, self).__init__(layer, **kwargs)
+        super(RecurrentDropoutCuDNNLSTM, self).__init__(layer, **kwargs)
         if 0. < self.prob <= 1.:
-            # TODO: check
             self.uses_learning_phase = True
 
     def build(self, input_shape=None):
         if not self.layer.built:
             self.layer.build(input_shape)
             self.layer.built = True
-        super(DropConnectCuDNNLSTM, self).build()
+        super(RecurrentDropoutCuDNNLSTM, self).build()
 
     def compute_output_shape(self, input_shape):
         return self.layer.compute_output_shape(input_shape)
 
     def call(self, inputs, **kwargs):
         if 0. < self.prob <= 1.:
-            # TODO: not clear on which weights DropConnect should be applied
-             = K.in_train_phase(K.dropout(one_vector, self.prob),
-                                                           self.layer.recurrent_kernel)
+            # no bias dropout here
+
+            # TODO: save old weights so that they don't get overwritten everytime
+            # TODO: take care that dropout mask same for every timestep
+
+            recurrent_kernel_shape = K.int_shape(self.layer.recurrent_kernel)
+            mask_shape = (1, recurrent_kernel_shape[0])
+            mask = K.ones(shape=mask_shape)
+
+            mask = K.dropout(mask, self.prob)
+
+            dropout_mask = K.repeat_elements(mask, recurrent_kernel_shape[0], axis=0)
+            dropout_mask = K.repeat_elements(dropout_mask, 4, axis=1)
+
+            recurrent_kernel_dropout = dropout_mask * self.layer.recurrent_kernel
+
+            # K.in_train_phase behaves like an if-else
+            self.layer.recurrent_kernel = K.in_train_phase(recurrent_kernel_dropout, self.layer.recurrent_kernel)
         return self.layer.call(inputs, **kwargs)

@@ -25,16 +25,12 @@ class H:
         self.TIME_STEPS = TIME_STEPS
         self.BATCH_SIZE = BATCH_SIZE
 
-        # TODO: just changed for convenience
         self.MAX_EPOCHS = MAX_EPOCHS
 
         self.OUTPUT_THRESHOLD = OUTPUT_THRESHOLD
 
         # TRAIN_SCENES = list(range(1, 81))
         self.TRAIN_SCENES = list(TRAIN_SCENES)
-
-        # TODO: just changed for convenience
-        ALL_FOLDS = range(1, 3)     # folds: 1 - 3
 
         self.ALL_FOLDS = list(ALL_FOLDS)
 
@@ -112,11 +108,15 @@ class H:
             # use just this validation fold for early stopping
             # mean the performance over stage 1 and stage 2
             return [4]
+        elif self.STAGE == 3:
+            return [2]
         else:
-            return [3, 4, 2]
+            return self.ALL_FOLDS
 
     @property
     def K_SCENES_TO_SUBSAMPLE(self):
+        # no more subsampling
+        return -1
         if self.STAGE == 1 or self.STAGE == 2:
             return 12
         else:
