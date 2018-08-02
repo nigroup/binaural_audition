@@ -86,22 +86,30 @@ class Phase:
             mask = np.random.binomial(1, 1-self.recurrent_dropout, (1, rk_s[0]))
             mask = np.tile(mask, (rk_s[0], 4))
             rk = rk * mask
-            return rk
+            return rk, mask
 
 
-        original_weights = []
+        original_weights_and_masks = []
         for layer in self.model.layers:
             if type(layer) is CuDNNLSTM:
                 rk = K.get_value(layer.weights[1])
-                original_weights.append(np.copy(rk))
-                rk = _drop_in_recurrent_kernel(rk)
+                rk_old = np.copy(rk)
+                rk, mask = _drop_in_recurrent_kernel(rk)
+                original_weights_and_masks.append((rk_old, np.copy(mask)))
                 K.set_value(layer.weights[1], rk)
 
-        return original_weights
+        return original_weights_and_masks
 
-    def _load_original_weights_updated(self, original_weights):
+    def _load_original_weights_updated(self, original_weights_and_masks):
         # TODO: apply the update to dropped weights to the original weights and load them again
-        pass
+        i = 0
+        for layer in self.model.layers:
+            if type(layer) is CuDNNLSTM:
+                rk = K.get_value(layer.weights[1])
+                mask = original_weights_and_masks[i][1]
+                original_weights_updated = original_weights_and_masks[i][0] + (rk - original_weights_and_masks[i][0]) * mask
+                K.set_value(layer.weights[1], original_weights_updated)
+                i += 1
 
     def run(self):
         self.model.reset_states()
@@ -122,10 +130,12 @@ class Phase:
                 b_x, b_y = next(self.gen)
 
             if self.train:
-                original_weights = None
+                original_weights_and_masks = None
                 if self.apply_recurrent_dropout:
-                    original_weights = self._recurrent_dropout()
+                    original_weights_and_masks = self._recurrent_dropout()
                 loss, out = m_ext.train_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
+                if self.apply_recurrent_dropout:
+                    self._load_original_weights_updated(original_weights_and_masks)
             else:
                 loss, out = m_ext.test_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
             self.losses.append(loss)
