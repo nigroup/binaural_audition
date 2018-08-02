@@ -63,6 +63,9 @@ def train_and_predict_on_batch(model, x, y,
         and/or metrics). The attribute `model.metrics_names` will give you
         the display labels for the scalar outputs.
     """
+
+    K.set_learning_phase(1)
+
     x, y, sample_weights = model._standardize_user_data(
         x, y,
         sample_weight=sample_weight,
@@ -123,6 +126,9 @@ def test_and_predict_on_batch(model, x, y, sample_weight=None):
         and/or metrics). The attribute `model.metrics_names` will give you
         the display labels for the scalar outputs.
     """
+
+    K.set_learning_phase(0)
+
     x, y, sample_weights = model._standardize_user_data(
         x, y,
         sample_weight=sample_weight)
@@ -146,44 +152,42 @@ def reset_with_keep_states(model, keep_states):
                 K.set_value(state, old_state * keep_states)
 
 
-class RecurrentDropoutCuDNNLSTM(Wrapper):
-    def __init__(self, layer, prob=1., **kwargs):
-        self.prob = prob
-        self.layer = layer
-        if type(self.layer) is not CuDNNLSTM:
-            raise ValueError('RecurrentDropoutCuDNNLSTM can just be wrapped around CuDNNLSTM, '
-                             'got: {}'.format(type(self.layer)))
-        super(RecurrentDropoutCuDNNLSTM, self).__init__(layer, **kwargs)
-        if 0. < self.prob <= 1.:
-            self.uses_learning_phase = True
-
-    def build(self, input_shape=None):
-        if not self.layer.built:
-            self.layer.build(input_shape)
-            self.layer.built = True
-        super(RecurrentDropoutCuDNNLSTM, self).build()
-
-    def compute_output_shape(self, input_shape):
-        return self.layer.compute_output_shape(input_shape)
-
-    def call(self, inputs, **kwargs):
-        if 0. < self.prob <= 1.:
-            # no bias dropout here
-
-            # TODO: save old weights so that they don't get overwritten everytime
-            # TODO: take care that dropout mask same for every timestep
-
-            recurrent_kernel_shape = K.int_shape(self.layer.recurrent_kernel)
-            mask_shape = (1, recurrent_kernel_shape[0])
-            mask = K.ones(shape=mask_shape)
-
-            mask = K.dropout(mask, self.prob)
-
-            dropout_mask = K.repeat_elements(mask, recurrent_kernel_shape[0], axis=0)
-            dropout_mask = K.repeat_elements(dropout_mask, 4, axis=1)
-
-            recurrent_kernel_dropout = dropout_mask * self.layer.recurrent_kernel
-
-            # K.in_train_phase behaves like an if-else
-            self.layer.recurrent_kernel = K.in_train_phase(recurrent_kernel_dropout, self.layer.recurrent_kernel)
-        return self.layer.call(inputs, **kwargs)
+# class RecurrentDropoutCuDNNLSTM(Wrapper):
+#     def __init__(self, layer, prob=1., **kwargs):
+#         self.prob = prob
+#         self.layer = layer
+#         if type(self.layer) is not CuDNNLSTM:
+#             raise ValueError('RecurrentDropoutCuDNNLSTM can just be wrapped around CuDNNLSTM, '
+#                              'got: {}'.format(type(self.layer)))
+#         super(RecurrentDropoutCuDNNLSTM, self).__init__(layer, **kwargs)
+#         if 0. < self.prob <= 1.:
+#             self.uses_learning_phase = True
+#
+#     def build(self, input_shape=None):
+#         if not self.layer.built:
+#             self.layer.build(input_shape)
+#             self.layer.built = True
+#         super(RecurrentDropoutCuDNNLSTM, self).build()
+#
+#     def compute_output_shape(self, input_shape):
+#         return self.layer.compute_output_shape(input_shape)
+#
+#     def call(self, inputs, **kwargs):
+#         if 0. < self.prob <= 1.:
+#             # no bias dropout here
+#
+#             # TODO: save old weights so that they don't get overwritten everytime
+#
+#             def recurrent_kernel_dropped():
+#                 recurrent_kernel_shape = K.int_shape(self.layer.recurrent_kernel)
+#                 mask_shape = (1, recurrent_kernel_shape[0])
+#                 recurrent_kernel_reshaped = K.reshape(self.layer.recurrent_kernel, (-1, recurrent_kernel_shape[0]))
+#                 recurrent_kernel_reshaped = K.dropout(recurrent_kernel_reshaped, self.prob, noise_shape=mask_shape)
+#                 return K.reshape(recurrent_kernel_reshaped, recurrent_kernel_shape)
+#
+#
+#             # K.in_train_phase behaves like an if-else
+#             training_flag = K.print_tensor(K.learning_phase(), message='training_flag is: ')
+#             recurrent_kernel = K.in_train_phase(recurrent_kernel_dropped, self.layer.recurrent_kernel, training=training_flag)
+#             _ = K.update(self.layer.recurrent_kernel, recurrent_kernel)
+#         return self.layer.call(inputs, **kwargs)

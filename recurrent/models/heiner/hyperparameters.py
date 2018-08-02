@@ -10,7 +10,7 @@ import numpy as np
 class H:
     # TODO: i changed it to be comparable to changbins value -> i think timelength has to be longer though
     def __init__(self, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=40, MAX_EPOCHS=50,
-                 UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001,
+                 UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001, RECURRENT_DROPOUT=0.25,
                  OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 2),
                  PATIENCE_IN_EPOCHS=5,
                  ALL_FOLDS=range(1, 7), STAGE=1,
@@ -61,6 +61,8 @@ class H:
             'last output layer should have %d (number of classes) units' % self.N_CLASSES
 
         self.LEARNING_RATE = LEARNING_RATE
+
+        self.RECURRENT_DROPOUT = RECURRENT_DROPOUT
 
 
         self.METRIC = METRIC
@@ -249,6 +251,8 @@ class RandomSearch:
         self.RANGE_LOG_NUMBER_OF_MLP_CELLS = (np.log10(50), np.log10(1000))  # same for each layer
 
         # Initialization of Layers: Glorot
+
+        # TODO recurrent dropout
 
         # Regularization TODO: implement in model
         # self.RANGE_DROPOUT_RATE = (0.25, 0.9)

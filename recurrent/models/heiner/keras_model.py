@@ -13,7 +13,7 @@ import heiner.hyperparameters as hp
 from heiner import train_utils as tr_utils
 from heiner import utils
 from heiner import plotting as plot
-from heiner.model_extension import RecurrentDropoutCuDNNLSTM
+# from heiner.model_extension import RecurrentDropoutCuDNNLSTM
 
 from timeit import default_timer as timer
 
@@ -97,7 +97,7 @@ for i_val_fold, val_fold in enumerate(h.VAL_FOLDS):
     # here will be the conv or grid lstm
     y = x
     for units in h.UNITS_PER_LAYER_LSTM:
-        y = RecurrentDropoutCuDNNLSTM(CuDNNLSTM(units, return_sequences=True, stateful=True), prob=0.4)(y)
+        y = CuDNNLSTM(units, return_sequences=True, stateful=True)(y)
     for units in h.UNITS_PER_LAYER_MLP:
         # TODO: Dropout (check if same for every timestep)
         y = Dense(units, activation='sigmoid')(y)
@@ -138,7 +138,7 @@ for i_val_fold, val_fold in enumerate(h.VAL_FOLDS):
                                 verbose=1, monitor='val_final_acc')
     model_ckp.set_model(model)
 
-    args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str, h.METRIC]
+    args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str, h.RECURRENT_DROPOUT, h.METRIC]
 
     # training phase
     train_phase = tr_utils.Phase('train', model, train_loader, *args)

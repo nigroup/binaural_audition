@@ -1,6 +1,9 @@
 from heiner import model_extension as m_ext
 from heiner import accuracy_utils as acc_u
 from heiner.dataloader import DataLoader
+from keras.layers import CuDNNLSTM
+from keras import backend as K
+import numpy as np
 
 
 def create_generator(dloader):
@@ -32,7 +35,9 @@ def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTE
 
 class Phase:
 
-    def __init__(self, train_or_val, model, dloader, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str, metric='BAC',
+    def __init__(self, train_or_val, model, dloader, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str,
+                 recurrent_dropout=0.,
+                 metric='BAC',
                  ret=('final', 'per_class')):
 
         self.prefix = train_or_val
@@ -42,6 +47,13 @@ class Phase:
             self.train = False
         else:
             raise ValueError('unknown train_or_val: {}'.format(train_or_val))
+
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
+
+        if self.train and 0. < self.recurrent_dropout <= 1.:
+            self.apply_recurrent_dropout = True
+        else:
+            self.apply_recurrent_dropout = False
 
         self.model = model
         self.dloader = dloader
@@ -68,6 +80,29 @@ class Phase:
     def epoch_str(self):
         return 'epoch: {:{prec}} / {:{prec}}'.format(self.e + 1, self.EPOCHS, prec=len(str(self.EPOCHS)))
 
+    def _recurrent_dropout(self):
+        def _drop_in_recurrent_kernel(rk):
+            rk_s = rk.shape
+            mask = np.random.binomial(1, 1-self.recurrent_dropout, (1, rk_s[0]))
+            mask = np.tile(mask, (rk_s[0], 4))
+            rk = rk * mask
+            return rk
+
+
+        original_weights = []
+        for layer in self.model.layers:
+            if type(layer) is CuDNNLSTM:
+                rk = K.get_value(layer.weights[1])
+                original_weights.append(np.copy(rk))
+                rk = _drop_in_recurrent_kernel(rk)
+                K.set_value(layer.weights[1], rk)
+
+        return original_weights
+
+    def _load_original_weights_updated(self, original_weights):
+        # TODO: apply the update to dropped weights to the original weights and load them again
+        pass
+
     def run(self):
         self.model.reset_states()
 
@@ -87,6 +122,9 @@ class Phase:
                 b_x, b_y = next(self.gen)
 
             if self.train:
+                original_weights = None
+                if self.apply_recurrent_dropout:
+                    original_weights = self._recurrent_dropout()
                 loss, out = m_ext.train_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
             else:
                 loss, out = m_ext.test_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
