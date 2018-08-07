@@ -133,14 +133,37 @@ class H:
 class HCombManager:
 
     def __init__(self, save_path, timeout=60):
+        self.save_path = save_path
+
         self.timeout = timeout
 
         pickle_name = 'hyperparameter_combinations.pickle'
-        self.filepath = path.join(save_path, pickle_name)
+        self.filepath = path.join(self.save_path, pickle_name)
         if not path.exists(self.filepath):
             with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
                 hcomb_list = []
                 self._write_hcomb_list(hcomb_list, handle)
+
+        pickle_name_to_run = 'hyperparameter_combinations_to_run.pickle'
+        self.filepath_to_run = path.join(self.save_path, pickle_name_to_run)
+
+    def poll_hcomb(self, timeout=60):
+        self.timeout = timeout
+
+        if not path.exists(self.filepath_to_run):
+            raise ValueError('Filepath "{}" should exist beforehand. '.format(self.filepath_to_run))
+
+        # TODO: has to be able to read and write
+        with portalocker.Lock(self.filepath_to_run, timeout=self.timeout) as handle:
+            hcombs_to_run = pickle.load(handle)
+
+            if len(hcombs_to_run) == 0:
+                return None
+
+            hcomb_to_run = hcombs_to_run[0]
+            hcombs_to_run = hcombs_to_run[1:]
+            pickle.dump(hcombs_to_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            return hcomb_to_run
 
     def get_hcomb_id(self, h, overwrite_hcombs=True):
         with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
@@ -283,12 +306,6 @@ class RandomSearch:
 
         self.metric_used = metric_used
 
-
-
-
-        self.hcombs_to_run_queue = self._get_hcombs_to_run_queue(number_of_hcombs)
-        self.available_gpus_queue = deque(available_gpus)
-
     def _sample_hcomb(self):
         units_per_layer_lstm = [int(10 ** np.random.uniform(*self.RANGE_LOG_NUMBER_OF_LSTM_CELLS))] * \
                                np.random.randint(*self.RANGE_NUMBER_OF_LSTM_LAYERS)
@@ -309,15 +326,23 @@ class RandomSearch:
                  LEARNING_RATE=learning_rate, PATIENCE_IN_EPOCHS=self.PATIENCE_IN_EPOCHS,
                  METRIC=self.metric_used, STAGE=self.STAGE)
 
-    def _get_hcombs_to_run_queue(self, number_of_hcombs):
-        return deque(list(set([self._sample_hcomb() for _ in range(0, number_of_hcombs)])))
+    def _get_hcombs_to_run(self, number_of_hcombs):
+        return list(set([self._sample_hcomb() for _ in range(0, number_of_hcombs)]))
 
-    def poll_hcomb(self):
-        if len(self.hcombs_to_run_queue) == 0:
-            return None, None
-        if len(self.available_gpus_queue) == 0:
-            return -1, -1
-        return self.available_gpus_queue.pop(), self.hcombs_to_run_queue.pop()
+    def save_hcombs_to_run(self, save_path, number_of_hcombs):
 
-    def add_available_gpu(self, used_gpu):
-        self.available_gpus_queue.append(used_gpu)
+        # name has to be same as in HCombManager
+        pickle_name = 'hyperparameter_combinations_to_run.pickle'
+
+        filepath = path.join(save_path, pickle_name)
+
+        if not path.exists(filepath):
+            with open(filepath, 'wb') as handle:
+                pickle.dump(self._get_hcombs_to_run(number_of_hcombs), handle, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            with open(filepath, 'rb') as handle:
+                hcombs_old = pickle.load(handle)
+            hcombs_old += self._get_hcombs_to_run(number_of_hcombs)
+            hcombs_new = list(set(hcombs_old))
+            with open(filepath, 'wb') as handle:
+                pickle.dump(hcombs_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
