@@ -140,7 +140,7 @@ class HCombManager:
         pickle_name = 'hyperparameter_combinations.pickle'
         self.filepath = path.join(self.save_path, pickle_name)
         if not path.exists(self.filepath):
-            with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
+            with portalocker.Lock(self.filepath, mode='ab', timeout=self.timeout) as handle:
                 hcomb_list = []
                 self._write_hcomb_list(hcomb_list, handle)
 
@@ -154,7 +154,7 @@ class HCombManager:
             raise ValueError('Filepath "{}" should exist beforehand. '.format(self.filepath_to_run))
 
         # TODO: has to be able to read and write
-        with portalocker.Lock(self.filepath_to_run, timeout=self.timeout) as handle:
+        with portalocker.Lock(self.filepath_to_run, mode='r+b', timeout=self.timeout) as handle:
             hcombs_to_run = pickle.load(handle)
 
             if len(hcombs_to_run) == 0:
@@ -166,7 +166,7 @@ class HCombManager:
             return hcomb_to_run
 
     def get_hcomb_id(self, h, overwrite_hcombs=True):
-        with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
+        with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
             h = h.__dict__
@@ -196,7 +196,7 @@ class HCombManager:
         hcomb['elapsed_time'] = h['elapsed_time']
 
     def finish_hcomb(self, id_, h, val_acc_mean, val_acc_std, elapsed_time):
-        with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
+        with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
             h = h.__dict__
@@ -213,7 +213,7 @@ class HCombManager:
             self._write_hcomb_list(hcomb_list, handle)
 
     def finish_epoch(self, id_, h, val_acc, fold_ind, elapsed_time):
-        with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
+        with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
             h = h.__dict__
@@ -241,7 +241,7 @@ class HCombManager:
 
     # IMPORTANT: happens if hcomb finished
     def _merge_with_stage_1(self, h):
-        with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
+        with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
             hcomb_list_copy = deepcopy(hcomb_list)
