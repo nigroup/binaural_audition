@@ -316,7 +316,7 @@ class RandomSearch:
         if len(self.hcombs_to_run_queue) == 0:
             return None, None
         if len(self.available_gpus_queue) == 0:
-            raise ValueError('No GPU available, but should always be available if added back to queue in finish_hcomb.')
+            return -1, -1
         return self.available_gpus_queue.pop(), self.hcombs_to_run_queue.pop()
 
     def add_available_gpu(self, used_gpu):

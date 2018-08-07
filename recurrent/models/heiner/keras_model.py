@@ -29,8 +29,7 @@ available_gpus = ['2']
 
 number_of_hcombs = 1
 
-rs = hp.RandomSearch(metric_used=metric_used, STAGE=STAGE)
-hcombs_to_run = rs.get_hcombs_to_run(number_of_hcombs=number_of_hcombs)
+rs = hp.RandomSearch(number_of_hcombs, available_gpus, metric_used=metric_used, STAGE=STAGE)
 
 # TODO: IMPORTANT -> see if validation accuracy weights are correct again (were changed to all ones)
 
@@ -45,11 +44,17 @@ model_name = 'LDNN_v1'
 save_path = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name)
 os.makedirs(save_path, exist_ok=True)
 
-hcm = hp.HCombManager(save_path, hcombs_to_run=hcombs_to_run, available_gpus=available_gpus)
+hcm = hp.HCombManager(save_path)
+
+gpu, h = rs.poll_hcomb()
+if gpu is None and h is None:
+    print('Finished random search! Exiting.')
+    sys.exit(0)
+if gpu == -1 and h == -1:
+    # No GPU available.
+    
 
 # TODO: add multiprocessing from here
-
-gpu, h = hcm.poll_hcomb()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 
