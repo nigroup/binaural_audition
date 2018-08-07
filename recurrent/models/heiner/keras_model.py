@@ -5,7 +5,7 @@ import shutil
 
 import numpy as np
 from keras.callbacks import ModelCheckpoint
-from keras.layers import Dense, Input, CuDNNLSTM
+from keras.layers import Dense, Input, CuDNNLSTM, Dropout
 from keras.models import Model
 from keras.optimizers import Adam
 
@@ -94,13 +94,21 @@ for i_val_fold, val_fold in enumerate(h.VAL_FOLDS):
     print('\nBuild model...\n')
 
     x = Input(batch_shape=(h.BATCH_SIZE, None, h.N_FEATURES), name='Input', dtype='float32')
-    # here will be the conv or grid lstm
     y = x
+
+    # Input dropout
+    y = Dropout(h.INPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, h.N_FEATURES))(y)
     for units in h.UNITS_PER_LAYER_LSTM:
         y = CuDNNLSTM(units, return_sequences=True, stateful=True)(y)
+
+        # LSTM Output dropout
+        y = Dropout(h.LSTM_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
     for units in h.UNITS_PER_LAYER_MLP:
-        # TODO: Dropout (check if same for every timestep)
         y = Dense(units, activation='sigmoid')(y)
+
+        # MLP Output dropout but not last layer
+        if units != h.N_CLASSES:
+            y = Dropout(h.MLP_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
     model = Model(x, y)
 
     model.summary()

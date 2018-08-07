@@ -5,12 +5,14 @@ from operator import add
 from collections import deque
 
 import numpy as np
+import portalocker
 
 
 class H:
     # TODO: i changed it to be comparable to changbins value -> i think timelength has to be longer though
     def __init__(self, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=40, MAX_EPOCHS=50,
-                 UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001, RECURRENT_DROPOUT=0.25,
+                 UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001,
+                 RECURRENT_DROPOUT=0.25, INPUT_DROPOUT=0., LSTM_OUTPUT_DROPOUT=0.25, MLP_OUTPUT_DROPOUT=0.25,
                  OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 2),
                  PATIENCE_IN_EPOCHS=5,
                  ALL_FOLDS=range(1, 7), STAGE=1,
@@ -63,6 +65,9 @@ class H:
         self.LEARNING_RATE = LEARNING_RATE
 
         self.RECURRENT_DROPOUT = RECURRENT_DROPOUT
+        self.INPUT_DROPOUT = INPUT_DROPOUT
+        self.LSTM_OUTPUT_DROPOUT = LSTM_OUTPUT_DROPOUT
+        self.MLP_OUTPUT_DROPOUT = MLP_OUTPUT_DROPOUT
 
 
         self.METRIC = METRIC
@@ -127,42 +132,36 @@ class H:
 
 class HCombManager:
 
-    def __init__(self, save_path, hcombs_to_run, available_gpus):
+    def __init__(self, save_path, timeout=60):
+        self.timeout = timeout
+
         pickle_name = 'hyperparameter_combinations.pickle'
         self.filepath = path.join(save_path, pickle_name)
-        if path.exists(self.filepath):
-            with open(self.filepath, 'rb') as handle:
-                self.hcomb_list = pickle.load(handle)
-        else:
-            # create empty hcomb list
-            self.hcomb_list = []
-        self.hcombs_to_run_queue = deque(hcombs_to_run)
-        self.available_gpus_queue = deque(available_gpus)
-
-    def poll_hcomb(self):
-        if len(self.hcombs_to_run_queue) == 0:
-            return None, None
-        if len(self.available_gpus_queue) == 0:
-            raise ValueError('No GPU available, but should always be available if added back to queue in finish_hcomb.')
-        return self.available_gpus_queue.pop(), self.hcombs_to_run_queue.pop()
+        if not path.exists(self.filepath):
+            with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
+                hcomb_list = []
+                self._write_hcomb_list(hcomb_list, handle)
 
     def get_hcomb_id(self, h, overwrite_hcombs=True):
-        h = h.__dict__
+        with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
+            hcomb_list = self._read_hcomb_list(handle)
 
-        hcomb_list_copy = deepcopy(self.hcomb_list)
-        for hcomb in hcomb_list_copy:
-            self._make_comparable(hcomb, h)
-        if h in hcomb_list_copy and overwrite_hcombs:
-            index = hcomb_list_copy.index(h)
-            is_overwrite = True
-        else:
-            self.hcomb_list.append(h)
-            index = self.hcomb_list.index(h)
-            is_overwrite = False
+            h = h.__dict__
 
-        self._write_hcomb_list()
+            hcomb_list_copy = deepcopy(hcomb_list)
+            for hcomb in hcomb_list_copy:
+                self._make_comparable(hcomb, h)
+            if h in hcomb_list_copy and overwrite_hcombs:
+                index = hcomb_list_copy.index(h)
+                is_overwrite = True
+            else:
+                hcomb_list.append(h)
+                index = hcomb_list.index(h)
+                is_overwrite = False
 
-        return index, self.hcomb_list[index], is_overwrite
+            self._write_hcomb_list(hcomb_list, handle)
+
+            return index, hcomb_list[index], is_overwrite
 
     def _make_comparable(self, hcomb, h):
         hcomb['finished'] = h['finished']
@@ -173,32 +172,36 @@ class HCombManager:
         hcomb['val_acc_std'] = h['val_acc_std']
         hcomb['elapsed_time'] = h['elapsed_time']
 
-    def finish_hcomb(self, id_, h, val_acc_mean, val_acc_std, elapsed_time, used_gpu):
-        h = h.__dict__
+    def finish_hcomb(self, id_, h, val_acc_mean, val_acc_std, elapsed_time):
+        with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
+            hcomb_list = self._read_hcomb_list(handle)
 
-        h['finished'] = True
-        h['elapsed_time'] = elapsed_time
-        self._update_val_metrics_mean_std(h, val_acc_mean, val_acc_std)
+            h = h.__dict__
 
-        if h['STAGE'] == 2:
-            self._merge_with_stage_1(h)
+            h['finished'] = True
+            h['elapsed_time'] = elapsed_time
+            self._update_val_metrics_mean_std(h, val_acc_mean, val_acc_std)
 
-        self.replace_at_id(id_, h)
+            if h['STAGE'] == 2:
+                self._merge_with_stage_1(h)
 
-        self._write_hcomb_list()
+            self.replace_at_id(hcomb_list, id_, h)
 
-        self.available_gpus_queue.append(used_gpu)
+            self._write_hcomb_list(hcomb_list, handle)
 
     def finish_epoch(self, id_, h, val_acc, fold_ind, elapsed_time):
-        h = h.__dict__
+        with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
+            hcomb_list = self._read_hcomb_list(handle)
 
-        h['epochs_finished'][fold_ind] += 1
-        h['elapsed_time'] = elapsed_time
-        self._update_val_metrics(h, val_acc, fold_ind)
+            h = h.__dict__
 
-        self.replace_at_id(id_, h)
+            h['epochs_finished'][fold_ind] += 1
+            h['elapsed_time'] = elapsed_time
+            self._update_val_metrics(h, val_acc, fold_ind)
 
-        self._write_hcomb_list()
+            self.replace_at_id(hcomb_list, id_, h)
+
+            self._write_hcomb_list(hcomb_list, handle)
 
     def _update_val_metrics(self, h, val_acc, fold_ind):
         h['val_acc'][fold_ind] = val_acc
@@ -207,37 +210,44 @@ class HCombManager:
         h['val_acc_mean'] = val_acc_mean
         h['val_acc_std'] = val_acc_std
 
-    def replace_at_id(self, id_, h):
+    def replace_at_id(self, hcomb_list, id_, h):
         if type(h) is not dict:
             h = h.__dict__
 
-        self.hcomb_list[id_] = h
-        self._write_hcomb_list()
-
-    def _write_hcomb_list(self):
-        with open(self.filepath, 'wb') as handle:
-            pickle.dump(self.hcomb_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        hcomb_list[id_] = h
 
     # IMPORTANT: happens if hcomb finished
     def _merge_with_stage_1(self, h):
-        hcomb_list_copy = deepcopy(self.hcomb_list)
-        for hcomb in hcomb_list_copy:
-            self._make_comparable(hcomb, h)
-            hcomb['STAGE'] = h['STAGE']
-        if h in hcomb_list_copy:
-            index = hcomb_list_copy.index(h)
-            h['epochs_finished'] = list(map(add, h['epochs_finished'], self.hcomb_list[index]['epochs_finished']))
-            h['val_acc'] = list(map(add, h['val_acc'], self.hcomb_list[index]['val_acc']))
-            h['val_acc_mean'] = np.mean(h['val_acc'])
-            h['val_acc_std'] = np.std(h['val_acc'])
-            h['elapsed_time'] += self.hcomb_list[index]['elapsed_time']
-        else:
-            raise ValueError('Cannot find HComb in Stage 1')
+        with portalocker.Lock(self.filepath, timeout=self.timeout) as handle:
+            hcomb_list = self._read_hcomb_list(handle)
 
+            hcomb_list_copy = deepcopy(hcomb_list)
+            for hcomb in hcomb_list_copy:
+                self._make_comparable(hcomb, h)
+                hcomb['STAGE'] = h['STAGE']
+            if h in hcomb_list_copy:
+                index = hcomb_list_copy.index(h)
+                h['epochs_finished'] = list(map(add, h['epochs_finished'], hcomb_list[index]['epochs_finished']))
+                h['val_acc'] = list(map(add, h['val_acc'], hcomb_list[index]['val_acc']))
+                h['val_acc_mean'] = np.mean(h['val_acc'])
+                h['val_acc_std'] = np.std(h['val_acc'])
+                h['elapsed_time'] += hcomb_list[index]['elapsed_time']
+            else:
+                raise ValueError('Cannot find HComb in Stage 1')
+
+            self.replace_at_id(hcomb_list, index, h)
+
+            self._write_hcomb_list(hcomb_list, handle)
+
+    def _read_hcomb_list(self, handle):
+        return pickle.load(handle)
+
+    def _write_hcomb_list(self, hcomb_list, handle):
+        pickle.dump(hcomb_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 class RandomSearch:
 
-    def __init__(self, metric_used='BAC', STAGE=1):
+    def __init__(self, number_of_hcombs, available_gpus, metric_used='BAC', STAGE=1):
 
         # random search stage
         self.STAGE = STAGE
@@ -252,12 +262,16 @@ class RandomSearch:
 
         # Initialization of Layers: Glorot
 
-        # TODO recurrent dropout
+        # Regularization
+        self.RANGE_RECURRENT_DROPOUT = (0.25, 0.9)
+        self.RANGE_INPUT_DROPOUT = (0., 0.)
+        self.RANGE_LSTM_OUTPUT_DROPOUT = (0.25, 0.9)
+        self.RANGE_MLP_OUTPUT_DROPOUT = (0.25, 0.9)
 
-        # Regularization TODO: implement in model
-        # self.RANGE_DROPOUT_RATE = (0.25, 0.9)
+        #TODO: implement in model
         # self.RANGE_L2 = None # TODO: check values
         # gradient clipping
+
         self.PATIENCE_IN_EPOCHS = 5     # patience for early stopping
 
         # Optimization
@@ -269,6 +283,12 @@ class RandomSearch:
 
         self.metric_used = metric_used
 
+
+
+
+        self.hcombs_to_run_queue = self._get_hcombs_to_run_queue(number_of_hcombs)
+        self.available_gpus_queue = deque(available_gpus)
+
     def _sample_hcomb(self):
         units_per_layer_lstm = [int(10 ** np.random.uniform(*self.RANGE_LOG_NUMBER_OF_LSTM_CELLS))] * \
                                np.random.randint(*self.RANGE_NUMBER_OF_LSTM_LAYERS)
@@ -278,11 +298,26 @@ class RandomSearch:
 
         learning_rate = 10 ** np.random.uniform(*self.RANGE_LEARNING_RATE)
 
+        # DROPOUT
+
+        recurrent_dropout = np.random.uniform(*self.RANGE_RECURRENT_DROPOUT)
+        input_dropout = np.random.uniform(*self.RANGE_INPUT_DROPOUT)
+        lstm_output_dropout = np.random.uniform(*self.RANGE_LSTM_OUTPUT_DROPOUT)
+        mlp_output_dropout = np.random.uniform(*self.RANGE_MLP_OUTPUT_DROPOUT)
+
         return H(UNITS_PER_LAYER_LSTM=units_per_layer_lstm, UNITS_PER_LAYER_MLP=units_per_layer_mlp,
                  LEARNING_RATE=learning_rate, PATIENCE_IN_EPOCHS=self.PATIENCE_IN_EPOCHS,
                  METRIC=self.metric_used, STAGE=self.STAGE)
 
-    def get_hcombs_to_run(self, number_of_hcombs):
-        hcombs_to_run = list(set([self._sample_hcomb() for _ in range(0, number_of_hcombs)]))
-        return hcombs_to_run
+    def _get_hcombs_to_run_queue(self, number_of_hcombs):
+        return deque(list(set([self._sample_hcomb() for _ in range(0, number_of_hcombs)])))
 
+    def poll_hcomb(self):
+        if len(self.hcombs_to_run_queue) == 0:
+            return None, None
+        if len(self.available_gpus_queue) == 0:
+            raise ValueError('No GPU available, but should always be available if added back to queue in finish_hcomb.')
+        return self.available_gpus_queue.pop(), self.hcombs_to_run_queue.pop()
+
+    def add_available_gpu(self, used_gpu):
+        self.available_gpus_queue.append(used_gpu)

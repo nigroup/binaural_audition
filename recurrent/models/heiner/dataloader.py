@@ -6,17 +6,19 @@ import random
 import pickle
 import heapq
 import re
-
+from tqdm import tqdm
 
 class DataLoader:
 
     def __init__(self, mode, label_mode, fold_nbs, scene_nbs, batchsize=50, timesteps=4000, epochs=10,
                  buffer=10, features=160, classes=13, path_pattern='/mnt/binaural/data/scenes2018/',
                  seed=1, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=-1.0,
-                 val_stateful=False, k_scenes_to_subsample=-1):
+                 val_stateful=False, k_scenes_to_subsample=-1,
+                 input_standardization=True):
 
         self.mode = mode
         self.path_pattern = path_pattern
+        self.fold_nbs = fold_nbs
 
 
         if not (self.mode == 'train' or self.mode == 'test' or self.mode == 'val'):
@@ -65,6 +67,15 @@ class DataLoader:
         self.scene_instance_ids_dict = None
 
         self.k_scenes_to_subsample = k_scenes_to_subsample
+
+        self.input_standardization = input_standardization
+        self.input_standardization_metrics = None
+
+        if self.mode != 'test' and self.input_standardization:
+            if type(self.fold_nbs) is int:
+                raise ValueError('input standardization can for now just be applied if only ONE val_fold is used')
+            if self.mode == 'train' and len(self.fold_nbs) != 5 or self.mode == 'val' and len(self.fold_nbs) != 1:
+                raise ValueError('input standardization can for now just be applied if only ONE val_fold is used')
 
         # whether to create last batches by padding the rows which are not long enough
         self.use_every_timestep = use_every_timestep
@@ -132,6 +143,83 @@ class DataLoader:
                 length_tuples = [(self._length_dict()[fn], fn) for fn in self.filenames]
                 self.filenames = [tup[1] for tup in sorted(length_tuples, key=lambda x: x[0], reverse=True)]
                 self.filenames_deque = deque(self.filenames)
+
+    def _input_standardization_if_wanted(self, x, y):
+        if self.input_standardization:
+            mean, std = self._input_standardization_metrics()
+            return np.where(y != self.mask_val, (x - mean) / std, self.mask_val)
+        return x
+
+    def _input_standardization_metrics(self):
+        if self.input_standardization_metrics is None:
+            self._load_input_standardization_metrics()
+        return self.input_standardization_metrics
+
+    def _load_input_standardization_metrics(self):
+        in_std_path = path.join(self.pickle_path, 'input_standardization_metrics.pickle')
+        if not path.exists(in_std_path):
+            self._create_input_standardization_metrics_pickle()
+        with open(in_std_path, 'rb') as handle:
+            means, stds = pickle.load(handle)
+        if self.mode == 'test':
+            return (means, stds) # just (mean, std)
+        else:
+            if self.mode == 'train':
+                val_fold = list(set(range(1, 7)) - set(self.fold_nbs))[0]
+            else:
+                val_fold = self.fold_nbs[0]
+            return (means[val_fold-1], stds[val_fold-1])
+
+    def _create_input_standardization_metrics_pickle(self):
+        def calc_mean_std(in_std_path):
+            all_existing_files = glob.glob(in_std_path)
+
+            N = 0
+            sum = np.zeros((1, self.features))
+            for file in tqdm(all_existing_files):
+                with np.load(file) as data:
+                    N += data['x'].shape[1]
+                    sum += np.sum(data['x'], axis=1)
+            mean = sum / N
+            mean = mean[np.newaxis, :, :]
+
+            sum_mean_sq = np.zeros((1, self.features))
+            for file in tqdm(all_existing_files):
+                with np.load(file) as data:
+                    x = data['x']
+                    x = (x - mean) ** 2
+                    sum += np.sum(x, axis=1)
+            std = np.sqrt(sum_mean_sq / N)
+            std = std[np.newaxis, :, :]
+
+            return (mean, std)
+
+        in_std_path = self.pickle_path
+        if self.mode == 'test':
+            in_std_path = path.join(in_std_path, 'fold*', 'scene*', '*.npz')
+
+
+            metrics = calc_mean_std(in_std_path)
+
+        else:
+            all_folds = list(range(1, 7))
+            means = []
+            stds = []
+            for val_fold in all_folds:
+                used_folds = list(set(all_folds)-{val_fold})
+                in_std_path_loop = path.join(in_std_path, 'fold'+str(used_folds), 'scene*', '*.npz')
+
+                mean, std = calc_mean_std(in_std_path_loop)
+                means.append(mean)
+                stds.append(std)
+
+            metrics = (means, stds)
+
+
+        with open(path.join(self.pickle_path, 'input_standardization_metrics.pickle'), 'wb') as handle:
+            pickle.dump(metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
 
     def reset_filenames(self):
         if self.k_scenes_to_subsample != -1:
@@ -322,8 +410,8 @@ class DataLoader:
                 else:
                     keep_states = self.row_leftover[:, 0] != -1
                 keep_states = keep_states[:, np.newaxis]
-                return x, y, keep_states
-            return x, y
+                return self._input_standardization_if_wanted(x, y), y, keep_states
+            return self._input_standardization_if_wanted(x, y), y
 
         if self.row_start == self.buffer_size:
             self._clear_buffers()
@@ -349,7 +437,7 @@ class DataLoader:
             with np.load(self.filenames.pop()) as data:
                 sequence = data['x']
                 labels = data['y'] if self.instant_mode else data['y_block']
-                return sequence, labels
+                return self._input_standardization_if_wanted(sequence, labels), labels
         else:
             return None, None
 
@@ -378,7 +466,7 @@ class DataLoader:
                 scene_instance_id = self._scene_instance_ids_dict()[next_filename]
                 b_y[r, :length, :, 1] = scene_instance_id
                 r += 1
-            return b_x, b_y
+            return self._input_standardization_if_wanted(b_x, b_y), b_y
         else:
             self.act_epoch += 1
             if self.act_epoch > self.epochs:
@@ -507,7 +595,6 @@ class DataLoader:
         return self.length_dict
 
     def _create_length_dict(self):
-        from tqdm import tqdm
         all_existing_files = glob.glob(self.pickle_path_pattern)
 
         def get_length(file):
@@ -529,7 +616,6 @@ class DataLoader:
         return self.scene_instance_ids_dict
 
     def _create_scene_instance_ids_dict(self):
-        from tqdm import tqdm
         all_existing_files = glob.glob(self.pickle_path_pattern)
         all_existing_files = sorted(all_existing_files)
         scene_nb_regex = re.compile('scene([0-9]+)[_/]')
