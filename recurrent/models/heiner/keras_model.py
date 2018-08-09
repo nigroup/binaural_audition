@@ -11,7 +11,7 @@ STAGE = 1
 
 metric_used = 'BAC'
 
-available_gpus = ['1', '2']
+available_gpus = ['2', '3']
 
 number_of_hcombs = 2
 
@@ -29,7 +29,9 @@ os.makedirs(save_path, exist_ok=True)
 
 rs.save_hcombs_to_run(save_path, number_of_hcombs)
 
-# TODO: add multiprocessing from here
-pool = multiprocessing.Pool(processes=len(available_gpus))
-for gpu in pool.imap_unordered(partial(run.run_hcomb, save_path=save_path, reset_hcombs=reset_hcombs), available_gpus):
-    print('GPU: {} finished!'.format(gpu))
+# # TODO: add multiprocessing from here
+# pool = multiprocessing.Pool(processes=len(available_gpus))
+# for gpu in pool.imap_unordered(partial(run.run_hcomb, save_path=save_path, reset_hcombs=reset_hcombs), available_gpus):
+#     print('GPU: {} finished!'.format(gpu))
+
+run.run_hcomb('2', save_path, reset_hcombs)
