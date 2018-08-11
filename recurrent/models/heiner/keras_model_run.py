@@ -16,9 +16,9 @@ from heiner import plotting as plot
 # from heiner.model_extension import RecurrentDropoutCuDNNLSTM
 
 from timeit import default_timer as timer
+import glob
 
-
-def run_hcomb(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True):
+def run_hcomb(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GRADIENT_NORM_PLOT=True):
 
     hcm = hp.HCombManager(save_path)
 
@@ -117,10 +117,14 @@ def run_hcomb(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True):
                                                                    [val_fold], h.VAL_STATEFUL, BUFFER=50)
 
             ################################################# CALLBACKS
-            model_ckp = ModelCheckpoint(os.path.join(model_save_dir,
+            model_ckp_last = ModelCheckpoint(os.path.join(model_save_dir,
                                                      'model_ckp_epoch_{epoch:02d}-val_acc_{val_final_acc:.3f}.hdf5'),
                                         verbose=1, monitor='val_final_acc')
-            model_ckp.set_model(model)
+            model_ckp_last.set_model(model)
+            model_ckp_best = ModelCheckpoint(os.path.join(model_save_dir,
+                                                     'best_model_ckp_epoch_{epoch:02d}-val_acc_{val_final_acc:.3f}.hdf5'),
+                                        verbose=1, monitor='val_final_acc', save_best_only=True)
+            model_ckp_best.set_model(model)
 
             args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str, h.RECURRENT_DROPOUT, h.METRIC]
 
@@ -132,18 +136,16 @@ def run_hcomb(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True):
 
             # needed for early stopping
             best_val_acc = -1
-            epochs_without_improvement = -1
+            best_epoch = 0
+            epochs_without_improvement = 0
 
             for e in range(h.epochs_finished[i_val_fold], h.MAX_EPOCHS):
-
-                # early stopping
-                if epochs_without_improvement > h.PATIENCE_IN_EPOCHS and h.PATIENCE_IN_EPOCHS > -1:
-                    break
 
                 train_phase.run()
                 val_phase.run()
 
-                model_ckp.on_epoch_end(e, logs={'val_final_acc': val_phase.accs[-1]})
+                tr_utils.update_latest_model_ckp(model_ckp_last, model_save_dir, e, val_phase.accs[-1])
+                model_ckp_best.on_epoch_end(e, logs={'val_final_acc': val_phase.accs[-1]})
 
                 metrics = {'train_losses': np.array(train_phase.losses), 'metric': h.METRIC,
                            'train_accs': np.array(train_phase.accs),
@@ -153,16 +155,25 @@ def run_hcomb(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True):
                            'val_class_sens_spec': np.array(val_phase.class_sens_spec)}
                 utils.pickle_metrics(metrics, model_save_dir)
 
-                hcm.finish_epoch(ID, h, val_phase.accs[-1], val_fold-1, timer()-start)
-
                 if val_phase.accs[-1] > best_val_acc:
                     best_val_acc = val_phase.accs[-1]
                     epochs_without_improvement = 0
+                    best_epoch = e + 1
                 else:
                     epochs_without_improvement += 1
 
+                hcm.finish_epoch(ID, h, val_phase.accs[-1], val_fold - 1, best_epoch, timer() - start)
+
                 if INTERMEDIATE_PLOTS:
                     plot.plot_metrics(metrics, model_save_dir)
+
+                if GRADIENT_NORM_PLOT:
+                    # TODO: add gradient norm plot here
+                    pass
+
+                # early stopping
+                if epochs_without_improvement > h.PATIENCE_IN_EPOCHS and h.PATIENCE_IN_EPOCHS > 0:
+                    break
 
             val_class_accuracies_over_folds[val_fold-1] = val_phase.class_accs[-1]
             val_acc_over_folds[val_fold-1] = val_phase.accs[-1]

@@ -76,6 +76,8 @@ class H:
         # Metrics
         self.epochs_finished = [0] * len(self.ALL_FOLDS)
 
+        self.best_epochs = [0] * len(self.ALL_FOLDS)
+
         self.val_acc = [0] * len(self.ALL_FOLDS)
 
         self.val_acc_mean = -1
@@ -189,6 +191,7 @@ class HCombManager:
     def _make_comparable(self, hcomb, h):
         hcomb['finished'] = h['finished']
         hcomb['epochs_finished'] = h['epochs_finished']
+        hcomb['best_epochs'] = h['best_epochs']
         hcomb['METRIC'] = h['METRIC']
         hcomb['val_acc'] = h['val_acc']
         hcomb['val_acc_mean'] = h['val_acc_mean']
@@ -212,13 +215,14 @@ class HCombManager:
 
             self._write_hcomb_list(hcomb_list, handle)
 
-    def finish_epoch(self, id_, h, val_acc, fold_ind, elapsed_time):
+    def finish_epoch(self, id_, h, val_acc, fold_ind, best_epoch, elapsed_time):
         with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
             h = h.__dict__
 
             h['epochs_finished'][fold_ind] += 1
+            h['best_epochs'][fold_ind] = best_epoch
             h['elapsed_time'] = elapsed_time
             self._update_val_metrics(h, val_acc, fold_ind)
 
@@ -251,6 +255,7 @@ class HCombManager:
             if h in hcomb_list_copy:
                 index = hcomb_list_copy.index(h)
                 h['epochs_finished'] = list(map(add, h['epochs_finished'], hcomb_list[index]['epochs_finished']))
+                h['best_epochs'] = list(zip(hcomb_list[index]['best_epochs'], h['best_epochs']))
                 h['val_acc'] = list(map(add, h['val_acc'], hcomb_list[index]['val_acc']))
                 h['val_acc_mean'] = np.mean(h['val_acc'])
                 h['val_acc_std'] = np.std(h['val_acc'])

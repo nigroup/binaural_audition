@@ -147,12 +147,12 @@ class DataLoader:
     def _input_standardization_if_wanted(self, x, y):
         if self.input_standardization:
             mean, std = self._input_standardization_metrics()
-            return np.where(y != self.mask_val, (x - mean) / std, self.mask_val)
+            return np.where(y[:, :, 0, 0][:, :, np.newaxis] != self.mask_val, (x - mean) / std, self.mask_val)
         return x
 
     def _input_standardization_metrics(self):
         if self.input_standardization_metrics is None:
-            self._load_input_standardization_metrics()
+            self.input_standardization_metrics = self._load_input_standardization_metrics()
         return self.input_standardization_metrics
 
     def _load_input_standardization_metrics(self):
@@ -170,6 +170,7 @@ class DataLoader:
                 val_fold = self.fold_nbs[0]
             return (means[val_fold-1], stds[val_fold-1])
 
+    #TODO: RERUN
     def _create_input_standardization_metrics_pickle(self):
         def calc_mean_std(in_std_path):
             all_existing_files = glob.glob(in_std_path)
@@ -188,7 +189,7 @@ class DataLoader:
                 with np.load(file) as data:
                     x = data['x']
                     x = (x - mean) ** 2
-                    sum += np.sum(x, axis=1)
+                    sum_mean_sq += np.sum(x, axis=1)
             std = np.sqrt(sum_mean_sq / N)
             std = std[np.newaxis, :, :]
 
@@ -196,6 +197,8 @@ class DataLoader:
 
         in_std_path = self.pickle_path
         if self.mode == 'test':
+            # calculate from all training data here
+            in_std_path = in_std_path.replace('test', 'train')
             in_std_path = path.join(in_std_path, 'fold*', 'scene*', '*.npz')
 
 

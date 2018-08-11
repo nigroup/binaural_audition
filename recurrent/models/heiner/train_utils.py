@@ -4,6 +4,8 @@ from heiner.dataloader import DataLoader
 from keras.layers import CuDNNLSTM
 from keras import backend as K
 import numpy as np
+import glob
+import os
 
 
 def create_generator(dloader):
@@ -31,6 +33,19 @@ def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTE
     print('Number of batches per epoch (validation): ' + str(val_loader_len))
 
     return train_loader, val_loader
+
+def update_latest_model_ckp(model_ckp_last, model_save_dir, e, acc):
+    created_checkpoint = glob.glob(os.path.join(model_save_dir, 'model_ckp_epoch*.hdf5'))
+    if len(created_checkpoint) > 1:
+        raise ValueError('Just one latest Model checkpoint besides the best should exist. N:{} exist.'.format(
+            len(created_checkpoint)))
+    if len(created_checkpoint) == 1:
+        if os.path.exists(created_checkpoint[0]):
+            os.remove(created_checkpoint[0])
+        else:
+            raise ValueError('Model checkpoint found by glob but is not a file.')
+
+    model_ckp_last.on_epoch_end(e, logs={'val_final_acc': acc})
 
 
 class Phase:
@@ -82,10 +97,13 @@ class Phase:
 
     def _recurrent_dropout(self):
         def _drop_in_recurrent_kernel(rk):
+            print('Zeros in weight matrix before dropout: {}'.format(np.sum(rk == 0)))
             rk_s = rk.shape
             mask = np.random.binomial(1, 1-self.recurrent_dropout, (1, rk_s[0]))
-            mask = np.tile(mask, (rk_s[0], 4))
+            mask = np.tile(mask, (rk_s[0], 4)) * (1/(1-self.recurrent_dropout))
             rk = rk * mask
+            print('Zeros in weight matrix after dropout: {}'.format(np.sum(rk == 0)))
+            print('Weight matrix norm after dropout: {}'.format(np.linalg.norm(rk)))
             return rk, mask
 
 
@@ -107,7 +125,8 @@ class Phase:
             if type(layer) is CuDNNLSTM:
                 rk = K.get_value(layer.weights[1])
                 mask = original_weights_and_masks[i][1]
-                original_weights_updated = original_weights_and_masks[i][0] + (rk - original_weights_and_masks[i][0]) * mask
+                original_weights_updated = original_weights_and_masks[i][0] + (rk - original_weights_and_masks[i][0]) \
+                                           * np.divide(1, mask, where=mask!=0.)
                 K.set_value(layer.weights[1], original_weights_updated)
                 i += 1
 
