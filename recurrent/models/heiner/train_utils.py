@@ -97,13 +97,16 @@ class Phase:
 
     def _recurrent_dropout(self):
         def _drop_in_recurrent_kernel(rk):
-            print('Zeros in weight matrix before dropout: {}'.format(np.sum(rk == 0)))
+            # print('Zeros in weight matrix before dropout: {}'.format(np.sum(rk == 0)))
+
             rk_s = rk.shape
             mask = np.random.binomial(1, 1-self.recurrent_dropout, (1, rk_s[0]))
-            mask = np.tile(mask, (rk_s[0], 4)) * (1/(1-self.recurrent_dropout))
-            rk = rk * mask
-            print('Zeros in weight matrix after dropout: {}'.format(np.sum(rk == 0)))
-            print('Weight matrix norm after dropout: {}'.format(np.linalg.norm(rk)))
+            mask = np.tile(mask, (rk_s[0], 4))
+            rk = rk * mask * (1/(1-self.recurrent_dropout))
+
+            # print('Zeros in weight matrix after dropout: {}'.format(np.sum(rk == 0)))
+            # print('Weight matrix norm after dropout: {}'.format(np.linalg.norm(rk)))
+            
             return rk, mask
 
 
@@ -125,8 +128,8 @@ class Phase:
             if type(layer) is CuDNNLSTM:
                 rk = K.get_value(layer.weights[1])
                 mask = original_weights_and_masks[i][1]
-                original_weights_updated = original_weights_and_masks[i][0] + (rk - original_weights_and_masks[i][0]) \
-                                           * np.divide(1, mask, where=mask!=0.)
+                original_weights_updated = original_weights_and_masks[i][0] + (rk * (1-self.recurrent_dropout) - original_weights_and_masks[i][0]) \
+                                           * mask
                 K.set_value(layer.weights[1], original_weights_updated)
                 i += 1
 
