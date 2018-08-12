@@ -106,7 +106,7 @@ class Phase:
 
             # print('Zeros in weight matrix after dropout: {}'.format(np.sum(rk == 0)))
             # print('Weight matrix norm after dropout: {}'.format(np.linalg.norm(rk)))
-            
+
             return rk, mask
 
 
@@ -136,7 +136,6 @@ class Phase:
     def run(self):
         self.model.reset_states()
 
-        # training phase
         scene_instance_id_metrics_dict = dict()
 
         for iteration in range(1, self.dloader_len[self.e] + 1):
