@@ -11,16 +11,17 @@ import sys
 
 class UnbufferedLogAndPrint:
 
-   def __init__(self, logfile):
+   def __init__(self, logfile_path):
 
        self.stream = sys.stdout
-       self.te = open(logfile+'.txt', 'w')  # File where you need to keep the logs
+       self.te = logfile_path +'.txt'  # File where you need to keep the logs
 
    def write(self, data):
 
        self.stream.write(data)
        self.stream.flush()
-       self.te.write(data)    # Write the data of stdout here to a text file as well
+       with open(self.te, 'a') as handle:
+        handle.write(data)    # Write the data of stdout here to a text file as well
 
    def flush(self):
        # this flush method is needed for python 3 compatibility.
