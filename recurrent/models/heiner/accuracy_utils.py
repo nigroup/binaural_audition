@@ -141,14 +141,14 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
         raise ValueError('unknown mode. available: {}, wanted: {}'.format(available_modes, mode))
 
     if mode == 'train' or mode == 'val':
-        # weights = 1 / np.array([21, 10, 29, 21, 29, 21, 21, 10, 20, 20, 29, 21, 29, 29, 21, 21, 10,
-        #                         20, 21, 29, 20, 20, 29, 29, 21, 20, 29, 29, 20, 21, 21, 29, 10, 10,
-        #                         29, 21, 21, 29, 29, 29, 21, 21, 29, 10, 20, 29, 29, 20, 20, 20, 29,
-        #                         21, 20, 29, 29, 20, 21, 29, 29, 20, 21, 29, 20, 21, 21, 29, 20, 10,
-        #                         10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
-
-        # TODO: change it back then -> now just for scene 1
-        weights = np.ones(80)
+        weights = 1 / np.array([21, 10, 29, 21, 29, 21, 21, 10, 20, 20, 29, 21, 29, 29, 21, 21, 10,
+                                20, 21, 29, 20, 20, 29, 29, 21, 20, 29, 29, 20, 21, 21, 29, 10, 10,
+                                29, 21, 21, 29, 29, 29, 21, 21, 29, 10, 20, 29, 29, 20, 20, 20, 29,
+                                21, 20, 29, 29, 20, 21, 29, 29, 20, 21, 29, 20, 21, 21, 29, 20, 10,
+                                10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
+        weights = weights / np.sum(weights)
+        # # TODO: change it back then -> now just for scene 1
+        # weights = np.ones(80)
     else:
         weights = 1 / np.array([3,  3,  3,  60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50,
                                 55, 60, 50, 55, 60, 50, 55, 60, 60, 50, 55, 60, 50, 55, 60, 50, 55,
@@ -160,6 +160,7 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
                                 55, 60, 60, 60, 60, 60, 60, 60, 60, 50, 50, 50, 50, 55, 55, 55, 55,
                                 60, 60, 60, 60, 50, 50, 50, 50, 55, 55, 55, 55, 60, 60, 60, 60, 50,
                                 50, 50, 50, 55, 55, 55, 55, 55, 55, 55, 55, 60, 60, 60, 60])
+        weights = weights / np.sum(weights)
     weights = weights[:, np.newaxis]
 
     scene_number_class_accuracies *= weights
@@ -171,62 +172,26 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
 def calculate_accuracy_final(class_accuracies):
     return np.mean(class_accuracies)
 
+def test_val_accuracy():
+    n_scenes = 80
+    n_scene_instances_per_scene = 10
 
-class StatefulMetric(Layer):
+    n_batches = 10
 
-    def __init__(self, metric, output_threshold, mask_val, name, **kwargs):
-        super().__init__(name=name, **kwargs)
-        self.stateful = True
-        self.metric_value = K.variable(value=0, dtype='int32')
+    shape = (20, 100, 13)
+    output_threshold = 0.5
+    mask_val = -1
 
-        self.metric = metric
-        self.output_threshold = output_threshold
-        self.mask_val = mask_val
+    scene_instance_id_metrics_dict = dict()
+    for _ in range(n_batches):
+        y_pred_logits = np.random.choice([0, 1], shape)
+        y_true = np.abs(np.copy(y_pred_logits)-np.random.choice([0, 1], shape))
+        y_true_ids = np.random.choice(range(1, n_scenes+1), shape)
+        y_true_ids = y_true_ids * 1e6
+        y_true_ids = y_true_ids + np.random.choice(range(1, n_scene_instances_per_scene), shape)
+        y_true = np.stack([y_true, y_true_ids], axis=3)
+        calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict, y_pred_logits, y_true, output_threshold, mask_val)
 
-    def reset_states(self):
-        K.set_value(self.metric_value, 0)
+    return val_accuracy(scene_instance_id_metrics_dict)
 
-    def __call__(self, y_true, y_pred):
-        y_pred_labels = K.cast(K.greater_equal(y_pred, self.output_threshold), 'float32')
-        mask, count_unmasked = mask_from(y_true, self.mask_val)
-
-        if self.metric == 'TP':
-            true_positives = K.sum(y_pred_labels * y_true * mask)
-            metric_value = true_positives
-        elif self.metric == 'TN':
-            true_negatives = K.sum((y_pred_labels - 1) * (y_true - 1) * mask)
-            metric_value = true_negatives
-        elif self.metric == 'P':
-            count_positives = K.sum(y_true * mask)  # just the +1 labels are added, the rest is 0
-            count_positives = K.switch(count_positives, count_positives, 1.0)
-            metric_value = count_positives
-        elif self.metric == 'N':
-            count_positives = K.sum(y_true * mask)  # just the +1 labels are added, the rest is 0
-            count_positives = K.switch(count_positives, count_positives, 1.0)
-
-            count_negatives = count_unmasked - count_positives  # count_unmasked are all valid labels
-            count_negatives = K.switch(count_negatives, count_negatives, 1.0)
-            metric_value = count_negatives
-        else:
-            raise ValueError("metric has to be either 'TP', 'TN', 'P' or 'N'")
-
-        current_metric_value = self.metric_value * 1
-        metric_value = K.cast(metric_value, 'int32')
-        self.add_update(K.update_add(self.metric_value,
-                                     metric_value),
-                        inputs=[y_true, y_pred])
-        return current_metric_value + metric_value
-
-
-def stateful_metric_builder(metric, output_threshold, mask_val):
-    metric_names = {'TP': 'true_positives', 'TN': 'true_negatives', 'P': 'positives', 'N': 'negatives'}
-    if metric not in metric_names.keys():
-        raise ValueError("metric has to be either 'TP', 'TN', 'P' or 'N'")
-
-    metric_fn = StatefulMetric(metric, output_threshold, mask_val, metric_names[metric])
-    config = metrics.serialize(metric_fn)
-    config['config']['metric'] = metric
-    config['config']['output_threshold'] = output_threshold
-    config['config']['mask_val'] = mask_val
-    metric_fn = metrics.deserialize(config, custom_objects={'StatefulMetric': StatefulMetric})
-    return metric_fn
+print(test_val_accuracy())
