@@ -164,7 +164,7 @@ class HCombManager:
 
             hcomb_to_run = hcombs_to_run[0]
             hcombs_to_run = hcombs_to_run[1:]
-            pickle.dump(hcombs_to_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            self._write_hcomb_list(hcombs_to_run, handle)
             return hcomb_to_run
 
     def get_hcomb_id(self, h, overwrite_hcombs=True):
@@ -271,6 +271,8 @@ class HCombManager:
         return pickle.load(handle)
 
     def _write_hcomb_list(self, hcomb_list, handle):
+        handle.seek(0)
+        handle.truncate()
         pickle.dump(hcomb_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 class RandomSearch:
