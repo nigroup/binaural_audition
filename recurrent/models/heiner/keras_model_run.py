@@ -22,7 +22,7 @@ import heiner.use_tmux as use_tmux
 from tmuxprocess import TmuxProcess
 import datetime
 
-def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GRADIENT_NORM_PLOT):
+def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT):
     # LOGGING
     sys.stdout = utils.UnbufferedLogAndPrint(os.path.join(model_dir, 'logfile'))
 
@@ -105,7 +105,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GRADIENT_NORM_PLOT):
                                          verbose=1, monitor='val_final_acc', save_best_only=True)
         model_ckp_best.set_model(model)
 
-        args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str, h.RECURRENT_DROPOUT, h.METRIC]
+        args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str, GLOBAL_GRADIENT_NORM_PLOT, h.RECURRENT_DROPOUT, h.METRIC]
 
         # training phase
         train_phase = tr_utils.Phase('train', model, train_loader, *args)
@@ -132,6 +132,8 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GRADIENT_NORM_PLOT):
                        'val_class_accs': np.array(val_phase.class_accs),
                        'train_class_sens_spec': np.array(train_phase.class_sens_spec),
                        'val_class_sens_spec': np.array(val_phase.class_sens_spec)}
+            if GLOBAL_GRADIENT_NORM_PLOT:
+                metrics['global_gradient_norm'] = np.array(train_phase.global_gradient_norms)
             utils.pickle_metrics(metrics, model_save_dir)
 
             if val_phase.accs[-1] > best_val_acc:
@@ -146,9 +148,8 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GRADIENT_NORM_PLOT):
             if INTERMEDIATE_PLOTS:
                 plot.plot_metrics(metrics, model_save_dir)
 
-            if GRADIENT_NORM_PLOT:
-                # TODO: add gradient norm plot here
-                pass
+            if GLOBAL_GRADIENT_NORM_PLOT:
+                plot.plot_global_gradient_norm(np.array(train_phase.global_gradient_norms), model_save_dir)
 
             # early stopping
             if epochs_without_improvement > h.PATIENCE_IN_EPOCHS and h.PATIENCE_IN_EPOCHS > 0:
@@ -184,7 +185,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GRADIENT_NORM_PLOT):
     if INTERMEDIATE_PLOTS:
         plot.plot_metrics(metrics, model_dir)
 
-def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GRADIENT_NORM_PLOT=True):
+def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIENT_NORM_PLOT=True):
 
     hcm = hp.HCombManager(save_path)
 
@@ -210,7 +211,8 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GRADIENT_NORM
 
         if use_tmux.use_tmux:
 
-            p_hcomb = TmuxProcess(target=run_hcomb, args=(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GRADIENT_NORM_PLOT),
+            p_hcomb = TmuxProcess(target=run_hcomb, args=(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS,
+                                                          GLOBAL_GRADIENT_NORM_PLOT),
                                   name='gpu{}_run_hcomb_{}'.format(gpu, ID))
             print('Running hcomb_{} on GPU {}.'.format(ID, gpu))
             print('Start: {}'.format(datetime.datetime.now().isoformat()))
@@ -222,4 +224,4 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GRADIENT_NORM
             print('End: {}\n'.format(datetime.datetime.now().isoformat()))
 
         else:
-            run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GRADIENT_NORM_PLOT)
+            run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT)

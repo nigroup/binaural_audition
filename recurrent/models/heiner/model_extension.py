@@ -2,7 +2,7 @@ from keras import backend as K
 from keras.layers import Wrapper, CuDNNLSTM
 
 
-def _make_train_and_predict_function(model):
+def _make_train_and_predict_function(model, calc_global_gradient_norm):
     if not hasattr(model, 'train_function'):
         raise RuntimeError('You must compile your model before using it.')
     model._check_trainable_weights_consistency()
@@ -18,17 +18,28 @@ def _make_train_and_predict_function(model):
                     loss=model.total_loss)
             updates = model.updates + training_updates + model.metrics_updates
             # Gets loss and metrics. Updates weights at each call.
-            model.train_and_predict_function = K.function(inputs,
-                                                          # added model.outputs
-                                                          [model.total_loss] + model.metrics_tensors + model.outputs,
-                                                          updates=updates,
-                                                          name='train_function',
-                                                          **model._function_kwargs)
-
+            if not calc_global_gradient_norm:
+                model.train_and_predict_function = K.function(inputs,
+                                                              # added model.outputs
+                                                              [model.total_loss] + model.metrics_tensors + model.outputs + [K.constant(-1)],
+                                                              updates=updates,
+                                                              name='train_function',
+                                                              **model._function_kwargs)
+            else:
+                grads = K.gradients(model.total_loss, model.trainable_weights)
+                summed_squares = [K.sum(K.square(g)) for g in grads]
+                norm = K.sqrt(sum(summed_squares))
+                model.train_and_predict_function = K.function(inputs,
+                                                              # added model.outputs
+                                                              [model.total_loss] + model.metrics_tensors + model.outputs + [norm],
+                                                              updates=updates,
+                                                              name='train_function',
+                                                              **model._function_kwargs)
 
 def train_and_predict_on_batch(model, x, y,
                                sample_weight=None,
-                               class_weight=None):
+                               class_weight=None,
+                               calc_global_gradient_norm=False):
     """Runs a single gradient update on a single batch of data.
 
     # Arguments
@@ -55,6 +66,7 @@ def train_and_predict_on_batch(model, x, y,
             from this class during training.
             This can be useful to tell the model to "pay more attention" to
             samples from an under-represented class.
+        calc_gradient_norm: Optional boolean activating the calculation of gradient norm.
 
     # Returns
         Scalar training loss
@@ -62,6 +74,8 @@ def train_and_predict_on_batch(model, x, y,
         or list of scalars (if the model has multiple outputs
         and/or metrics). The attribute `model.metrics_names` will give you
         the display labels for the scalar outputs.
+        AND the outputs
+        AND the gradient norm if calc_gradient_norm == True
     """
 
     K.set_learning_phase(1)
@@ -74,7 +88,7 @@ def train_and_predict_on_batch(model, x, y,
         ins = x + y + sample_weights + [1.]
     else:
         ins = x + y + sample_weights
-    _make_train_and_predict_function(model)
+    _make_train_and_predict_function(model, calc_global_gradient_norm)
     outputs = model.train_and_predict_function(ins)
     if len(outputs) == 1:
         return outputs[0]

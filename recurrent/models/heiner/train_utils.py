@@ -51,7 +51,7 @@ def update_latest_model_ckp(model_ckp_last, model_save_dir, e, acc):
 class Phase:
 
     def __init__(self, train_or_val, model, dloader, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str,
-                 recurrent_dropout=0.,
+                 calc_global_gradient_norm, recurrent_dropout=0.,
                  metric='BAC',
                  ret=('final', 'per_class')):
 
@@ -79,6 +79,8 @@ class Phase:
 
         self.val_fold_str = val_fold_str
 
+        self.calc_global_gradient_norm = calc_global_gradient_norm
+
         self.metric = metric
         self.ret = ret
 
@@ -91,6 +93,8 @@ class Phase:
 
         self.class_sens_spec = []
 
+        self.global_gradient_norms = []
+
     @property
     def epoch_str(self):
         return 'epoch: {:{prec}} / {:{prec}}'.format(self.e + 1, self.EPOCHS, prec=len(str(self.EPOCHS)))
@@ -100,8 +104,8 @@ class Phase:
             # print('Zeros in weight matrix before dropout: {}'.format(np.sum(rk == 0)))
 
             rk_s = rk.shape
-            mask = np.random.binomial(1, 1-self.recurrent_dropout, (1, rk_s[0]))
-            mask = np.tile(mask, (rk_s[0], 4))
+            mask = np.random.binomial(1, 1-self.recurrent_dropout, (rk_s[0], 1))
+            mask = np.tile(mask, rk_s[0]*4)
             rk = rk * mask * (1/(1-self.recurrent_dropout))
 
             # print('Zeros in weight matrix after dropout: {}'.format(np.sum(rk == 0)))
@@ -154,7 +158,11 @@ class Phase:
                 original_weights_and_masks = None
                 if self.apply_recurrent_dropout:
                     original_weights_and_masks = self._recurrent_dropout()
-                loss, out = m_ext.train_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
+                loss, out, gradient_norm = m_ext.train_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0],
+                                                                            calc_global_gradient_norm=self.calc_global_gradient_norm)
+                if self.calc_global_gradient_norm:
+                    self.global_gradient_norms.append(gradient_norm)
+
                 if self.apply_recurrent_dropout:
                     self._load_original_weights_updated(original_weights_and_masks)
                     del original_weights_and_masks

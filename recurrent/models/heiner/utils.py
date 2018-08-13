@@ -161,4 +161,3 @@ def latest_training_state(model_save_dir):
     val_acc = float(latest_weights_path[val_acc_start:val_acc_start + 5])
 
     return latest_weights_path, epochs_finished, val_acc
-

@@ -4,7 +4,6 @@ import numpy as np
 
 from os import path
 
-
 def plot_metrics(metrics, save_dir):
     if 'val_class_accs_over_folds' in metrics.keys():
         _plot_acc_over_folds(metrics, save_dir)
@@ -30,7 +29,7 @@ def _plot_acc_over_folds(metrics, save_dir):
         else:
             metrics_acc[metric_name] = data
 
-    x = np.arange(0, len(metrics['val_class_accs_over_folds']), 1)
+    x = np.arange(1, len(metrics['val_class_accs_over_folds']) +1, 1)
     plt.figure(figsize=(15, 15))
 
     labels = ['alarm', 'baby', 'crash', 'dog', 'engine', 'femaleScreammaleScream', 'femaleSpeech', 'fire',
@@ -42,43 +41,43 @@ def _plot_acc_over_folds(metrics, save_dir):
     for metric_name, data in metrics_class_accs.items():
         if 'mean' not in metric_name and 'var' not in metric_name:
             for row in range(data.shape[1]):
-                plt.plot(x, data[:, row], label=labels[row], c=colors[row])
+                plt.plot(x, data[:, row], '.-', label=labels[row], c=colors[row])
         if 'mean' in metric_name:
             for row in range(data.shape[0]):
-                plt.plot((0, x[-1]), (data[row], data[row]), c=colors[row])
+                plt.plot((0, x[-1]), (data[row], data[row]), '.-', c=colors[row])
         if 'var' in metric_name:
             for row in range(data.shape[0]):
                 mean = metrics_class_accs['val_class_accs_mean_over_folds'][row]
-                plt.plot((0, x[-1]), (mean + np.sqrt(data[row]), mean + np.sqrt(data[row])), '--', c=colors[row])
-                plt.plot((0, x[-1]), (mean - np.sqrt(data[row]), mean - np.sqrt(data[row])), '--', c=colors[row])
+                plt.plot((0, x[-1]), (mean + np.sqrt(data[row]), mean + np.sqrt(data[row])), '.--', c=colors[row])
+                plt.plot((0, x[-1]), (mean - np.sqrt(data[row]), mean - np.sqrt(data[row])), '.--', c=colors[row])
 
     name = 'val_class_accs_over_folds'
     plt.legend(loc=1, ncol=2)
     plt.title(name)
-    plt.xticks(x+1)
+    plt.xticks(x)
     plt.xlabel('folds')
     plt.ylabel('accuracy')
     plt.savefig(path.join(save_dir, name) + '.pdf')
     plt.close()
 
-    x = np.arange(0, len(metrics['val_class_accs_over_folds']), 1)
+    x = np.arange(1, len(metrics['val_class_accs_over_folds']) + 1, 1)
     plt.figure(figsize=(15, 15))
 
     labels = ['weighted average']
     for metric_name, data in metrics_acc.items():
         if 'mean' not in metric_name and 'var' not in metric_name:
-            plt.plot(x, data, label=labels[0], c=colors[0])
+            plt.plot(x, data, '.-', label=labels[0], c=colors[0])
         if 'mean' in metric_name:
-            plt.plot((0, x[-1]), (data, data), c=colors[0])
+            plt.plot((0, x[-1]), (data, data), '.-', c=colors[0])
         if 'var' in metric_name:
             mean = metrics_acc['val_acc_mean_over_folds']
-            plt.plot((0, x[-1]), (mean + np.sqrt(data), mean + np.sqrt(data)), '--', c=colors[0])
-            plt.plot((0, x[-1]), (mean - np.sqrt(data), mean - np.sqrt(data)), '--', c=colors[0])
+            plt.plot((0, x[-1]), (mean + np.sqrt(data), mean + np.sqrt(data)), '.--', c=colors[0])
+            plt.plot((0, x[-1]), (mean - np.sqrt(data), mean - np.sqrt(data)), '.--', c=colors[0])
 
     name = 'val_acc_over_folds'
     plt.legend(loc=1, ncol=2)
     plt.title(name)
-    plt.xticks(x+1)
+    plt.xticks(x)
     plt.xlabel('folds')
     plt.ylabel('accuracy')
     plt.savefig(path.join(save_dir, name) + '.pdf')
@@ -86,7 +85,7 @@ def _plot_acc_over_folds(metrics, save_dir):
 
 
 def _plot_loss_and_acc(metric_name, data, save_dir, over_classes=False):
-    x = np.arange(0, len(data), 1)
+    x = np.arange(1, len(data) + 1, 1)
     plt.figure(figsize=(15, 15))
 
     if over_classes:
@@ -98,11 +97,11 @@ def _plot_loss_and_acc(metric_name, data, save_dir, over_classes=False):
         labels = ['weighted average'] if 'acc' in metric_name else [None]
 
     for row in range(data.shape[1]):
-        plt.plot(x, data[:, row], label=labels[row])
+        plt.plot(x, data[:, row], '.-', label=labels[row])
     if 'loss' not in metric_name:
         plt.legend(loc=1, ncol=2)
     plt.title(metric_name)
-    plt.xticks(x+1)
+    plt.xticks(x)
     if 'acc' in metric_name:
         plt.xlabel('epochs')
         plt.ylabel('accuracy')
@@ -160,6 +159,24 @@ def test_plot_sens_spec():
     data = np.random.rand(1, 80, 13, 2)
     _plot_sens_spec(metric_name, data, '/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/stage1/hcomb_0/val_fold3/')
 
+def plot_global_gradient_norm(global_gradient_norms, save_dir):
+    x = np.arange(1, len(global_gradient_norms)+1, 1)
+    plt.figure(figsize=(15, 15))
+
+    data = global_gradient_norms
+
+    plt.plot(x, data)
+    plt.xticks(x)
+    plt.xlabel('iterations')
+    plt.ylabel('global gradient norm')
+    plt.savefig(path.join(save_dir, 'global_gradient_norm') + '.pdf')
+    plt.close()
+
+def test_plot_global_gradient_norm():
+    global_gradient_norms = np.random.rand(20)
+    plot_global_gradient_norm(global_gradient_norms, '/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/stage1/hcomb_0/val_fold3')
+
+#test_plot_global_gradient_norm()
 # test_plot_sens_spec()
 
 # with open('/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/hcomb_0/val_fold1/metrics.pickle',
