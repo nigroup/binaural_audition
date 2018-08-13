@@ -105,7 +105,7 @@ if __name__ == "__main__":
                         dest="number_of_hcombs",
                         metavar="<number of hcombs>",
                         help="Number of hcombs which will be added to hcombs_to_run. "
-                             "Experiment will first run the old ones.")
+                             "Experiment will first run the new ones.")
     parser.add_argument('-r', '--reset_hcombs',
                         required=False,
                         type=bool,
