@@ -147,8 +147,6 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
                                 21, 20, 29, 29, 20, 21, 29, 29, 20, 21, 29, 20, 21, 21, 29, 20, 10,
                                 10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
         weights = weights / np.sum(weights)
-        # # TODO: change it back then -> now just for scene 1
-        # weights = np.ones(80)
     else:
         weights = 1 / np.array([3,  3,  3,  60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50,
                                 55, 60, 50, 55, 60, 50, 55, 60, 60, 50, 55, 60, 50, 55, 60, 50, 55,

@@ -126,7 +126,6 @@ class Phase:
         return original_weights_and_masks
 
     def _load_original_weights_updated(self, original_weights_and_masks):
-        # TODO: apply the update to dropped weights to the original weights and load them again
         i = 0
         for layer in self.model.layers:
             if type(layer) is CuDNNLSTM:

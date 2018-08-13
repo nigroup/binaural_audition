@@ -127,8 +127,6 @@ def _plot_sens_spec(metric_name, data, save_dir):
     cmap = plt.get_cmap('gnuplot2')
     colors = [cmap(val) for val in colors]
 
-    # TODO: somehow nothing shows up on the grid
-
     for n in range(n_plots):
         grid_plot, axes = plt.subplots(nrows=gridshape[0], ncols=gridshape[1],
                                        figsize=(5 * gridshape[0], 5 * gridshape[1]))

@@ -9,11 +9,10 @@ import portalocker
 
 
 class H:
-    # TODO: i changed it to be comparable to changbins value -> i think timelength has to be longer though
     def __init__(self, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=40, MAX_EPOCHS=50,
                  UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001,
                  RECURRENT_DROPOUT=0.25, INPUT_DROPOUT=0., LSTM_OUTPUT_DROPOUT=0.25, MLP_OUTPUT_DROPOUT=0.25,
-                 OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 2),
+                 OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 81),
                  PATIENCE_IN_EPOCHS=5,
                  ALL_FOLDS=range(1, 7), STAGE=1,
                  LABEL_MODE='blockbased',
@@ -31,7 +30,6 @@ class H:
 
         self.OUTPUT_THRESHOLD = OUTPUT_THRESHOLD
 
-        # TRAIN_SCENES = list(range(1, 81))
         self.TRAIN_SCENES = list(TRAIN_SCENES)
 
         self.ALL_FOLDS = list(ALL_FOLDS)
@@ -155,7 +153,6 @@ class HCombManager:
         if not path.exists(self.filepath_to_run):
             raise ValueError('Filepath "{}" should exist beforehand. '.format(self.filepath_to_run))
 
-        # TODO: has to be able to read and write
         with portalocker.Lock(self.filepath_to_run, mode='r+b', timeout=self.timeout) as handle:
             hcombs_to_run = pickle.load(handle)
 
@@ -279,62 +276,88 @@ class RandomSearch:
 
     def __init__(self, number_of_hcombs, available_gpus, metric_used='BAC', STAGE=1):
 
+        # TODO: find time-steps
+
         # random search stage
         self.STAGE = STAGE
 
+        # ARCH -> don't sample
+
         # LSTM
-        self.RANGE_NUMBER_OF_LSTM_LAYERS = (1, 5)  # 1 - 4
-        self.RANGE_LOG_NUMBER_OF_LSTM_CELLS = (np.log10(50), np.log10(1000))  # same for each layer
-
+        self.RANGE_NUMBER_OF_LSTM_LAYERS = [2, 3, 4]
         # MLP
-        self.RANGE_NUMBER_OF_MLP_LAYERS = (0, 4)  # 0 - 3
-        self.RANGE_LOG_NUMBER_OF_MLP_CELLS = (np.log10(50), np.log10(1000))  # same for each layer
+        self.RANGE_NUMBER_OF_MLP_LAYERS = [2]
 
-        # Initialization of Layers: Glorot
+        self.RANGE_LSTM_NEURON_RATIO = [0.75, 0.5, 0.25]
 
         # Regularization
-        self.RANGE_RECURRENT_DROPOUT = (0.25, 0.9)
-        self.RANGE_INPUT_DROPOUT = (0., 0.)
-        self.RANGE_LSTM_OUTPUT_DROPOUT = (0.25, 0.9)
-        self.RANGE_MLP_OUTPUT_DROPOUT = (0.25, 0.9)
+
+        # comb: (Input, Recurrent, Output)
+        self.RANGE_REGULARIZATION_COMBINATION = [
+            (0, 1, 1),
+            (0, 0.5, 1),
+            (0, 1, 0.5),
+            (0, 0, 1),
+            (0, 0, 0.5)
+        ]
+
+        # SAMPLE
+
+        # total no of neurons in network
+        self.TOTAL_NO_OF_NEURONS = [500, 1000, 1500, 2000, 2500, 3000]
+
+        self.GLOBAL_REGULARIZATION_STRENGTH = [0.25, 0.5, 0.75]
 
         #TODO: implement in model
-        # self.RANGE_L2 = None # TODO: check values
+        # self.RANGE_L2 = None
+        # TODO: check values
         # gradient clipping
 
+        # TODO: to determine
         self.PATIENCE_IN_EPOCHS = 5     # patience for early stopping
 
-        # Optimization
-        self.RANGE_LEARNING_RATE = (-4, -2)
 
         # Data characteristics TODO: find size limit -> check when sampling the product of both
-        # self.RANGE_TIME_STEPS = None
-        # self.RANGE_BATCH_SIZE = None
+        self.RANGE_TIME_STEPS = [1500]  # one frame = 10ms = 0.01 s
+        self.RANGE_BATCH_SIZE = [40]
 
         self.metric_used = metric_used
 
-    def _sample_hcomb(self):
-        units_per_layer_lstm = [int(10 ** np.random.uniform(*self.RANGE_LOG_NUMBER_OF_LSTM_CELLS))] * \
-                               np.random.randint(*self.RANGE_NUMBER_OF_LSTM_LAYERS)
+    def _sample_hcomb(self, number_of_lstm_layers, number_of_mlp_layers, lstm_neuron_ratio, regularization_combination):
 
-        units_per_layer_mlp = [int(10 ** np.random.uniform(*self.RANGE_LOG_NUMBER_OF_MLP_CELLS))] * \
-                              np.random.randint(*self.RANGE_NUMBER_OF_MLP_LAYERS)
+        # sampling
+        total_number_of_neurons = np.random.choice(self.TOTAL_NO_OF_NEURONS)
+        global_regularization_strength = np.random.choice(self.GLOBAL_REGULARIZATION_STRENGTH)
 
-        learning_rate = 10 ** np.random.uniform(*self.RANGE_LEARNING_RATE)
+        lstm_total_neurons = int(total_number_of_neurons*lstm_neuron_ratio)
+        mlp_total_neurons = total_number_of_neurons - lstm_total_neurons
+
+        units_per_layer_lstm = [int(lstm_total_neurons / number_of_lstm_layers)] * number_of_lstm_layers
+
+        units_per_layer_mlp = [int(mlp_total_neurons / number_of_mlp_layers)] * number_of_mlp_layers
 
         # DROPOUT
 
-        recurrent_dropout = np.random.uniform(*self.RANGE_RECURRENT_DROPOUT)
-        input_dropout = np.random.uniform(*self.RANGE_INPUT_DROPOUT)
-        lstm_output_dropout = np.random.uniform(*self.RANGE_LSTM_OUTPUT_DROPOUT)
-        mlp_output_dropout = np.random.uniform(*self.RANGE_MLP_OUTPUT_DROPOUT)
+        input_factor, recurrent_factor, output_factor = regularization_combination
+        input_dropout = input_factor * global_regularization_strength
+        recurrent_dropout = recurrent_factor * global_regularization_strength
+        lstm_output_dropout = output_factor * global_regularization_strength
+        mlp_output_dropout = output_factor * global_regularization_strength
 
         return H(UNITS_PER_LAYER_LSTM=units_per_layer_lstm, UNITS_PER_LAYER_MLP=units_per_layer_mlp,
-                 LEARNING_RATE=learning_rate, PATIENCE_IN_EPOCHS=self.PATIENCE_IN_EPOCHS,
+                 PATIENCE_IN_EPOCHS=self.PATIENCE_IN_EPOCHS,
+                 BATCH_SIZE=self.RANGE_BATCH_SIZE[0], TIME_STEPS=self.RANGE_TIME_STEPS[0],
+                 INPUT_DROPOUT=input_dropout, RECURRENT_DROPOUT=recurrent_dropout,
+                 LSTM_OUTPUT_DROPOUT=lstm_output_dropout, MLP_OUTPUT_DROPOUT=mlp_output_dropout,
                  METRIC=self.metric_used, STAGE=self.STAGE)
 
     def _get_hcombs_to_run(self, number_of_hcombs):
-        return list(set([self._sample_hcomb() for _ in range(0, number_of_hcombs)]))
+        from itertools import product
+        from random import shuffle
+        architecture_params_list = list(product(self.RANGE_NUMBER_OF_LSTM_LAYERS, self.RANGE_NUMBER_OF_MLP_LAYERS,
+                                           self.RANGE_LSTM_NEURON_RATIO, self.RANGE_REGULARIZATION_COMBINATION))
+        shuffle(architecture_params_list)
+        return list(set([self._sample_hcomb(*architecture_params) for architecture_params in architecture_params_list[:number_of_hcombs]]))
 
     def save_hcombs_to_run(self, save_path, number_of_hcombs):
 
