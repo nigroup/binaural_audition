@@ -12,11 +12,12 @@ class DataLoaderTester(DataLoader):
     def __init__(self, mode, filenames, batchsize=50, timesteps=4000, epochs=10,
                  buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
                  seed_by_epoch=True,
-                 priority_queue=True, use_every_timestep=False, val_stateful=False):
+                 priority_queue=True, use_every_timestep=False, val_stateful=False, input_standardization=False):
         super().__init__(mode, 'blockbased', 1, 1, batchsize=batchsize, timesteps=timesteps, epochs=epochs,
                          buffer=buffer, features=features, classes=classes, path_pattern=path_pattern,
                          seed_by_epoch=seed_by_epoch,
-                         priority_queue=priority_queue, use_every_timestep=use_every_timestep, val_stateful=val_stateful)
+                         priority_queue=priority_queue, use_every_timestep=use_every_timestep, val_stateful=val_stateful,
+                         input_standardization=input_standardization)
         self.filenames = filenames
         self._init_buffers()
         self.scene_instance_ids_dict = {filename: int(filename[filename.find('factor')+6:filename.find('.npz')])

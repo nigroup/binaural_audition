@@ -170,7 +170,6 @@ class DataLoader:
                 val_fold = self.fold_nbs[0]
             return (means[val_fold-1], stds[val_fold-1])
 
-    #TODO: RERUN
     def _create_input_standardization_metrics_pickle(self):
         def calc_mean_std(in_std_path):
             all_existing_files = glob.glob(in_std_path)
@@ -355,6 +354,7 @@ class DataLoader:
             self.row_lengths[row_ind] = (self.row_lengths[row_ind] // self.timesteps + 1) * self.timesteps
 
     def fill_buffer(self):
+        filled = True
         for row_ind in range(self.batchsize):
             stopping_condition = self.row_lengths[row_ind] >= self.buffer_size
             if not stopping_condition:
@@ -366,6 +366,9 @@ class DataLoader:
                     self._fill_in_new_sequence(row_ind)
                     if self.priority_queue:
                         heapq.heappush(self.heap, (self.row_lengths[row_ind] + self.row_leftover[row_ind, 1], row_ind))
+                if self.row_lengths[row_ind] < self.buffer_size:
+                    filled = False
+        return filled
 
     def _nothing_left(self):
         queue_empty = len(self.file_ind_queue) == 0
@@ -432,7 +435,11 @@ class DataLoader:
                         return None, None, None
                     else:
                         return None, None
-            self.fill_buffer()
+            while not self._nothing_left():
+                filled = self.fill_buffer()
+                if filled:
+                    break
+            # _ = self.fill_buffer()
             return self._next_batch_train_val_stateful()
 
     def _next_batch_test(self):
