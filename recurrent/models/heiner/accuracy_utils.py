@@ -193,5 +193,3 @@ def test_val_accuracy():
         calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict, y_pred_logits, y_true, output_threshold, mask_val)
 
     return val_accuracy(scene_instance_id_metrics_dict)
-
-print(test_val_accuracy())

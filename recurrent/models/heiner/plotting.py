@@ -13,7 +13,7 @@ def plot_metrics(metrics, save_dir):
             if type(data) is str:
                 continue
             if 'class' in metric_name:
-                if 'sens' or 'spec' in metric_name:
+                if 'sens' in metric_name or 'spec' in metric_name:
                     _plot_sens_spec(metric_name, data, save_dir)
                 else:
                     _plot_loss_and_acc(metric_name, data, save_dir, over_classes=True)
@@ -36,8 +36,8 @@ def _plot_acc_over_folds(metrics, save_dir):
     labels = ['alarm', 'baby', 'crash', 'dog', 'engine', 'femaleScreammaleScream', 'femaleSpeech', 'fire',
               'footsteps',
               'knock', 'maleSpeech', 'phone', 'piano']
-    colors = np.linspace(0, 1, len(labels))
-    cmap = plt.get_cmap('inferno')
+    colors = np.linspace(0.2, 0.8, len(labels))
+    cmap = plt.get_cmap('gnuplot2')
     colors = [cmap(val) for val in colors]
     for metric_name, data in metrics_class_accs.items():
         if 'mean' not in metric_name and 'var' not in metric_name:
@@ -124,30 +124,43 @@ def _plot_sens_spec(metric_name, data, save_dir):
     labels = ['alarm', 'baby', 'crash', 'dog', 'engine', 'femaleScreammaleScream', 'femaleSpeech', 'fire',
               'footsteps',
               'knock', 'maleSpeech', 'phone', 'piano']
-    colors = np.linspace(0, 1, len(labels))
-    cmap = plt.get_cmap('inferno')
+    colors = np.linspace(0.2, 0.8, len(labels))
+    cmap = plt.get_cmap('gnuplot2')
     colors = [cmap(val) for val in colors]
-
-    gs = gridspec.GridSpec(*gridshape)
 
     # TODO: somehow nothing shows up on the grid
 
     for n in range(n_plots):
-        fig = plt.figure(figsize=(5 * gridshape[0], 5 * gridshape[1]))
+        grid_plot, axes = plt.subplots(nrows=gridshape[0], ncols=gridshape[1],
+                                       figsize=(5 * gridshape[0], 5 * gridshape[1]))
+        # grid_plot.suptitle('Sensitivity and Specificity')
 
         for n_sp in range(gridsize):
-            ax = plt.subplot(gs[n_sp])
-
+            row = n_sp // gridshape[1]
+            col = n_sp % gridshape[1]
             scene_ind = n*gridsize + n_sp
             for label_ind in range(data.shape[2]):
-                ax.plot(x, data[:, scene_ind, label_ind, 0], label='sensitivity: ' + labels[label_ind],
+                axes[row][col].plot(x, data[:, scene_ind, label_ind, 0], '.-', label='sens.: ' + labels[label_ind],
                         c=colors[label_ind])
-                ax.plot(x, data[:, scene_ind, label_ind, 1], '--', label='specificity: ' + labels[label_ind],
+                axes[row][col].plot(x, data[:, scene_ind, label_ind, 1], '.--', label='spec.: ' + labels[label_ind],
                         c=colors[label_ind])
-            ax.set_title('Scene: ' + str(scene_ind+1))
+            axes[row][col].set_title('Scene: ' + str(scene_ind+1))
 
+        handles, plt_labels = axes[0, 0].get_legend_handles_labels()
+        plt.legend(handles, plt_labels, loc='upper center', bbox_to_anchor=(-1.35, -0.15), ncol=data.shape[2])
         plt.savefig(path.join(save_dir, metric_name) + '_' + str(n) + '.pdf')
         plt.close()
+
+def test_plot_sens_spec():
+    import pickle
+    with open('/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/stage1/hcomb_0/val_fold3/metrics.pickle', 'rb') as handle:
+        metrics = pickle.load(handle)
+    metric_name = 'val_class_sens_spec'
+    # data = metrics[metric_name]
+    data = np.random.rand(1, 80, 13, 2)
+    _plot_sens_spec(metric_name, data, '/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/stage1/hcomb_0/val_fold3/')
+
+# test_plot_sens_spec()
 
 # with open('/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/hcomb_0/val_fold1/metrics.pickle',
 #           'rb') as handle:

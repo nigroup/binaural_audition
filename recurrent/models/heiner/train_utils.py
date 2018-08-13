@@ -157,6 +157,7 @@ class Phase:
                 loss, out = m_ext.train_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
                 if self.apply_recurrent_dropout:
                     self._load_original_weights_updated(original_weights_and_masks)
+                    del original_weights_and_masks
             else:
                 loss, out = m_ext.test_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
             self.losses.append(loss)
