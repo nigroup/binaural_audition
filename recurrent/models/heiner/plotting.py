@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
@@ -10,6 +12,8 @@ def plot_metrics(metrics, save_dir):
     else:
         for metric_name, data in metrics.items():
             if type(data) is str:
+                continue
+            if 'gradient' in metric_name:
                 continue
             if 'class' in metric_name:
                 if 'sens' in metric_name or 'spec' in metric_name:
@@ -54,7 +58,7 @@ def _plot_acc_over_folds(metrics, save_dir):
     name = 'val_class_accs_over_folds'
     plt.legend(loc=1, ncol=2)
     plt.title(name)
-    plt.xticks(x)
+    # plt.xticks(x)
     plt.xlabel('folds')
     plt.ylabel('accuracy')
     plt.savefig(path.join(save_dir, name) + '.pdf')
@@ -77,7 +81,7 @@ def _plot_acc_over_folds(metrics, save_dir):
     name = 'val_acc_over_folds'
     plt.legend(loc=1, ncol=2)
     plt.title(name)
-    plt.xticks(x)
+    # plt.xticks(x)
     plt.xlabel('folds')
     plt.ylabel('accuracy')
     plt.savefig(path.join(save_dir, name) + '.pdf')
@@ -101,7 +105,7 @@ def _plot_loss_and_acc(metric_name, data, save_dir, over_classes=False):
     if 'loss' not in metric_name:
         plt.legend(loc=1, ncol=2)
     plt.title(metric_name)
-    plt.xticks(x)
+    # plt.xticks(x)
     if 'acc' in metric_name:
         plt.xlabel('epochs')
         plt.ylabel('accuracy')
@@ -164,9 +168,9 @@ def plot_global_gradient_norm(global_gradient_norms, save_dir):
     data = global_gradient_norms
 
     plt.plot(x, data)
-    plt.xticks(x)
+    # plt.xticks(x)
     plt.xlabel('iterations')
-    plt.ylabel('global gradient norm')
+    plt.ylabel('norm')
     plt.savefig(path.join(save_dir, 'global_gradient_norm') + '.pdf')
     plt.close()
 
@@ -176,10 +180,13 @@ def test_plot_global_gradient_norm():
 
 #test_plot_global_gradient_norm()
 # test_plot_sens_spec()
+if __name__ == '__main__':
+    import pickle
+    save_dir = '/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/stage1/hcomb_5/val_fold3'
+    with open(path.join(save_dir, 'metrics.pickle'), 'rb') as handle:
+        metrics = pickle.load(handle)
 
-# with open('/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/hcomb_0/val_fold1/metrics.pickle',
-#           'rb') as handle:
-#     metrics = pickle.load(handle)
+    plot_metrics(metrics, save_dir)
 #
 # for key, metric in metrics.items():
 #     metrics[key] = np.array(metric)
