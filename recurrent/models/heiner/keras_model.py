@@ -12,6 +12,15 @@ import datetime
 
 import sys
 import argparse
+import logging
+logger = logging.getLogger('exceptions_logger')
+# Configure logger to write to a file...
+
+def my_handler(type, value, tb):
+    logger.exception("Uncaught exception: {0}".format(str(value)))
+
+# Install exception handler
+sys.excepthook = my_handler
 
 def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, reset_hcombs):
     use_tmux.set_use_tmux(tmux)

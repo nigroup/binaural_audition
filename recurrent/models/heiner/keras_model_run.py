@@ -185,6 +185,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
     if INTERMEDIATE_PLOTS:
         plot.plot_metrics(metrics, model_dir)
 
+
 def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIENT_NORM_PLOT=True):
 
     hcm = hp.HCombManager(save_path)
