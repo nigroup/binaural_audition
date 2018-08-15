@@ -52,6 +52,8 @@ class DataLoader:
                 path_pattern = path.join(path_pattern, '*.npz')
                 self.filenames_all += glob.glob(path_pattern)
 
+        self.filenames_all = sorted(self.filenames_all)
+
         self.pickle_path_pattern = path.join(self.pickle_path_pattern, 'scene*')
 
         self.filenames = self.filenames_all.copy()
@@ -287,8 +289,9 @@ class DataLoader:
         self.row_lengths = np.zeros(self.batchsize, np.int32)
 
         # first value: file_index which is not fully included in row
-        # second value: which index to proceed loading the files -> file is already included up to this index - 1
+        # second value: what is missing from the file
         self.row_leftover = -np.ones((self.batchsize, 2), np.int32)
+        self.row_leftover[:, 1] = 0
 
         if self.priority_queue:
             self._build_actual_heap()
@@ -298,7 +301,8 @@ class DataLoader:
             self.file_ind_queue = self._create_deque()
         else:
             self.file_ind_queue = self._create_deque(shuffle=False)
-        self.row_leftover[:] = -1
+        self.row_leftover[:, 0] = -1
+        self.row_leftover[:, 1] = 0
         self._clear_buffers()
 
     def _clear_buffers(self):
@@ -322,21 +326,24 @@ class DataLoader:
 
     def _fill_in_divided_sequence(self, row_ind):
         act_file_ind = self.row_leftover[row_ind, 0]
-        start_in_sequence = self.row_leftover[row_ind, 1]
-        self.row_leftover[row_ind] = [-1, -1]
-        self._parse_sequence(row_ind, act_file_ind, start_in_sequence)
+        leftover = self.row_leftover[row_ind, 1]
+        self.row_leftover[row_ind] = [-1, 0]
+        self._parse_sequence(row_ind, act_file_ind, leftover)
 
-    def _parse_sequence(self, row_ind, act_file_ind, start_in_sequence):
+    def _parse_sequence(self, row_ind, act_file_ind, leftover):
         with np.load(self.filenames[act_file_ind]) as data:
             sequence = data['x']
             labels = data['y'] if self.instant_mode else data['y_block']
             sequence_length = sequence.shape[1]
             start = self.row_lengths[row_ind]
+            if leftover != 0:
+                start_in_sequence = sequence_length - leftover
+            else:
+                start_in_sequence = 0
             end = start + sequence_length - start_in_sequence
             if end > self.buffer_size:
+                self.row_leftover[row_ind] = [act_file_ind, end - self.buffer_size]
                 end = self.buffer_size
-                # important: set it again to zero after reading it
-                self.row_leftover[row_ind] = [act_file_ind, start_in_sequence + end - start]
             self.buffer_x[row_ind, start:end, :] = sequence[:, start_in_sequence:start_in_sequence+(end - start), :]
 
             if len(labels.shape) == 3:
@@ -443,6 +450,8 @@ class DataLoader:
                         return None, None
             while not self._nothing_left():
                 filled = self.fill_buffer()
+                if self.priority_queue:
+                    filled = self.heap[0][0] >= self.buffer_size
                 if filled:
                     break
             # _ = self.fill_buffer()
@@ -578,11 +587,13 @@ class DataLoader:
                                 heapq.heappush(heap, (sim_lengths[row] + left_lengths[row], row))
                         if sim_lengths[row] < self.buffer_size:
                             filled = False
+                if self.priority_queue:
+                    filled = heap[0][0] >= self.buffer_size
                 if filled:
                     length += self.buffer_size // self.timesteps
                     sim_lengths[:] = 0
                     if self.priority_queue:
-                        heap = [(length + left_lengths[i], i) for i, length in enumerate(sim_lengths)]
+                        heap = [(l + left_lengths[i], i) for i, l in enumerate(sim_lengths)]
                         heapq.heapify(heap)
             effective_length = length
             if self.use_every_timestep:

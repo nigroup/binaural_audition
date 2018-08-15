@@ -82,8 +82,12 @@ def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instanc
         false_negatives = positives - true_positives
         false_positives = negatives - true_negatives
 
-        scene_instance_id_metrics_dict[int(scene_instance_id)] = \
-            np.vstack((true_positives, false_negatives, true_negatives, false_positives))
+        new_metrics = np.vstack((true_positives, false_negatives, true_negatives, false_positives))
+
+        if int(scene_instance_id) in scene_instance_id_metrics_dict:
+            scene_instance_id_metrics_dict[int(scene_instance_id)] += new_metrics
+        else:
+            scene_instance_id_metrics_dict[int(scene_instance_id)] = new_metrics
 
 
 def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict, mode, metric='BAC'):
@@ -170,7 +174,8 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
 def calculate_accuracy_final(class_accuracies):
     return np.mean(class_accuracies)
 
-def test_val_accuracy():
+def test_val_accuracy(with_wrong_predictions=False):
+    np.random.seed(1)
     n_scenes = 80
     n_scene_instances_per_scene = 10
 
@@ -181,18 +186,57 @@ def test_val_accuracy():
     mask_val = -1
 
     scene_instance_id_metrics_dict = dict()
+    batches = []
     for _ in range(n_batches):
-        y_pred_logits = np.random.choice([0, 1], shape)
-        y_true = np.copy(y_pred_logits) * np.random.choice([1, -1], shape)
-        # y_true = np.abs(np.copy(y_pred_logits)-np.random.choice([0, 1], shape))
-        y_true_ids = np.random.choice(range(1, n_scenes+1), shape)
+        y_pred_logits = np.random.choice([0, 1], shape).astype(np.float32)
+        pad = np.random.choice([True, False], (shape[0], shape[1], 1))
+        pad = np.tile(pad, shape[2])
+        y_true = np.copy(y_pred_logits)
+        if with_wrong_predictions:
+            y_true = np.abs(y_true - np.random.choice([0, 1], shape).astype(np.float32))
+        y_true[pad] = mask_val
+        scene_ids = np.random.choice(range(1, n_scenes+1), (shape[0], shape[1], 1)).astype(np.float32)
+        scene_ids = np.tile(scene_ids, shape[2])
+        y_true_ids = scene_ids
         y_true_ids = y_true_ids * 1e6
-        y_true_ids = y_true_ids + np.random.choice(range(1, n_scene_instances_per_scene), shape)
+        scene_instance_ids = np.random.choice(range(1, n_scene_instances_per_scene), (shape[0], shape[1], 1)).astype(np.float32)
+        scene_instance_ids = np.tile(scene_instance_ids, shape[2])
+        y_true_ids = y_true_ids + scene_instance_ids
         y_true_ids[y_true == mask_val] = mask_val
         y_true = np.stack([y_true, y_true_ids], axis=3)
+        batches.append(y_true)
         calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict, y_pred_logits, y_true, output_threshold, mask_val)
 
+    batches = np.array(batches)
+    # print(batches[batches[:, :, :, 0, 1] == 80000008][:, :, 0])
     return val_accuracy(scene_instance_id_metrics_dict)
 
+def test_val_accuracy_real_data(with_wrong_predictions=False):
+    import heiner.train_utils as tr_utils
+    epochs = 2
+    train_loader, val_loader = tr_utils.create_dataloaders('blockbased', [1, 2, 4, 5, 6], list(range(11, 13)), 20,
+                                                           1000, epochs, 160, 13,
+                                                           [3], True, BUFFER=50)
+    dloader = train_loader
+    scene_instance_ids = []
+    gen = tr_utils.create_generator(dloader)
+
+    for e in range(epochs):
+        i = 0
+        for it in range(1, dloader.len()[e] + 1):
+            try:
+                i += 1
+                ret = next(gen)
+                if len(ret) == 2:
+                    b_x, b_y = ret
+                else:
+                    b_x, b_y, keep_states = ret
+                scene_instance_ids.append(b_y[:, :, 0, 1])
+            except:
+                print('epoch: {} failed at i: {}'.format(e, i))
+
+    scene_instance_ids = np.array(scene_instance_ids)
+
 if __name__ == '__main__':
-    print(test_val_accuracy())
+    # print(test_val_accuracy(with_wrong_predictions=True))
+    print(test_val_accuracy_real_data())
