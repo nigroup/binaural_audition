@@ -38,15 +38,24 @@ class DataLoader:
             self.path_pattern = path.join(self.path_pattern, 'fold'+str(fold_nbs))
         self.pickle_path_pattern = path.join(self.pickle_path_pattern, 'fold*')
 
+        self.filenames_all = []
+
         if not (type(scene_nbs) is list or type(scene_nbs) is int):
             raise TypeError('scene_nbs has to be a list of ints or -1')
         if scene_nbs == -1:
             self.path_pattern = path.join(self.path_pattern, 'scene*')
+            self.path_pattern = path.join(self.path_pattern, '*.npz')
+            self.filenames_all = glob.glob(self.path_pattern)
         else:
-            self.path_pattern = path.join(self.path_pattern, 'scene'+str(scene_nbs))
+            for scene_nb in scene_nbs:
+                path_pattern = path.join(self.path_pattern, 'scene'+str(scene_nb))
+                path_pattern = path.join(path_pattern, '*.npz')
+                self.filenames_all += glob.glob(path_pattern)
+
         self.pickle_path_pattern = path.join(self.pickle_path_pattern, 'scene*')
 
-        self.path_pattern = path.join(self.path_pattern, '*.npz')
+        self.filenames = self.filenames_all.copy()
+
         self.pickle_path_pattern = path.join(self.pickle_path_pattern, '*.npz')
 
         if not (label_mode == 'instant' or label_mode == 'blockbased'):
@@ -56,9 +65,6 @@ class DataLoader:
 
         if label_mode == 'blockbased':
             self.instant_mode = False
-
-        self.filenames_all = glob.glob(self.path_pattern)
-        self.filenames = self.filenames_all.copy()
 
         self.mask_val = mask_val
         self.val_stateful = val_stateful
