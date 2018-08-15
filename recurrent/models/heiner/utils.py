@@ -11,9 +11,9 @@ import sys
 
 class UnbufferedLogAndPrint:
 
-   def __init__(self, logfile_path):
+   def __init__(self, logfile_path, stream):
 
-       self.stream = sys.stdout
+       self.stream = stream
        self.te = logfile_path +'.txt'  # File where you need to keep the logs
 
    def write(self, data):
@@ -30,7 +30,7 @@ class UnbufferedLogAndPrint:
        pass
 
 
-def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
+def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/binaural/data/scenes2018/',
                      location='train', name='train_weights'):
     name += '_' + label_mode + '.npy'
     save_path = path.join(path_pattern, location, name)

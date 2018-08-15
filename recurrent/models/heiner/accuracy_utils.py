@@ -183,11 +183,16 @@ def test_val_accuracy():
     scene_instance_id_metrics_dict = dict()
     for _ in range(n_batches):
         y_pred_logits = np.random.choice([0, 1], shape)
-        y_true = np.abs(np.copy(y_pred_logits)-np.random.choice([0, 1], shape))
+        y_true = np.copy(y_pred_logits) * np.random.choice([1, -1], shape)
+        # y_true = np.abs(np.copy(y_pred_logits)-np.random.choice([0, 1], shape))
         y_true_ids = np.random.choice(range(1, n_scenes+1), shape)
         y_true_ids = y_true_ids * 1e6
         y_true_ids = y_true_ids + np.random.choice(range(1, n_scene_instances_per_scene), shape)
+        y_true_ids[y_true == mask_val] = mask_val
         y_true = np.stack([y_true, y_true_ids], axis=3)
         calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict, y_pred_logits, y_true, output_threshold, mask_val)
 
     return val_accuracy(scene_instance_id_metrics_dict)
+
+if __name__ == '__main__':
+    print(test_val_accuracy())

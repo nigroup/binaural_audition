@@ -24,7 +24,8 @@ import datetime
 
 def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT):
     # LOGGING
-    sys.stdout = utils.UnbufferedLogAndPrint(os.path.join(model_dir, 'logfile'))
+    sys.stdout = utils.UnbufferedLogAndPrint(os.path.join(model_dir, 'logfile'), sys.stdout)
+    sys.stderr = utils.UnbufferedLogAndPrint(os.path.join(model_dir, 'errorfile'), sys.stderr)
 
     ################################################# CROSS VALIDATION
     start = timer()

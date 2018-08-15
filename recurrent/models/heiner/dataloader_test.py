@@ -10,7 +10,7 @@ from collections import deque
 
 class DataLoaderTester(DataLoader):
     def __init__(self, mode, filenames, batchsize=50, timesteps=4000, epochs=10,
-                 buffer=10, features=160, classes=13, path_pattern='/mnt/raid/data/ni/twoears/scenes2018/',
+                 buffer=10, features=160, classes=13, path_pattern='/mnt/binaural/data/scenes2018/',
                  seed_by_epoch=True,
                  priority_queue=True, use_every_timestep=False, val_stateful=False, input_standardization=False):
         super().__init__(mode, 'blockbased', 1, 1, batchsize=batchsize, timesteps=timesteps, epochs=epochs,

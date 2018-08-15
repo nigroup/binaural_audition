@@ -9,7 +9,7 @@ import portalocker
 
 
 class H:
-    def __init__(self, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=40, MAX_EPOCHS=50,
+    def __init__(self, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=64, MAX_EPOCHS=50,
                  UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001,
                  RECURRENT_DROPOUT=0.25, INPUT_DROPOUT=0., LSTM_OUTPUT_DROPOUT=0.25, MLP_OUTPUT_DROPOUT=0.25,
                  OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 81),
@@ -274,7 +274,7 @@ class HCombManager:
 
 class RandomSearch:
 
-    def __init__(self, number_of_hcombs, available_gpus, metric_used='BAC', STAGE=1):
+    def __init__(self, number_of_hcombs, available_gpus, metric_used='BAC', STAGE=1, time_steps=1000):
 
         # TODO: find time-steps
 
@@ -318,8 +318,14 @@ class RandomSearch:
 
 
         # Data characteristics TODO: find size limit -> check when sampling the product of both
-        self.RANGE_TIME_STEPS = [1500]  # one frame = 10ms = 0.01 s
-        self.RANGE_BATCH_SIZE = [40]
+        self.RANGE_TIME_STEPS = [1000, 500, 50]  # one frame = 10ms = 0.01 s
+        if time_steps in self.RANGE_TIME_STEPS:
+            self.TIME_STEPS = time_steps
+        else:
+            print('Given time_steps: {} not in range of expected {}. Using {} nevertheless.'
+                  .format(time_steps, self.RANGE_TIME_STEPS, time_steps))
+            self.TIME_STEPS = time_steps
+        self.RANGE_BATCH_SIZE = [32]
 
         self.metric_used = metric_used
 
@@ -346,7 +352,7 @@ class RandomSearch:
 
         return H(UNITS_PER_LAYER_LSTM=units_per_layer_lstm, UNITS_PER_LAYER_MLP=units_per_layer_mlp,
                  PATIENCE_IN_EPOCHS=self.PATIENCE_IN_EPOCHS,
-                 BATCH_SIZE=self.RANGE_BATCH_SIZE[0], TIME_STEPS=self.RANGE_TIME_STEPS[0],
+                 BATCH_SIZE=self.RANGE_BATCH_SIZE[0], TIME_STEPS=self.TIME_STEPS,
                  INPUT_DROPOUT=input_dropout, RECURRENT_DROPOUT=recurrent_dropout,
                  LSTM_OUTPUT_DROPOUT=lstm_output_dropout, MLP_OUTPUT_DROPOUT=mlp_output_dropout,
                  METRIC=self.metric_used, STAGE=self.STAGE)

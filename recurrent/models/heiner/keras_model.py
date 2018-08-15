@@ -22,12 +22,12 @@ def my_handler(type, value, tb):
 # Install exception handler
 sys.excepthook = my_handler
 
-def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, reset_hcombs):
+def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, reset_hcombs, time_steps):
     use_tmux.set_use_tmux(tmux)
 
     ################################################# RANDOM SEARCH SETUP
 
-    rs = hp.RandomSearch(number_of_hcombs, available_gpus, metric_used=metric_used, STAGE=STAGE)
+    rs = hp.RandomSearch(number_of_hcombs, available_gpus, metric_used=metric_used, STAGE=STAGE, time_steps=time_steps)
 
     ################################################# MODEL LOG AND CHECKPOINT SETUP DEPENDENT ON HYPERPARAMETERS
 
@@ -122,5 +122,12 @@ if __name__ == "__main__":
                         dest="reset_hcombs",
                         metavar="<reset hcombs>",
                         help="resets hcomb if not finished otherwise would resume. default: False (resume)")
+    parser.add_argument('-t', '--time_steps',
+                        required=False,
+                        type=int,
+                        default=1000,
+                        dest="time_steps",
+                        metavar="<time steps>",
+                        help="number of time steps for sequences.")
     args = parser.parse_args()
     run_experiment(**vars(args))
