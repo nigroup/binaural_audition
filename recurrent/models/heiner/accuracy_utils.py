@@ -213,29 +213,37 @@ def test_val_accuracy(with_wrong_predictions=False):
 
 def test_val_accuracy_real_data(with_wrong_predictions=False):
     import heiner.train_utils as tr_utils
-    epochs = 2
+    epochs = 1
+    output_threshold = 0.5
+    mask_val = -1
     train_loader, val_loader = tr_utils.create_dataloaders('blockbased', [1, 2, 4, 5, 6], list(range(11, 13)), 20,
                                                            1000, epochs, 160, 13,
                                                            [3], True, BUFFER=50)
     dloader = train_loader
-    scene_instance_ids = []
     gen = tr_utils.create_generator(dloader)
 
-    for e in range(epochs):
-        i = 0
-        for it in range(1, dloader.len()[e] + 1):
-            try:
-                i += 1
-                ret = next(gen)
-                if len(ret) == 2:
-                    b_x, b_y = ret
-                else:
-                    b_x, b_y, keep_states = ret
-                scene_instance_ids.append(b_y[:, :, 0, 1])
-            except:
-                print('epoch: {} failed at i: {}'.format(e, i))
+    scene_instance_id_metrics_dict = dict()
 
-    scene_instance_ids = np.array(scene_instance_ids)
+    for e in range(epochs):
+        for it in range(1, dloader.len() + 1):
+            ret = next(gen)
+            if len(ret) == 2:
+                b_x, b_y = ret
+            else:
+                b_x, b_y, keep_states = ret
+            np.random.seed(it)
+            p_y_shape = b_y.shape[:-1]
+            if with_wrong_predictions:
+                pad = np.random.choice([True, False], (p_y_shape[0], p_y_shape[1], 1))
+                pad = np.tile(pad, p_y_shape[2])
+                p_y = np.random.choice([0, 1], p_y_shape)
+                p_y[pad] = mask_val
+            else:
+                p_y = np.copy(b_y[:, :, :, 0])
+            calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
+                                                                           p_y, b_y, output_threshold,
+                                                                           mask_val)
+    return None
 
 if __name__ == '__main__':
     # print(test_val_accuracy(with_wrong_predictions=True))
