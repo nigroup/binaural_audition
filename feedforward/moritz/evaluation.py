@@ -1,0 +1,1 @@
+# apply a saved model that was trained on the full training set with the earlystopping (optimnal w.r.t. average across three or even better all six validation folds)
