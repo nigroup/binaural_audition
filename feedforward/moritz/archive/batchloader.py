@@ -4,11 +4,6 @@ import time
 import random
 import copy
 
-
-# TODO: implement loader
-# mode=train => nan to 1, mode=valid_test => nan to -1 (=filter) -- check with test data definition
-
-
 # meta parameters
 SCENEINSTANCE_BUFSIZE_DEF = 2000 # one scene instance has between 3,000 and 20,000 frames, avg < 4,000 frames
                                  # => avg host mem required per buffered scene instance: (160+13) * 4,000 * 4 Byte < 2.8 MB
@@ -203,20 +198,14 @@ class SingleProcBatchLoader(BaseBatchLoader):
                          dtype_features, dtype_labels, dtype_batchsizes)
 
         self.sceneinstances_number_max = sceneinstances_number_max
-        self.reset()
-
-
-    # allow same object to iterate multiple times by calling reset() before any run
-    # TODO check whether something is missing here to iterate again (check attributes from parent class)
-    def reset(self):
         self.sceneinstances_buffer_features = []
         self.sceneinstances_buffer_labels = []
         self.sceneinstances_buffer_position = []
         self.batch_index = 0
 
         # shuffle scene instances (not applicable vor validation/testing)
-        self.filenames_remaining = copy.copy(self.filenames)
-        if self.mode == 'train':
+        self.filenames_remaining = copy.copy(filenames)
+        if mode == 'train':
             seed = True
             if (seed):
                 random.seed(9876)  # for DEBUG purposes only
@@ -225,14 +214,8 @@ class SingleProcBatchLoader(BaseBatchLoader):
             random.shuffle(self.filenames_remaining)
 
         self.lastbatch_done = False
-        pass
-
-    def __len__(self):
-        # calculate length based on folds => total timesteps
-        pass
 
     def __iter__(self):
-        self.reset()
         return self
 
     def __next__(self):

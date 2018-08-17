@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+import socket
 import time
 import numpy as np
 from keras.optimizers import Adam
@@ -8,10 +9,12 @@ from keras.optimizers import Adam
 import heiner.utils as heiner_utils
 
 from weightnorm import AdamWithWeightnorm
+from training_generator import fit_generator_modified
 from constants import DIM_FEATURES, DIM_LABELS, MASK_VALUE, NUMBER_SCENES_TRAIN_VALID
 from model import temporal_convolutional_network
 from batchloader import SingleProcBatchLoader
 from hyperparams import obtain_residuallayers_refining_historysize
+from training_callback import TrainingCallback
 from misc import save_h5, load_h5, printerror
 
 
@@ -22,6 +25,7 @@ parser = argparse.ArgumentParser()
 # general
 parser.add_argument('--path', type=str, default='playground',
                         help='folder where to store the files (log, model, hyperparams, results incl. duration)')
+parser.add_argument('--gpuid', type=int, default=0, help='ID (cf. nvidia-smi) of the GPU to use')
 parser.add_argument('--hyper', type=str, default='manual',
                         help='random_coarse or random_fine: hyperparam samples (overrides manually specified params!); '+
                              'a filename yields loading the params from there (also overrides cmd line args!); manual: via command line')
@@ -39,7 +43,7 @@ parser.add_argument('--historylength', type=int, default=500,
                              'recommendation: ensure that batchlength is significantly larger (i.e., at least threefold) '+
                              'for efficiency')
 
-parser.add_argument('--noweightnorm', action='store_true', default=False,
+parser.add_argument('--weightnorm', action='store_true', default=False,
                         help='disables the weight norm version of the Adam optimizer, i.e., falls back to regular Adam')
 parser.add_argument('--learningrate', type=float, default=0.001,
                         help='initial learning rate of the Adam optimizer')
@@ -63,8 +67,8 @@ parser.add_argument('--instantlabels', action='store_true', default=False,
                         help='if chosen: instant labels; otherwise: block-interprete labels')
 parser.add_argument('--sceneinstancebufsize', type=int, default=2000,
                         help='number of buffered scene instances from which to draw the time series of a batch')
-parser.add_argument('--batchbufmultiproc', action='store_true', default=False,
-                        help='multiprocessing mode of the batchcreator')
+# parser.add_argument('--batchbufmultiproc', action='store_true', default=False,
+#                         help='multiprocessing mode of the batchcreator')
 parser.add_argument('--batchbufsize', type=int, default=10,
                         help='number of buffered batches (only relevant in batch buffer\'s multiprocessing mode)')
 
@@ -75,6 +79,8 @@ args = parser.parse_args()
 # (HYPER)PARAMS
 
 params = vars(args)
+
+params['server'] = socket.gethostname()
 
 params['dim_features'] = DIM_FEATURES
 params['dim_labels'] = DIM_LABELS
@@ -88,11 +94,13 @@ initial_output = obtain_residuallayers_refining_historysize(params)
 
 name_short = 'n{}_dr{}_ks{}_hl{}_lr{}'.format(params['featuremaps'], params['dropoutrate'], params['kernelsize'],
                                               params['historylength'], params['learningrate'])
-name_long = name_short + '_nwn{}_bs{}_bl{}_me{}_es{}_gc{}_sb{}_bbm{}_bbs{}'.format(params['noweightnorm'],
+name_long = name_short + '_wn{}_bs{}_bl{}_me{}_es{}_gc{}_sb{}_bbs{}'.format(params['weightnorm'],
             params['batchsize'], params['batchlength'], params['maxepochs'], params['earlystop'], params['gradientclip'],
-            params['sceneinstancebufsize'], params['batchbufmultiproc'], params['batchbufsize'])
+            params['sceneinstancebufsize'], params['batchbufsize'])
 name_short += '_vf{}'.format(args.validfold)
 name_long += '_vf{}'.format(args.validfold)
+
+# TODO check that all params from above are contained in the name
 
 if 'pre' in params['path']:
     params['name'] = name_long
@@ -105,7 +113,6 @@ elif 'final' in params['path']:
 else:
     params['name'] = name_long
 
-
 # redirecting stdout and stderr
 outfile = os.path.join(params['path'], params['name']+'_output')
 errfile = os.path.join(params['path'], params['name']+'_errors')
@@ -114,9 +121,15 @@ sys.stderr = heiner_utils.UnbufferedLogAndPrint(errfile, sys.stderr)
 
 print('STARTING')
 
+# specification of a GPU
+print('choosing gpu id {} on {}'.format(params['gpuid'], params['server']))
+os.environ["CUDA_VISIBLE_DEVICES"] = str(params['gpuid']) # cf. nvidia-smi ids
+
+# TODO: add output of nvidia-smi
+
 print(initial_output)
 
-# TODO: make gradient clipping optional / use it only in the first passes
+# TODO: make gradient clipping optional / use it only in the first passes => https://stackoverflow.com/questions/50033312/how-to-monitor-gradient-vanish-and-explosion-in-keras-with-tensorboard
 
 # TODO ensure that parametrization has not been run (based on name) => skip and write warning to warnings file
 
@@ -145,10 +158,10 @@ print('BUILDING MODEL')
 
 model = temporal_convolutional_network(params)
 
-if params['noweightnorm']:
-    optimizer = Adam
-else:
+if params['weightnorm']:
     optimizer = AdamWithWeightnorm
+else:
+    optimizer = Adam
 
 train_folds = [1, 2, 3, 4, 5, 6]
 if params['validfold'] != -1:
@@ -167,7 +180,7 @@ loss_weights = heiner_utils.get_loss_weights(fold_nbs=train_folds, scene_nbs=par
                                              label_mode='instant' if params['instantlabels'] else 'blockbased')
 masked_weighted_crossentropy_loss = heiner_utils.my_loss_builder(MASK_VALUE, loss_weights)
 # TODO: potential performance optimization: in label mode reduce to weighted crossentropy loss, i.e., without masked
-print('constructed loss (masking labels with value {}) using loss weights'.format(MASK_VALUE, loss_weights))
+print('constructed loss (masking labels with value {}) using loss weights {}'.format(MASK_VALUE, loss_weights))
 
 model.summary()
 model.compile(optimizer(lr=params['learningrate'], clipnorm=params['gradientclip']),
@@ -180,9 +193,10 @@ save_h5(params, params['name'] + '_params.h5')
 print()
 print('STARTING TRAINING')
 
-atleastoneepochdone = False
+batchloader_validation = None # first fix training data loader
 
-duration = [] # list for the epoch's runtimes
+atleastoneepochdone = False
+trainingcallback = TrainingCallback(batchloader_validation, params, metrics_train=False, loss_valid_separate=False, verbose=1)
 
 for epoch in range(params['maxepochs']):
 
@@ -191,21 +205,28 @@ for epoch in range(params['maxepochs']):
     print('==> training epoch {} out of maximal {}'.format(epoch+1, params['maxepochs']))
 
     # TODO: check data types within batch loader with real ones (features 32bit, labels?, weights? etc.)
-    batchloader = SingleProcBatchLoader(batchsize=params['batchsize'], blocklength=params['batchlength'],
+    # TODO change into BatchLoader (no mp/sp versions required anymore)
+    batchloader_training = SingleProcBatchLoader(mode='training', batchsize=params['batchsize'], batchlength=params['batchlength'],
                                         filenames=list_of_scene_instance_files, instant_labels=params['instantlabels'],
                                         sceneinstances_number_max=params['sceneinstancebufsize'],
                                         mean_features_training=mean_features_training,
                                         std_features_training=std_features_training)
+
+    fit_generator_modified(model, generator=batchloader_training, epochs=params['maxepochs'], callbacks=[trainingcallback],
+                           max_queue_size=params['batchbufsize'], workers=1, use_multiprocessing=True)
+
+
+
+    # TODO check classifier value 0.5 vs optimized (valid set/cv or via simply train set because is training?)
 
     print('initialized batchloader')
 
     # TODO: log all output to _output.txt file as well
     # TODO: write important warnings (e.g. not early stopped/combination already run etc) to separate _warnings.txt
 
-
     # TODO: calculate metrics for each scene tp/tn/fp/fn => sens/spec => bac/weighted bac
     # TODO: use Heiner's stateful metrics which should allow same 30s-wise batch creation for training as well as validation and testing
-    # TODO: also monitor gradient norm => requried to set (optinally) gradient clipping
+    # TODO: also monitor gradient norm => requried to set (optinally) gradient clipping => https://stackoverflow.com/questions/50033312/how-to-monitor-gradient-vanish-and-explosion-in-keras-with-tensorboard
     results = {'sens': np.array([[0.5, 0.9, 0.8], [0.8, 0.75, 0.85]])}
     # TODO: save all metrics(separate train/valid): per class and per scene, scene-averaged per class; class-averaged; both: bac and nSrc-weighted as well as nSrc-weighted [see also baseline]: SN/SP as well as BAC and BAC2
 
