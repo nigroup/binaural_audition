@@ -3,6 +3,60 @@ import multiprocessing as mp
 import time
 import random
 import copy
+from heiner.dataloader import DataLoader as HeinerDataloader
+from myutils import printerror
+from constants import *
+
+class BatchLoader(HeinerDataloader):
+    # TODO: merge constructor parameters from old implementation
+    def __init__(self, params, mode, fold_nbs, scene_nbs, batchsize, timesteps,
+                 path_pattern='/mnt/binaural/data/scenes2018/', seed=None, input_standardization=True):
+        # initializing super constructor with values from above or with their defaults (copied from super init)
+        label_mode = 'instant' if params['instantlabels'] else 'blockbased'
+        super().__init__(mode=mode, label_mode=label_mode,
+                       fold_nbs=fold_nbs, scene_nbs=scene_nbs, batchsize=batchsize, timesteps=timesteps, epochs=10,
+                       buffer=10, features=DIM_FEATURES, classes=DIM_LABELS, path_pattern=path_pattern,
+                       seed=seed, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=MASK_VALUE,
+                       val_stateful=False, k_scenes_to_subsample=-1,
+                       input_standardization=input_standardization)
+
+        self.length = self._get_length_by_loading_or_calculating()
+        print('created batchloader with mode {} using {} labels '.format(mode, label_mode))
+
+        # (re)initialize state of the batch loader
+        self.seed_changes = 0 # ignored if seed is None
+        self.reset(reinit=False)
+
+    def reset(self, reinit=True):
+        # set new seed
+        if self.seed is not None:
+            self.seed_changes += 1
+            random.seed(self.seed * self.seed_changes) # to have new seed per epoch (also for validation set)
+
+        textre = 're' if reinit > 0 else ''
+        print('batchloader (mode {}) was {}initialized'.format(self.mode, textre))
+        pass
+
+    def __iter__(self):
+        pass
+
+    def __next__(self):
+        print('DEBUG: batchloader is sending next element')
+        pass
+
+    def __len__(self): # required for the generators in generator_extension generally and also the progress bar
+        return self.batches_per_epoch
+
+    def _get_length_by_loading_or_calculating(self):
+        # TODO fill content
+        print('naive version 1: missing')
+
+        print('better (final) version 2: missing')
+
+        print('validation of version 2: missing')
+
+        printerror('DOH: specifying dummy value 3 as batchloader size')
+        self.batches_per_epoch = 3
 
 
 # TODO: implement loader

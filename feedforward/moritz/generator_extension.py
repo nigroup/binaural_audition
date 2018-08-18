@@ -1,4 +1,9 @@
-# this file is based on keras original keras/engine/training_generator.py
+# this file extends the generators on keras original keras/engine/training_generator.py as follows
+# 1) fit and predict are combined into one generator
+# 2) evaluate and predict are combined into one generator
+# 3) both generators calculate the (sceneinstance-based) metrics after each batch
+#    and save it for final processing using a callback
+# 4) the fit_predict_generator_with_metrics
 
 """Part of the training engine related to Python generators of array data.
 """
@@ -18,29 +23,26 @@ from keras.utils.generic_utils import to_list
 from keras.utils.generic_utils import unpack_singleton
 from keras import callbacks as cbks
 
+from heiner.model_extension import train_and_predict_on_batch as heiner_train_and_predict_on_batch
+from heiner.model_extension import test_and_predict_on_batch as heiner_test_and_predict_on_batch
+from heiner.accuracy_utils import calculate_class_accuracies_metrics_per_scene_instance_in_batch as heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch
 
-# fit_generator was modified:
-# TODO:
-# 1.) removed dependence on iterator length (not necessary)
-#       => changed from fixed number of steps to indefinite looping that is stopped when iterator is done
-#       => removed verbose and progress bar since it needed a length which we do not want to specify a priori
-#       => removed progbarlogger
-#       => set callbacks steps to -1 (should not be used)
-#       => removed validation part (wo do that separately)
-def fit_generator_modified(model,
+
+def fit_and_predict_generator_with_sceneinst_metrics(model,
                   generator,
+                  params,
+                  steps_per_epoch=None,
                   epochs=1,
+                  verbose=1,
                   callbacks=None,
                   validation_data=None,
                   validation_steps=None,
-                  class_weight=None,
                   max_queue_size=10,
                   workers=1,
                   use_multiprocessing=False,
                   shuffle=True,
                   initial_epoch=0):
     """See docstring for `Model.fit_generator`."""
-    verbose = 0 # modification
     wait_time = 0.01  # in seconds
     epoch = initial_epoch
 
@@ -56,6 +58,15 @@ def fit_generator_modified(model,
                         ' and multiple workers may duplicate your data.'
                         ' Please consider using the`keras.utils.Sequence'
                         ' class.'))
+    if steps_per_epoch is None:
+        if is_sequence:
+            steps_per_epoch = len(generator)
+        else:
+            raise ValueError('`steps_per_epoch=None` is only valid for a'
+                             ' generator based on the '
+                             '`keras.utils.Sequence`'
+                             ' class. Please specify `steps_per_epoch` '
+                             'or use the `keras.utils.Sequence` class.')
 
     # python 2 has 'next', 3 has '__next__'
     # avoid any explicit version checks
@@ -77,6 +88,11 @@ def fit_generator_modified(model,
     model.history = cbks.History()
     _callbacks = [cbks.BaseLogger(
         stateful_metrics=model.stateful_metric_names)]
+    if verbose:
+        _callbacks.append(
+            cbks.ProgbarLogger(
+                count_mode='steps',
+                stateful_metrics=model.stateful_metric_names))
     _callbacks += (callbacks or []) + [model.history]
     callbacks = cbks.CallbackList(_callbacks)
 
@@ -88,7 +104,7 @@ def fit_generator_modified(model,
     callbacks.set_model(callback_model)
     callbacks.set_params({
         'epochs': epochs,
-        'steps': -1, # modification
+        'steps': steps_per_epoch,
         'verbose': verbose,
         'do_validation': do_validation,
         'metrics': callback_metrics,
@@ -99,6 +115,46 @@ def fit_generator_modified(model,
     val_enqueuer = None
 
     try:
+        if do_validation:
+            if val_gen and workers > 0:
+                # Create an Enqueuer that can be reused
+                val_data = validation_data
+                if isinstance(val_data, Sequence):
+                    val_enqueuer = OrderedEnqueuer(val_data,
+                                                   use_multiprocessing=use_multiprocessing)
+                    validation_steps = len(val_data)
+                else:
+                    val_enqueuer = GeneratorEnqueuer(val_data,
+                                                     use_multiprocessing=use_multiprocessing)
+                val_enqueuer.start(workers=workers,
+                                   max_queue_size=max_queue_size)
+                val_enqueuer_gen = val_enqueuer.get()
+            elif val_gen:
+                val_data = validation_data
+                if isinstance(val_data, Sequence):
+                    val_enqueuer_gen = iter(val_data)
+                else:
+                    val_enqueuer_gen = val_data
+            else:
+                # Prepare data for validation
+                if len(validation_data) == 2:
+                    val_x, val_y = validation_data
+                    val_sample_weight = None
+                elif len(validation_data) == 3:
+                    val_x, val_y, val_sample_weight = validation_data
+                else:
+                    raise ValueError('`validation_data` should be a tuple '
+                                     '`(val_x, val_y, val_sample_weight)` '
+                                     'or `(val_x, val_y)`. Found: ' +
+                                     str(validation_data))
+                val_x, val_y, val_sample_weights = model._standardize_user_data(
+                    val_x, val_y, val_sample_weight)
+                val_data = val_x + val_y + val_sample_weights
+                if model.uses_learning_phase and not isinstance(K.learning_phase(),
+                                                                int):
+                    val_data += [0.]
+                for cbk in callbacks:
+                    cbk.validation_data = val_data
 
         if workers > 0:
             if is_sequence:
@@ -123,16 +179,14 @@ def fit_generator_modified(model,
         # Construct epoch logs.
         epoch_logs = {}
         while epoch < epochs:
+            model.scene_instance_id_metrics_dict_train = {}
             for m in model.stateful_metric_functions:
                 m.reset_states()
             callbacks.on_epoch_begin(epoch)
             steps_done = 0
             batch_index = 0
-            while True:
-                generator_output = next(output_generator, None)
-                if generator_output is None:
-                    print('we detected that the data generator has reached the end => stopping the iteration')
-                    break
+            while steps_done < steps_per_epoch:
+                generator_output = next(output_generator)
 
                 if not hasattr(generator_output, '__len__'):
                     raise ValueError('Output of generator should be '
@@ -166,13 +220,16 @@ def fit_generator_modified(model,
                 batch_logs['size'] = batch_size
                 callbacks.on_batch_begin(batch_index, batch_logs)
 
-                outs = model.train_on_batch(x, y,
-                                            sample_weight=sample_weight,
-                                            class_weight=class_weight)
+                # remark on label shape: last (fourth) dimension contains in 0 the true labels, in 1 the corresponding sceneinstid (millioncode)
+                batch_loss, y_pred_probs, gradient_norm = heiner_train_and_predict_on_batch(model, x, y[:, :, :, 0],
+                                                         calc_global_gradient_norm=params['calcgradientnorm'])
 
-                outs = to_list(outs)
-                for l, o in zip(out_labels, outs):
-                    batch_logs[l] = o
+                batch_logs['loss'] = batch_loss
+
+                model.gradient_norm = gradient_norm
+
+                heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch(model.scene_instance_id_metrics_dict_train,
+                                                              y_pred_probs, y, params['outputthreshold'], params['mask_value'])
 
                 callbacks.on_batch_end(batch_index, batch_logs)
 
@@ -180,6 +237,24 @@ def fit_generator_modified(model,
                 steps_done += 1
 
                 # Epoch finished.
+                if steps_done >= steps_per_epoch and do_validation:
+                    if val_gen:
+                        val_outs = model.evaluate_and_predict_generator(
+                            val_enqueuer_gen,
+                            validation_steps,
+                            workers=0)
+                    else:
+                        # No need for try/except because
+                        # data has already been validated.
+                        val_outs = model.evaluate(
+                            val_x, val_y,
+                            batch_size=batch_size,
+                            sample_weight=val_sample_weights,
+                            verbose=0)
+                    val_outs = to_list(val_outs)
+                    # Same labels assumed.
+                    for l, o in zip(out_labels, val_outs):
+                        epoch_logs['val_' + l] = o
 
                 if callback_model.stop_training:
                     break
@@ -200,15 +275,13 @@ def fit_generator_modified(model,
     callbacks.on_train_end()
     return model.history
 
-# evaluate_generator was modified:
-# TODO:
-# 1.) removed dependence on iterator length (not necessary)
-#       => changed from fixed number of steps to indefinite looping that is stopped when iterator is done
-#       => removed verbose and progress bar since it needed a length which we do not want to specify a priori
-def evaluate_generator_modified(model, generator,
+
+def evaluate_and_predict_generator_with_sceneinst_metrics(model, generator, params,
+                       steps=None,
                        max_queue_size=10,
                        workers=1,
-                       use_multiprocessing=False):
+                       use_multiprocessing=False,
+                       verbose=0):
     """See docstring for `Model.evaluate_generator`."""
     model._make_test_function()
 
@@ -233,6 +306,14 @@ def evaluate_generator_modified(model, generator,
                         ' and multiple workers may duplicate your data.'
                         ' Please consider using the`keras.utils.Sequence'
                         ' class.'))
+    if steps is None:
+        if is_sequence:
+            steps = len(generator)
+        else:
+            raise ValueError('`steps=None` is only valid for a generator'
+                             ' based on the `keras.utils.Sequence` class.'
+                             ' Please specify `steps` or use the'
+                             ' `keras.utils.Sequence` class.')
     enqueuer = None
 
     try:
@@ -254,8 +335,13 @@ def evaluate_generator_modified(model, generator,
             else:
                 output_generator = generator
 
-        while True:
-            generator_output = next(output_generator, None)
+        if verbose == 1:
+            progbar = Progbar(target=steps)
+
+        model.scene_instance_id_metrics_dict_eval = {}
+        losses = []
+        while steps_done < steps:
+            generator_output = next(output_generator)
             if not hasattr(generator_output, '__len__'):
                 raise ValueError('Output of generator should be a tuple '
                                  '(x, y, sample_weight) '
@@ -271,9 +357,17 @@ def evaluate_generator_modified(model, generator,
                                  '(x, y, sample_weight) '
                                  'or (x, y). Found: ' +
                                  str(generator_output))
-            outs = model.test_on_batch(x, y, sample_weight=sample_weight)
-            outs = to_list(outs)
-            outs_per_batch.append(outs)
+
+            # remark on label shape: last (fourth) dimension contains in 0 the true labels, in 1 the corresponding sceneinstid (millioncode)
+            batch_loss, y_pred_probs = heiner_test_and_predict_on_batch.test_and_predict_on_batch(model, x, y[:, :, :, 0])
+
+            losses.append(batch_loss)
+
+            heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch(
+                model.scene_instance_id_metrics_dict_eval,
+                y_pred_probs, y, params['outputthreshold'], params['mask_value'])
+
+
 
             if x is None or len(x) == 0:
                 # Handle data tensors support when no input given
@@ -291,136 +385,11 @@ def evaluate_generator_modified(model, generator,
                                  'at least one item.')
             steps_done += 1
             batch_sizes.append(batch_size)
+            if verbose == 1:
+                progbar.update(steps_done)
 
     finally:
         if enqueuer is not None:
             enqueuer.stop()
 
-    averages = []
-    for i in range(len(outs)):
-        if i not in stateful_metric_indices:
-            averages.append(np.average([out[i] for out in outs_per_batch],
-                                       weights=batch_sizes))
-        else:
-            averages.append(np.float64(outs_per_batch[-1][i]))
-    return unpack_singleton(averages)
-
-
-
-# predict_generator was modified:
-# TODO: 1.) added true label output (since we do not want to iterate multiple times)
-# 2.) removed dependence on iterator length (not necessary)
-#       => changed from fixed number of steps to indefinite looping that is stopped when iterator is done
-#       => removed verbose and progress bar since it needed a length which we do not want to specify a priori
-def predict_generator_modified(model, generator,
-                      max_queue_size=10,
-                      workers=1,
-                      use_multiprocessing=False):
-    """See docstring for `Model.predict_generator`."""
-    model._make_predict_function()
-
-    steps_done = 0
-    wait_time = 0.01
-    all_outs = []
-    all_ytruths = []
-    all_sceneinstids = []
-    is_sequence = isinstance(generator, Sequence)
-    if not is_sequence and use_multiprocessing and workers > 1:
-        warnings.warn(
-            UserWarning('Using a generator with `use_multiprocessing=True`'
-                        ' and multiple workers may duplicate your data.'
-                        ' Please consider using the`keras.utils.Sequence'
-                        ' class.'))
-    enqueuer = None
-
-    try:
-        if workers > 0:
-            if is_sequence:
-                enqueuer = OrderedEnqueuer(
-                    generator,
-                    use_multiprocessing=use_multiprocessing)
-            else:
-                enqueuer = GeneratorEnqueuer(
-                    generator,
-                    use_multiprocessing=use_multiprocessing,
-                    wait_time=wait_time)
-            enqueuer.start(workers=workers, max_queue_size=max_queue_size)
-            output_generator = enqueuer.get()
-        else:
-            if is_sequence:
-                output_generator = iter(generator)
-            else:
-                output_generator = generator
-
-        steps_done = 0
-        while True:
-            generator_output = next(output_generator, None)
-            if generator_output is None:
-                print('we detected that the data generator has reached the end => stopping the iteration')
-                break
-            # custom generator: scene instance ids
-            x, ytruths, sceneinstids = generator_output
-
-                # if isinstance(generator_output, tuple):
-                # Compatibility with the generators
-                # used for training.
-                # if len(generator_output) == 2:
-                #     x, y_truth = generator_output
-                # elif len(generator_output) == 3:
-                #     x, y_truth, sample_weights = generator_output
-                # elif len(generator_output) == 4:
-                # else:
-                #     raise ValueError('Output of generator should be '
-                #                      'a tuple `(x, y, sample_weight)` '
-                #                      'or `(x, y)`. Found: ' +
-                #                      str(generator_output))
-            # else:
-                # Assumes a generator that only
-                # yields inputs (not targets and sample weights).
-                # x = generator_output
-
-            outs = model.predict_on_batch(x)
-            outs = to_list(outs)
-
-            # TODO: check the following
-            ytruths = to_list(ytruths)
-            sceneinstids = to_list(sceneinstids)
-
-            if not all_outs:
-                for out in outs:
-                    all_outs.append([])
-
-            for i, out in enumerate(outs):
-                all_outs[i].append(out)
-
-            if not all_ytruths:
-                for ytruth in ytruths:
-                    all_ytruths.append([])
-
-            for i, ytruth in enumerate(ytruths):
-                all_ytruths[i].append(ytruth)
-
-            if not all_sceneinstids:
-                for sceneinstid in sceneinstids:
-                    all_sceneinstids.append([])
-
-            for i, sceneinstid in enumerate(sceneinstids):
-                all_sceneinstids[i].append(sceneinstid)
-
-            steps_done += 1
-
-    finally:
-        if enqueuer is not None:
-            enqueuer.stop()
-
-    if len(all_outs) == 1:
-        if steps_done == 1:
-            return all_outs[0][0]
-        else:
-            return np.concatenate(all_outs[0])
-    if steps_done == 1:
-        return [out[0] for out in all_outs]
-    else:
-        return [np.concatenate(out) for out in all_outs], \
-               [np.concatenate(ytruth) for ytruth in all_ytruths], \
-               [np.concatenate(sceneinstid) for sceneinstid in all_sceneinstids],
+    return np.average(losses) # for test phase: simply use the model.scene_instance_id_metrics_dict_test after execution

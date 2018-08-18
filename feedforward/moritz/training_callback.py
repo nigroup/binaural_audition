@@ -1,19 +1,37 @@
+import numpy as np
 from time import time
 from keras.callbacks import Callback
-from training_generator import predict_generator_modified, evaluate_generator_modified
+from myutils import calculate_metrics, plotresults, save_h5, load_h5, printerror
 
-class TrainingCallback(Callback):
-    def __init__(self, batchloader_validation, params, metrics_train=False, loss_valid_separate=False, verbose=1):
-        self.batchloader_validation = batchloader_validation
-        self.params = params
-        self.metrics_train = metrics_train
-        self.loss_valid_separate = loss_valid_separate
-        self.verbose = verbose
+class MetricsCallback(Callback):
+    def __init__(self, params):
+        self.myparams = params # self.params is reserved by parent class
 
-        self.runtime_save = [] # save the runtimes of each epoch
-        self.loss_train_save = []
-        self.loss_train_batches_save = []
-        self.loss_valid_separate_save = []
+        # lists that will be increased in each epoch (batch) and merged into results dict
+        self.runtime = []
+        self.loss_train_per_batch = []
+
+        self.metrics_train = {'wbac': [],
+                              'wbac_per_class': [],
+                              'bac_per_class_scene': [],
+                              'sens_spec_per_class': [],
+                              'wbac2': [],
+                              'wbac2_per_class': []}
+
+        if self.myparams['validfold'] != -1:
+            self.metrics_valid = {'wbac': [],
+                                  'wbac_per_class': [],
+                                  'bac_per_class_scene': [],
+                                  'sens_spec_per_class': [],
+                                  'wbac2': [],
+                                  'wbac2_per_class': []}
+
+        # gradient norm statistics lists
+        if self.myparams['calcgradientnorm']:
+            self.gradient_norm_max = []
+            self.gradient_norm_avg = []
+            self.gradient_norm_max_per_batch = []
+            self.gradient_norm_avg_per_batch = []
 
     def on_epoch_begin(self, epoch, logs={}):
         # start epoch time measurement
@@ -23,7 +41,12 @@ class TrainingCallback(Callback):
         self.epoch = epoch
 
         # initialize batch loss saving
-        self.loss_train_batches_save.append([])
+        self.loss_train_per_batch.append([])
+
+        # initialize saving for gradient norm statistics
+        if self.myparams['calcgradientnorm']:
+            self.gradient_norm_max_per_batch.append([])
+            self.gradient_norm_avg_per_batch.append([])
 
     def on_batch_begin(self, batch, logs=None):
         # start batch time measurement
@@ -35,58 +58,74 @@ class TrainingCallback(Callback):
         runtime_batch = time() - self.starttime_batch
 
         # get loss
-        self.loss_train_batches_save[-1].append(logs.get('loss'))
+        self.loss_train_per_batch[-1].append(logs.get('loss'))
 
-        # output
-        if self.verbose:
-            print('batch {} yielded loss {:.2} [epoch {}]'.format(batch + 1, self.loss_train_batches_save[-1][-1],
-                                                                  runtime_batch, self.epoch))
+        # extract and compute gradient norm statistics
+        if self.myparams['calcgradientnorm']:
+            self.gradient_norm_per_batch_max[-1].append(np.max(self.model.gradient_norm_per_batch))
+            self.gradient_norm_per_batch_avg[-1].append(np.mean(self.model.gradient_norm_per_batch))
 
     def on_epoch_end(self, epoch, logs={}):
         # measure the epoch time
-        self.runtime_save.append(time() - self.starttime_epoch)
+        self.runtime.append(time() - self.starttime_epoch)
 
-        # get loss
-        self.loss_train_save.append(logs.get('loss'))
+        # calculate and extract training metrics
+        metrics_training = calculate_metrics(self.model.scene_instance_id_metrics_dict_train)
+        for metric, value in self.metrics_train.items():
+            self.metrics_train[metric].append(value)
 
-        print('==> DONE WITH EPOCH {}/{}: yielded loss {:.2} in {:.2} seconds'.format(epoch+1, self.params['maxepochs'],
-                                                                                      self.loss_train_save[-1],
-                                                                                      self.runtime_save[-1]))
-        print()
+        if self.myparams['validfold'] != -1:
+            # calculate and extract validation metrics
+            metrics_validation = calculate_metrics(self.model.scene_instance_id_metrics_dict_eval)
+            for metric, value in self.metrics_valid.items():
+                self.metrics_valid[metric].append(value)
 
-        # predict using the validation set
-        self.batchloader_validation.reset()
-        y_pred_probs, y_truth, scene_instance_ids = predict_generator_modified(self.model,
-                                                                    generator=self.batchloader_validation,
-                                                                    max_queue_size=self.params['batchbufsize'],
-                                                                    workers=1, use_multiprocessing=True)
+            # save validation wbac in order to use it as monitor in original earlystopping and modelcheckpoint callbacks
+            logs['val_wbac'] = metrics_validation['wbac']
 
-        # compute metrics for the validation set [including _manual_ weighted cross entropy loss]
-        # TODO implement via Heiner / transferrable to test evaluation (i.e., function wrapper)
-        #allmetrics = metrics(y_truth, y_pred_probs, scene_instance_ids)
+        # get gradient norm statistics per epoch
+        if self.myparams['calcgradientnorm']:
+            self.gradient_norm_max.append(np.array(self.gradient_norm_max_per_batch).max())
+            self.gradient_norm_avg.append(np.array(self.gradient_norm_avg_per_batch).mean())
+            gradstring = ', gradient norm max {} (avg {})'.format(self.gradient_norm_max[-1],
+                                                                    self.gradient_norm_avg[-1])
+
+        if self.myparams['validfold'] != -1:
+            print('epoch {} ended with training wbac {:.2f}'.format(metrics_training['wbac']))
+        else:
+            print('epoch {} ended with validation wbac {:.2f} (training wbac {:.2f})'.
+                  format(epoch + 1, metrics_validation['wbac'], metrics_training['wbac'])
+                  +gradstring)
+
+        # collect results
+        self.results = {}
+        self.results['train_loss'] = logs['loss'] # epoch-based loss (created outside)
+        self.results['train_loss_batch'] = np.array(self.loss_train_per_batch) # batch-based loss
+        # collect training metrics
+        for metric, value in self.metrics_train.items():
+            self.results['train_'+metric] = np.array(self.metrics_train[metric])
+        # collect validation metrics
+        if self.myparams['validfold'] != -1:
+            self.results['val_loss'] = logs['val_loss']  # epoch-based loss (created outside)
+            for metric, value in self.metrics_valid.items():
+                self.results['val_'+metric] = np.array(self.metrics_validation[metric])
+        # runtime
+        self.result['runtime'] = np.array(self.runtime)
+        # gradient norm statistics
+        if self.myparams['calcgradientnorm']:
+            self.results['gradientnorm_max_per_batch'] = self.gradient_norm_max_per_batch
+            self.results['gradientnorm_max'] = self.gradient_norm_max
+            self.results['gradientnorm_avg_per_batch'] = self.gradient_norm_avg_per_batch
+            self.results['gradientnorm_avg'] = self.gradient_norm_avg
+
+        # save results
+        save_h5(self.results, self.params['name'] + '_results.h5')
+
+        # plot results
+        plotresults(self.results, self.params)
 
 
-        # optionally predict and compute metrics for the training set [including manual weighted cross entropy loss]
-        # [note the loss during fit_generator consists of the forwardpass loss that is changed by the backward pass
-        #  already; additionally the loss is higher at the beginning of an epoch and smaller lateron
-        #  => an indepenedent evalutation based on the training set seems very useful and not use the training output]
-        if self.metrics_train:
-            # TODO: implement
-            pass
-
-        # optionally compute the loss _automatically_ via evaluate [to verify that _manual_ version is correct]
-        if self.loss_valid_separate:
-            loss_valid_sep_cur = self.model.evaluate_generator(generator=self.batchloader_validation,
-                                                               max_queue_size=self.params['batchbufsize'],
-                                                               workers=1, use_multiprocessing=True, verbose=1)
-            self.loss_valid_separate_save.append(loss_valid_sep_cur)
-
-        # TODO: implement early stopping and (best) model saving + best epoch no.
-        #if bestmodel
-
-
-
-# time measurements (merged into PerEpochRunner)
+# time measurements (merged into MetricsCallback)
 # class Timing(Callback):
 #     def __init__(self):
 #         self.duration = []

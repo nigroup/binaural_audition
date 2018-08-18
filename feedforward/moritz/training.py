@@ -5,18 +5,20 @@ import socket
 import time
 import numpy as np
 from keras.optimizers import Adam
+from keras.callbacks import EarlyStopping, ModelCheckpoint, TerminateOnNaN
 
 import heiner.utils as heiner_utils
 
 from weightnorm import AdamWithWeightnorm
-from training_generator import fit_generator_modified
-from constants import DIM_FEATURES, DIM_LABELS, MASK_VALUE, NUMBER_SCENES_TRAIN_VALID
+from generator_extension import fit_and_predict_generator_with_sceneinst_metrics
+from constants import *
 from model import temporal_convolutional_network
-from batchloader import SingleProcBatchLoader
+from batchloader import BatchLoader
 from hyperparams import obtain_residuallayers_refining_historysize
-from training_callback import TrainingCallback
-from misc import save_h5, load_h5, printerror
+from training_callback import MetricsCallback
+from myutils import save_h5, load_h5, printerror, plotresults, printresults
 
+totaltime_start = time.time()
 
 # COMMAND LINE ARGUMENTS
 
@@ -42,6 +44,8 @@ parser.add_argument('--historylength', type=int, default=500,
                              '(filtersize-1) * 2^(resblocks - 1) + 1 => the no of resblocks is determined via this formula. '+
                              'recommendation: ensure that batchlength is significantly larger (i.e., at least threefold) '+
                              'for efficiency')
+parser.add_argument('--outputthreshold', type=float, default=0.5,
+                        help='threshold for hard classification (above: classify as 1, below classify as 0)')
 
 parser.add_argument('--weightnorm', action='store_true', default=False,
                         help='disables the weight norm version of the Adam optimizer, i.e., falls back to regular Adam')
@@ -56,10 +60,12 @@ parser.add_argument('--maxepochs', type=int, default=2,
                         help='maximal number of epochs (typically stopped early before reaching this value)')
 parser.add_argument('--earlystop', type=int, default=5,
                         help='early stop patience, i.e., number of number of non-improving epochs; -1 => no early stopping')
-parser.add_argument('--validfold', type=int, default=-1,
+parser.add_argument('--validfold', type=int, default=3,
                         help='number of validation fold (1, ..., 6); -1 => use all 6 for training [latter incompatible with earlystopping]')
 parser.add_argument('--gradientclip', type=float, default=1.0,
                         help='maximal number of epochs (typically stopped early before reaching this value)')
+parser.add_argument('--calcgradientnorm', action='store_true', default=False,
+                        help='enables calculation of the gradient norm that is saved per batch and per epoch')
 
 parser.add_argument('--firstsceneonly', action='store_true', default=False,
                         help='if chosen: only the first scene is used for training/validation, otherwise all (80)')
@@ -84,6 +90,7 @@ params['server'] = socket.gethostname()
 
 params['dim_features'] = DIM_FEATURES
 params['dim_labels'] = DIM_LABELS
+params['mask_value'] = MASK_VALUE
 
 # TODO: hyperparam sampling (will override specified param values)
 # TODO: hyperparam loading from file (will override all specified param values)
@@ -163,20 +170,22 @@ if params['weightnorm']:
 else:
     optimizer = Adam
 
-train_folds = [1, 2, 3, 4, 5, 6]
+trainfolds = [1, 2, 3, 4, 5, 6]
 if params['validfold'] != -1:
-    if params['validfold'] in train_folds:
-        train_folds.remove(params['validfold'])
+    if params['validfold'] in trainfolds:
+        trainfolds.remove(params['validfold'])
     else:
         raise ValueError('the validation fold needs to be one of the six possible folds')
+
+params['trainfolds'] = trainfolds
 
 if params['firstsceneonly']:
     params['scenes_trainvalid'] = [1] # corresponds to nSrc=2, with the master at 112,5 degree and the (weaker, SNR=4) distractor at -112.5
 else:
-    params['scenes_trainvalid'] = list(range(1, NUMBER_SCENES_TRAIN_VALID+1))
+    params['scenes_trainvalid'] = list(range(1, NUMBER_SCENES_TRAINING_VALIDATION+1))
 
 # weighting with inverse label frequency, ignoring cost of predictions of true labels value MASK_VALUE via masking the loss of such labels
-loss_weights = heiner_utils.get_loss_weights(fold_nbs=train_folds, scene_nbs=params['scenes_trainvalid'],
+loss_weights = heiner_utils.get_loss_weights(fold_nbs=trainfolds, scene_nbs=params['scenes_trainvalid'],
                                              label_mode='instant' if params['instantlabels'] else 'blockbased')
 masked_weighted_crossentropy_loss = heiner_utils.my_loss_builder(MASK_VALUE, loss_weights)
 # TODO: potential performance optimization: in label mode reduce to weighted crossentropy loss, i.e., without masked
@@ -193,72 +202,84 @@ save_h5(params, params['name'] + '_params.h5')
 print()
 print('STARTING TRAINING')
 
-batchloader_validation = None # first fix training data loader
+print('trainfolds: {}, validfold: {}'.format(params['trainfolds'], params['validfold']))
 
-atleastoneepochdone = False
-trainingcallback = TrainingCallback(batchloader_validation, params, metrics_train=False, loss_valid_separate=False, verbose=1)
+batchloader_training = BatchLoader(params=params, mode='train', fold_nbs=params['trainfolds'],
+                                   scene_nbs=params['scenes_trainvalid'], batchsize=params['batchsize'],
+                                   timesteps=params['batchlength'], seed=1) # seed for testing
 
-for epoch in range(params['maxepochs']):
+# TODO: check data types within batch loader with real ones (features 32bit, labels?, weights? etc.)
+# batchloader_training = SingleProcBatchLoader(mode='training', batchsize=params['batchsize'],
+#                                              batchlength=params['batchlength'],
+#                                              filenames=list_of_scene_instance_files,
+#                                              instant_labels=params['instantlabels'],
+#                                              sceneinstances_number_max=params['sceneinstancebufsize'],
+#                                              mean_features_training=mean_features_training,
+#                                              std_features_training=std_features_training)
 
-    time_epochstart = time.time()
+if params['validfold'] == -1:
+    batchloader_validation = None
+else:
+    batchloader_validation = None # TODO
 
-    print('==> training epoch {} out of maximal {}'.format(epoch+1, params['maxepochs']))
+params['batches_per_trainepoch'] = len(batchloader_training)
 
-    # TODO: check data types within batch loader with real ones (features 32bit, labels?, weights? etc.)
-    # TODO change into BatchLoader (no mp/sp versions required anymore)
-    batchloader_training = SingleProcBatchLoader(mode='training', batchsize=params['batchsize'], batchlength=params['batchlength'],
-                                        filenames=list_of_scene_instance_files, instant_labels=params['instantlabels'],
-                                        sceneinstances_number_max=params['sceneinstancebufsize'],
-                                        mean_features_training=mean_features_training,
-                                        std_features_training=std_features_training)
+print('starting training for at most {} epochs ({} batches per epoch)'.format(params['maxepochs'],
+                                                                              params['batches_per_trainepoch']))
 
-    fit_generator_modified(model, generator=batchloader_training, epochs=params['maxepochs'], callbacks=[trainingcallback],
-                           max_queue_size=params['batchbufsize'], workers=1, use_multiprocessing=True)
+# collect train and validation metrics after each epoch (loss, wbac, wbac_per_class, bac_per_class_scene, wbac2,
+# wbac2_per_class, sensitivies, specificities, gradient statistics, runtime) and after each batch (loss, gradient statistics)
+metricscallback = MetricsCallback(params)
+
+# keras callbacks for earlystopping, model saving and nantermination
+# remark: val_wbac is not a metric in the keras sense but is provided via the metricscallback
+earlystopping = EarlyStopping(monitor='val_wbac', mode='max')
+modelcheckpoint = ModelCheckpoint(params['name']+'_model.h5', monitor='val_wbac', mode='max', save_best_only=True)
+terminateonnan = TerminateOnNaN()
+
+callbacks = [terminateonnan, metricscallback, earlystopping, modelcheckpoint]
 
 
+# start training, after each epoch evaluate loss and metrics on validation set (and training set)
+fit_and_predict_generator_with_sceneinst_metrics(model,
+                                                 generator=batchloader_training,
+                                                 params=params,
+                                                 epochs=params['maxepochs'],
+                                                 steps_per_epoch=params['batches_per_trainepoch'],
+                                                 callbacks=callbacks,
+                                                 max_queue_size=params['batchbufsize'],
+                                                 workers=1,
+                                                 use_multiprocessing=True,
+                                                 validation_data=batchloader_validation)
 
-    # TODO check classifier value 0.5 vs optimized (valid set/cv or via simply train set because is training?)
+# collecting and saving results
+results = metricscallback.results
 
-    print('initialized batchloader')
+# total runtime
+runtime_total = time.time() - totaltime_start
+results['runtime_total'] = runtime_total
 
-    # TODO: log all output to _output.txt file as well
-    # TODO: write important warnings (e.g. not early stopped/combination already run etc) to separate _warnings.txt
-
-    # TODO: calculate metrics for each scene tp/tn/fp/fn => sens/spec => bac/weighted bac
-    # TODO: use Heiner's stateful metrics which should allow same 30s-wise batch creation for training as well as validation and testing
-    # TODO: also monitor gradient norm => requried to set (optinally) gradient clipping => https://stackoverflow.com/questions/50033312/how-to-monitor-gradient-vanish-and-explosion-in-keras-with-tensorboard
-    results = {'sens': np.array([[0.5, 0.9, 0.8], [0.8, 0.75, 0.85]])}
-    # TODO: save all metrics(separate train/valid): per class and per scene, scene-averaged per class; class-averaged; both: bac and nSrc-weighted as well as nSrc-weighted [see also baseline]: SN/SP as well as BAC and BAC2
-
-    # TODO: save time measurement (per epoch and total)
-
-    ## save results
-    save_h5(results, params['name']+'_results.h5')
-
-    ## TODO: save model if so-far best (w.r.t. weighted bac) and the current bestepoch
-
-    ## TODO: plot results: should save png file of loss/accuracy train/valid over epochs (updated after each epoch)
-
-    ## TODO: early stopping [ensure that plotted]
-
-    atleastoneepochdone = True
-
-    duration_epoch = (time.time() - time_epochstart) / 60.
-    print('epoch {} took {:.1f} minutes to run'.format(epoch+1, duration_epoch))
-    duration.append(duration_epoch)
-    print()
-
-if not atleastoneepochdone:
-    printerror('for some reason we could not finish a single parametrization. exiting before writing (nonexistent) results')
-    sys.exit(1)
-
-# saving results
-results = {}
-results['duration'] = duration
+# early stopping
+if earlystopping.stopped_epoch == 0:
+    results['epoch_best'] = -1
+    printerror('early stopping could not be applied with patience {}, maxepochs {} was seemingly too small'.format(params['earlystop'], params['maxepochs']))
+else:
+    results['epoch_best'] = earlystopping.stopped_epoch - params['earlystop']
+    print('the best epoch was epoch {} (as of nonimproving for {} epochs)'.format(params['epoch_best']+1, params['maxepochs']))
 
 save_h5(results, params['name'] + '_results.h5')
 
-## TODO: go through use cases and check for script's feature completeness
+
+# TODO: final plotting and printing
+plotresults(results, params)
+printresults(results, params)
+
+
+# TODO: experiment before hyper search: time measurements when finally running to see what takes what part (per epoch)
+
+# TODO: experiment before hyper search: classifier value 0.5 vs optimized (valid set/cv or via simply train set because is training?)
+
+# TODO: go through use cases and check for script's feature completeness
 
 ## USE CASES:
 
