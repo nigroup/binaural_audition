@@ -1,6 +1,6 @@
 import numpy as np
 
-#DATA_ROOT = '/mnt/binaural/data/scenes2018' # sits on a local disk on each server (via symlink)
+DATA_ROOT = '/mnt/binaural/data/scenes2018' # sits on a local disk on each server (via symlink)
 
 DIM_FEATURES = 160
 DIM_LABELS = 13

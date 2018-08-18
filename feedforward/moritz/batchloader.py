@@ -8,17 +8,14 @@ from myutils import printerror
 from constants import *
 
 class BatchLoader(HeinerDataloader):
-    # TODO: merge constructor parameters from old implementation
-    def __init__(self, params, mode, fold_nbs, scene_nbs, batchsize, timesteps,
-                 path_pattern='/mnt/binaural/data/scenes2018/', seed=None, input_standardization=True):
+    def __init__(self, params, mode, fold_nbs, scene_nbs, batchsize, seed=None):
         # initializing super constructor with values from above or with their defaults (copied from super init)
-        label_mode = 'instant' if params['instantlabels'] else 'blockbased'
-        super().__init__(mode=mode, label_mode=label_mode,
-                       fold_nbs=fold_nbs, scene_nbs=scene_nbs, batchsize=batchsize, timesteps=timesteps, epochs=10,
-                       buffer=10, features=DIM_FEATURES, classes=DIM_LABELS, path_pattern=path_pattern,
+        super().__init__(mode=mode, label_mode='instant' if params['instantlabels'] else 'blockbased',
+                       fold_nbs=fold_nbs, scene_nbs=scene_nbs, batchsize=batchsize, timesteps=params['batchlength'], epochs=params['maxepochs'],
+                       buffer=10, features=DIM_FEATURES, classes=DIM_LABELS, path_pattern=DATA_ROOT+'/',
                        seed=seed, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=MASK_VALUE,
                        val_stateful=False, k_scenes_to_subsample=-1,
-                       input_standardization=input_standardization)
+                       input_standardization=not params['noinputstandardization'])
 
         self.length = self._get_length_by_loading_or_calculating()
         print('created batchloader with mode {} using {} labels '.format(mode, label_mode))
@@ -57,6 +54,9 @@ class BatchLoader(HeinerDataloader):
 
         printerror('DOH: specifying dummy value 3 as batchloader size')
         self.batches_per_epoch = 3
+
+
+class SceneInstance
 
 
 # TODO: implement loader

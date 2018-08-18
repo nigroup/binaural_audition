@@ -58,6 +58,8 @@ parser.add_argument('--batchlength', type=int, default=3000,
                              'to allow for efficiency/parallelism)')
 parser.add_argument('--maxepochs', type=int, default=2,
                         help='maximal number of epochs (typically stopped early before reaching this value)')
+parser.add_argument('--noinputstandardization', action='store_true', default=False,
+                        help='disables input standardization')
 parser.add_argument('--earlystop', type=int, default=5,
                         help='early stop patience, i.e., number of number of non-improving epochs; -1 => no early stopping')
 parser.add_argument('--validfold', type=int, default=3,
@@ -107,7 +109,7 @@ name_long = name_short + '_wn{}_bs{}_bl{}_me{}_es{}_gc{}_sb{}_bbs{}'.format(para
 name_short += '_vf{}'.format(args.validfold)
 name_long += '_vf{}'.format(args.validfold)
 
-# TODO check that all params from above are contained in the name
+# TODO check that all params from above are contained in the name (many are not anymore)
 
 if 'pre' in params['path']:
     params['name'] = name_long
@@ -150,13 +152,6 @@ print('name: '+params['name'])
 
 print()
 print('BUILDING DATA LOADER')
-
-# TODO: add scene ids, see Heiner's implementation?! stateful metrics; maybe move to base batchloader class
-list_of_scene_instance_files = ['only', 'example', 'files']
-
-# TODO: load mean and std features of this training combination for input standardization (use Heiner's code / check that all 6=train is included, too)
-mean_features_training = np.zeros(160, dtype=np.float32)
-std_features_training = np.ones(160, dtype=np.float32)
 
 # MODEL BUILDING
 
@@ -279,7 +274,7 @@ printresults(results, params)
 
 # TODO: experiment before hyper search: classifier value 0.5 vs optimized (valid set/cv or via simply train set because is training?)
 
-# TODO: go through use cases and check for script's feature completeness
+# TODO: go through use cases and check for script's feature completeness (go through cmd line arguments again to add initial experiments)
 
 ## USE CASES:
 
@@ -308,7 +303,7 @@ printresults(results, params)
 # python model_run.py --path=blockinterprete_2_hyper_main --validfold=4 --hyper=XYZfilename
 # python model_run.py --path=blockinterprete_2_hyper_main --validfold=2 --hyper=XYZfilename
 
-### exploration of learningrate (for largest possible batch size and best parameters from above)
+### exploration of featuremaps first, then for best learningrate (for largest possible batch size and best parameters from above)
 # python model_run.py --path=blockinterprete_3_hyper_fine --maxepochs=10 --hyper=random_fine
 
 ## find best early stopping epoch of best model
