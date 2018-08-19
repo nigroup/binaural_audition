@@ -4,7 +4,6 @@ import matlab.engine
 
 import scipy.io
 import numpy as np
-import re
 import h5py
 import os
 from os import path
@@ -20,8 +19,8 @@ def get_label_paths():
 
 def convert_from_list(fplist, label_paths, save_path, is_train):
     for fp in tqdm(fplist):
-        fn = fp.split(sep='/')[-1]
-        data = scipy.io.loadmat(fp)
+        fn = fp.split('/')[-1]
+        data = scipy.io.loadmat(fp, mat_dtype=True)
         x = data['x']
         x = x.astype(np.float32, copy=True)
         ys = ([], [])
@@ -29,12 +28,12 @@ def convert_from_list(fplist, label_paths, save_path, is_train):
             for i, label_path in enumerate(label_path_both):
                 load_path = path.join(label_path, fn)
                 try:
-                    label = scipy.io.loadmat(load_path)
-                    ys[i].append(label['y'])
+                    label = scipy.io.loadmat(load_path, mat_dtype=True)
+                    ys[i].append(label['y'].astype(np.float32, copy=True))
                 except NotImplementedError:
                     print("HDF5 File: CHECK if dimension for block labels matches")
                     f = h5py.File(load_path)
-                    ys[i].append(np.array(f['y']).T)
+                    ys[i].append(np.array(f['y']).astype(np.float32, copy=True).T)
                 except Exception:
                     raise Exception("Exception for: " + load_path)
 
@@ -53,8 +52,8 @@ def convert_from_list(fplist, label_paths, save_path, is_train):
         y_block[y_block_zeroi] = -1
         y_block = y_block[np.newaxis, :, :]
 
-        y[y == np.nan] = 1 if is_train else -1
-        y_block[y_block == np.nan] = 1 if is_train else -1
+        y[np.isnan(y)] = 1 if is_train else -1
+        y_block[np.isnan(y_block)] = 1 if is_train else -1
 
         bs_y, _, ncl_y = y.shape
         bs_y_bl, _, ncl_y_bl = y_block.shape
@@ -156,5 +155,5 @@ def main(argv):
 
 if __name__ == '__main__':
     main(sys.argv[1:])
-    #main(['train', -1, -1])
+    # main(['train', -1, -1])
 
