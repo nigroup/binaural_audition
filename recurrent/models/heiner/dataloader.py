@@ -14,7 +14,7 @@ class DataLoader:
                  buffer=10, features=160, classes=13, path_pattern='/mnt/binaural/data/scenes2018/',
                  seed=1, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=-1.0,
                  val_stateful=False, k_scenes_to_subsample=-1,
-                 input_standardization=True):
+                 input_standardization=False): # TODO change to True and copy to other servers
 
         self.mode = mode
         self.path_pattern = path_pattern
@@ -79,10 +79,14 @@ class DataLoader:
         self.input_standardization = input_standardization
         self.input_standardization_metrics = None
 
+        self.train_on_all_folds = False
+
         if self.mode != 'test' and self.input_standardization:
             if type(self.fold_nbs) is int:
                 raise ValueError('input standardization can for now just be applied if only ONE val_fold is used')
             if self.mode == 'train' and len(self.fold_nbs) != 5 or self.mode == 'val' and len(self.fold_nbs) != 1:
+                if self.mode == 'train' and len(self.fold_nbs) == 6:
+                    self.train_on_all_folds = True
                 raise ValueError('input standardization can for now just be applied if only ONE val_fold is used')
 
         # whether to create last batches by padding the rows which are not long enough
@@ -164,12 +168,13 @@ class DataLoader:
         return self.input_standardization_metrics
 
     def _load_input_standardization_metrics(self):
-        in_std_path = path.join(self.pickle_path, 'input_standardization_metrics.pickle')
+        name = 'input_standardization_metrics{}.pickle'.format('_all_train_folds' if self.train_on_all_folds else '')
+        in_std_path = path.join(self.pickle_path, name)
         if not path.exists(in_std_path):
             self._create_input_standardization_metrics_pickle()
         with open(in_std_path, 'rb') as handle:
             means, stds = pickle.load(handle)
-        if self.mode == 'test':
+        if self.mode == 'test' or self.train_on_all_folds:
             return (means, stds) # just (mean, std)
         else:
             if self.mode == 'train':
@@ -180,7 +185,12 @@ class DataLoader:
 
     def _create_input_standardization_metrics_pickle(self):
         def calc_mean_std(in_std_path):
-            all_existing_files = glob.glob(in_std_path)
+            if type(in_std_path) is list:
+                all_existing_files = []
+                for in_std_path_inner in in_std_path:
+                    all_existing_files += glob.glob(in_std_path_inner)
+            else:
+                all_existing_files = glob.glob(in_std_path)
 
             N = 0
             sum = np.zeros((1, self.features))
@@ -203,9 +213,10 @@ class DataLoader:
             return (mean, std)
 
         in_std_path = self.pickle_path
-        if self.mode == 'test':
+        if self.mode == 'test' or self.train_on_all_folds:
             # calculate from all training data here
-            in_std_path = in_std_path.replace('test', 'train')
+            if not self.train_on_all_folds:
+                in_std_path = in_std_path.replace('test', 'train')
             in_std_path = path.join(in_std_path, 'fold*', 'scene*', '*.npz')
 
 
@@ -217,16 +228,19 @@ class DataLoader:
             stds = []
             for val_fold in all_folds:
                 used_folds = list(set(all_folds)-{val_fold})
-                in_std_path_loop = path.join(in_std_path, 'fold'+str(used_folds), 'scene*', '*.npz')
 
-                mean, std = calc_mean_std(in_std_path_loop)
+                in_std_path_loop_list = []
+                for used_fold in used_folds:
+                    in_std_path_loop_list.append(path.join(in_std_path, 'fold'+str(used_fold), 'scene*', '*.npz'))
+
+                mean, std = calc_mean_std(in_std_path_loop_list)
                 means.append(mean)
                 stds.append(std)
 
             metrics = (means, stds)
 
-
-        with open(path.join(self.pickle_path, 'input_standardization_metrics.pickle'), 'wb') as handle:
+        name = 'input_standardization_metrics{}.pickle'.format('_all_train_folds' if self.train_on_all_folds else '')
+        with open(path.join(self.pickle_path, name), 'wb') as handle:
             pickle.dump(metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
@@ -649,7 +663,7 @@ class DataLoader:
 
         scene_counts = dict()
 
-        def get_scene_instance_id(file, scene_count):
+        def get_scene_instance_id(file):
             scene_number = int(scene_nb_regex.findall(file)[0])
             if scene_number not in scene_counts:
                 scene_counts[scene_number] = 1
@@ -657,6 +671,6 @@ class DataLoader:
             scene_counts[scene_number] += 1
             return id_
 
-        d = {file: get_scene_instance_id(file, scene_counts) for file in tqdm(all_existing_files)}
+        d = {file: get_scene_instance_id(file) for file in tqdm(all_existing_files)}
         with open(path.join(self.pickle_path, 'scene_instances_ids.pickle'), 'wb') as handle:
             pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
