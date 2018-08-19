@@ -85,7 +85,7 @@ class H:
         # indicates whether this combination is already finished
         self.finished = False
 
-        self.elapsed_time = -1
+        self.elapsed_time_minutes = -1
 
     def save_to_dir(self, model_dir):
         filepath = path.join(model_dir, 'hyperparameters.pickle')
@@ -193,16 +193,16 @@ class HCombManager:
         hcomb['val_acc'] = h['val_acc']
         hcomb['val_acc_mean'] = h['val_acc_mean']
         hcomb['val_acc_std'] = h['val_acc_std']
-        hcomb['elapsed_time'] = h['elapsed_time']
+        hcomb['elapsed_time_minutes'] = h['elapsed_time_minutes']
 
-    def finish_hcomb(self, id_, h, val_acc_mean, val_acc_std, elapsed_time):
+    def finish_hcomb(self, id_, h, val_acc_mean, val_acc_std, elapsed_time_minutes):
         with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
             h = h.__dict__
 
             h['finished'] = True
-            h['elapsed_time'] = elapsed_time
+            h['elapsed_time_minutes'] = elapsed_time_minutes
             self._update_val_metrics_mean_std(h, val_acc_mean, val_acc_std)
 
             if h['STAGE'] == 2:
@@ -212,7 +212,7 @@ class HCombManager:
 
             self._write_hcomb_list(hcomb_list, handle)
 
-    def finish_epoch(self, id_, h, val_acc, fold_ind, best_epoch, elapsed_time):
+    def finish_epoch(self, id_, h, val_acc, fold_ind, best_epoch, elapsed_time_minutes):
         with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
@@ -220,7 +220,7 @@ class HCombManager:
 
             h['epochs_finished'][fold_ind] += 1
             h['best_epochs'][fold_ind] = best_epoch
-            h['elapsed_time'] = elapsed_time
+            h['elapsed_time_minutes'] = elapsed_time_minutes
             self._update_val_metrics(h, val_acc, fold_ind)
 
             self.replace_at_id(hcomb_list, id_, h)
@@ -256,7 +256,7 @@ class HCombManager:
                 h['val_acc'] = list(map(add, h['val_acc'], hcomb_list[index]['val_acc']))
                 h['val_acc_mean'] = np.mean(h['val_acc'])
                 h['val_acc_std'] = np.std(h['val_acc'])
-                h['elapsed_time'] += hcomb_list[index]['elapsed_time']
+                h['elapsed_time_minutes'] += hcomb_list[index]['elapsed_time_minutes']
             else:
                 raise ValueError('Cannot find HComb in Stage 1')
 
@@ -305,6 +305,8 @@ class RandomSearch:
 
         # total no of neurons in network
         self.TOTAL_NO_OF_NEURONS = [500, 1000, 1500, 2000, 2500, 3000]
+
+        self.NO_OF_NEURONS_LIMIT_PER_LAYER = 600
 
         self.GLOBAL_REGULARIZATION_STRENGTH = [0.25, 0.5, 0.75]
 

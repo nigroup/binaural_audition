@@ -1,5 +1,4 @@
 from keras import backend as K
-from keras.layers import Wrapper, CuDNNLSTM
 
 
 def _make_train_and_predict_function(model, calc_global_gradient_norm):

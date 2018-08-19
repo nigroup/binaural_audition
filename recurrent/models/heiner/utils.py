@@ -104,6 +104,7 @@ def my_accuracy_builder(mask_val, output_threshold, metric='bac2'):
         mask, count_unmasked = mask_from(y_true, mask_val)
 
         count_positives = K.sum(y_true * mask)  # just the +1 labels are added, the rest is 0
+        # 1.0 is neutral for division
         count_positives = K.switch(count_positives, count_positives, 1.0)
         # count_positives = K.print_tensor(count_positives, message='count_positives: ')
         sensitivity = 0.0
