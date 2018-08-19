@@ -1,7 +1,3 @@
-from keras.layers import Layer
-import keras.backend as K
-from keras import metrics
-
 import numpy as np
 
 
@@ -11,9 +7,9 @@ def get_scene_number_from_scene_instance_id(scene_instance_id):
 
 def mask_from(y_true, mask_val):
     # mask has to be calculated per class -> same mask for every class
-    mask = (y_true[:, :, 0] != mask_val).astype(np.float32)
-    count_unmasked = np.sum(mask)
-    return mask, count_unmasked
+    mask = (y_true != mask_val).astype(np.float32)
+    count_unmasked_per_class = np.sum(mask, axis=(0, 1))
+    return mask, count_unmasked_per_class
 
 
 def train_accuracy(scene_instance_id_metrics_dict, metric='BAC'):
@@ -26,7 +22,7 @@ def train_accuracy(scene_instance_id_metrics_dict, metric='BAC'):
     return calculate_accuracy_final(class_accuracies), np.stack((sens_class, spec_class), axis=2)
 
 
-def val_accuracy(scene_instance_id_metrics_dict, metric='BAC', ret=('final', 'per_class')):
+def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('final', 'per_class')):
     available_ret = ('final', 'per_class', 'per_class_scene', 'per_class_scene_scene_instance')
     for r in ret:
         if r not in available_ret:
@@ -48,7 +44,10 @@ def val_accuracy(scene_instance_id_metrics_dict, metric='BAC', ret=('final', 'pe
 
     r_v = []
     for r in ret:
-        r_v.append(ret_dict[r])
+        if type(ret_dict[r]) is tuple:
+            r_v += list(ret_dict[r])
+        else:
+            r_v.append(ret_dict[r])
     r_v.append(np.stack((sens_class, spec_class), axis=2))
 
     return r_v[0] if len(r_v) == 1 else tuple(r_v)
@@ -57,9 +56,9 @@ def val_accuracy(scene_instance_id_metrics_dict, metric='BAC', ret=('final', 'pe
 # i think this can not be hugely improved performance wise -> would need an array with the size of all instance ids
 # and some mapping from id to index in that array
 def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
-                                                                   y_pred_logits, y_true, output_threshold, mask_val):
+                                                                   y_pred_probs, y_true, output_threshold, mask_val):
 
-    y_pred = (y_pred_logits >= output_threshold).astype(np.float32)
+    y_pred = (y_pred_probs >= output_threshold).astype(np.float32)
 
     all_scene_instance_ids = np.unique(y_true[:, :, 0, 1])
     for scene_instance_id in all_scene_instance_ids:
@@ -72,13 +71,12 @@ def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instanc
         y_true_extracted = y_true[extracted_indices, :, 0]
         y_true_extracted = y_true_extracted[np.newaxis, :, :]
 
-        mask, count_unmasked = mask_from(y_true_extracted, mask_val)
-        mask = mask[:, :, np.newaxis]
+        mask, count_unmasked_per_class = mask_from(y_true_extracted, mask_val)
 
         true_positives = np.sum(y_pred_extracted * y_true_extracted * mask, axis=(0, 1))    # sum per class
         true_negatives = np.sum((y_pred_extracted-1) * (y_true_extracted-1) * mask, axis=(0, 1))
         positives = np.sum(y_true_extracted * mask, axis=(0, 1))
-        negatives = count_unmasked - positives
+        negatives = count_unmasked_per_class - positives
         false_negatives = positives - true_positives
         false_positives = negatives - true_negatives
 
@@ -91,7 +89,7 @@ def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instanc
 
 
 def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict, mode, metric='BAC'):
-    available_metrics = ('BAC', 'BAC2')
+    available_metrics = ('BAC', 'BAC2', ('BAC', 'BAC2'))
     if metric not in available_metrics:
         raise ValueError('unknown metric. available: {}, wanted: {}'.format(available_metrics, metric))
 
@@ -131,12 +129,22 @@ def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict,
                   (scene_number_class_accuracies_metrics[vs, 0, :]+scene_number_class_accuracies_metrics[vs, 1, :])
     specificity[vs] = scene_number_class_accuracies_metrics[vs, 2, :] / \
                   (scene_number_class_accuracies_metrics[vs, 2, :]+scene_number_class_accuracies_metrics[vs, 3, :])
-    if metric == 'BAC':
-        scene_number_class_accuracies[vs] = 0.5 * (sensitivity[vs] + specificity[vs])
-    elif metric == 'BAC2':
-        scene_number_class_accuracies[vs] = 1 - (((1 - sensitivity[vs])**2 + (1 - specificity[vs])**2) / 2)**0.5
 
-    return scene_number_class_accuracies, sensitivity, specificity
+    return_list = []
+
+    if 'BAC' in metric:
+        scene_number_class_accuracies[vs] = 0.5 * (sensitivity[vs] + specificity[vs])
+        return_list.append(np.copy(scene_number_class_accuracies))
+    if 'BAC2' in metric:
+        scene_number_class_accuracies[vs] = 1 - (((1 - sensitivity[vs])**2 + (1 - specificity[vs])**2) / 2)**0.5
+        return_list.append(np.copy(scene_number_class_accuracies))
+
+    if len(return_list) == 1:
+        ret_scene_number_class_accuracies = return_list[0]
+    else:
+        ret_scene_number_class_accuracies = tuple(return_list)
+
+    return ret_scene_number_class_accuracies, sensitivity, specificity
 
 
 def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, mode):
@@ -165,14 +173,28 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
         weights = weights / np.sum(weights)
     weights = weights[:, np.newaxis]
 
-    scene_number_class_accuracies *= weights
-
-    class_accuracies = np.sum(scene_number_class_accuracies, axis=0)
-    return class_accuracies
+    if not type(scene_number_class_accuracies) is tuple:
+        scene_number_class_accuracies = (scene_number_class_accuracies,)
+    class_accuracies = []
+    for scene_number_class_accuracies_i in scene_number_class_accuracies:
+        scene_number_class_accuracies_i *= weights
+        class_accuracies.append(np.sum(scene_number_class_accuracies_i, axis=0))
+    if len(class_accuracies) == 1:
+        return class_accuracies[0]
+    else:
+        return tuple(class_accuracies)
 
 
 def calculate_accuracy_final(class_accuracies):
-    return np.mean(class_accuracies)
+    if not type(class_accuracies) is tuple:
+        class_accuracies = (class_accuracies,)
+    final_accuracies = []
+    for class_accuracies_i in class_accuracies:
+        final_accuracies.append(np.mean(class_accuracies_i))
+    if len(final_accuracies) == 1:
+        return final_accuracies[0]
+    else:
+        return tuple(final_accuracies)
 
 def test_val_accuracy(with_wrong_predictions=False):
     np.random.seed(1)
@@ -216,10 +238,11 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
     epochs = 1
     output_threshold = 0.5
     mask_val = -1
-    train_loader, val_loader = tr_utils.create_dataloaders('blockbased', [1, 2, 4, 5, 6], list(range(11, 13)), 20,
+    scenes = list(range(11, 13))
+    train_loader, val_loader = tr_utils.create_dataloaders('blockbased', [1, 2, 4, 5, 6], scenes, 20,
                                                            1000, epochs, 160, 13,
                                                            [3], True, BUFFER=50)
-    dloader = train_loader
+    dloader = val_loader
     gen = tr_utils.create_generator(dloader)
 
     scene_instance_id_metrics_dict = dict()
@@ -243,6 +266,9 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
             calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
                                                                            p_y, b_y, output_threshold,
                                                                            mask_val)
+    r = val_accuracy(scene_instance_id_metrics_dict, metric='BAC')
+    scenes_i = np.array(scenes) - 1
+    # print(np.mean(sens_spec_per_class_and_scene[scenes_i, :, :]))
     return None
 
 if __name__ == '__main__':

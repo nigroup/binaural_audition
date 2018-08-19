@@ -6,6 +6,7 @@ from keras import backend as K
 import numpy as np
 import glob
 import os
+import time
 
 
 def create_generator(dloader):
@@ -90,6 +91,8 @@ class Phase:
         self.losses = []
         self.accs = []
         self.class_accs = []
+        self.accs_bac2 = []
+        self.class_accs_bac2 = []
 
         self.class_sens_spec = []
 
@@ -142,6 +145,7 @@ class Phase:
         scene_instance_id_metrics_dict = dict()
 
         for iteration in range(1, self.dloader_len[self.e] + 1):
+            iteration_start_time = time.time()
             it_str = '{}_iteration: {:{prec}} / {:{prec}}'.format(self.prefix, iteration, self.dloader_len[self.e],
                                                                   prec=len(str(self.dloader_len[self.e])))
 
@@ -173,8 +177,11 @@ class Phase:
                                                                                  out, b_y,
                                                                                  self.OUTPUT_THRESHOLD, self.MASK_VAL)
 
+            elapsed_time = time.time() - iteration_start_time
+            time_spent_str = 'time spent: {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
             loss_str = 'loss: {}'.format(loss)
-            loss_log_str = '{:<20}  {:<20}  {:<20}  {:<20}'.format(self.val_fold_str, self.epoch_str, it_str, loss_str)
+            loss_log_str = '{:<20}  {:<20}  {:<20}  {:<20}  {:<25}'.format(self.val_fold_str, self.epoch_str, it_str,
+                                                                           loss_str, time_spent_str)
             print(loss_log_str)
 
             if not self.train:
@@ -187,9 +194,11 @@ class Phase:
             final_acc, sens_spec_class = acc_u.train_accuracy(scene_instance_id_metrics_dict, metric=self.metric)
         else:
             # TODO: can get a mismatch here, as number of returned values may change depending on parameter 'ret'
-            final_acc, class_accuracies, sens_spec_class = acc_u.val_accuracy(scene_instance_id_metrics_dict,
-                                                                              metric=self.metric, ret=self.ret)
+            final_acc, final_acc_bac2, class_accuracies, class_accuracies_bac2, sens_spec_class = \
+                acc_u.val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=self.ret)
             self.class_accs.append(class_accuracies)
+            self.accs_bac2.append(final_acc_bac2)
+            self.class_accs_bac2.append(class_accuracies_bac2)
         self.accs.append(final_acc)
         self.class_sens_spec.append(sens_spec_class)
 

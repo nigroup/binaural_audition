@@ -60,7 +60,10 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
             # LSTM Output dropout
             y = Dropout(h.LSTM_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
         for units in h.UNITS_PER_LAYER_MLP:
-            y = Dense(units, activation='sigmoid')(y)
+            if units != h.N_CLASSES:
+                y = Dense(units, activation='relu')(y)
+            else:
+                y = Dense(units, activation='sigmoid')(y)
 
             # MLP Output dropout but not last layer
             if units != h.N_CLASSES:
@@ -127,10 +130,14 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
             tr_utils.update_latest_model_ckp(model_ckp_last, model_save_dir, e, val_phase.accs[-1])
             model_ckp_best.on_epoch_end(e, logs={'val_final_acc': val_phase.accs[-1]})
 
-            metrics = {'train_losses': np.array(train_phase.losses), 'metric': h.METRIC,
+            metrics = {'metric': h.METRIC,
+                       'train_losses': np.array(train_phase.losses),
                        'train_accs': np.array(train_phase.accs),
-                       'val_losses': np.array(val_phase.losses), 'val_accs': np.array(val_phase.accs),
+                       'val_losses': np.array(val_phase.losses),
+                       'val_accs': np.array(val_phase.accs),
+                       'val_accs_bac2': np.array(val_phase.accs_bac2),
                        'val_class_accs': np.array(val_phase.class_accs),
+                       'val_class_accs_bac2': np.array(val_phase.class_accs_bac2),
                        'train_class_sens_spec': np.array(train_phase.class_sens_spec),
                        'val_class_sens_spec': np.array(val_phase.class_sens_spec)}
             if GLOBAL_GRADIENT_NORM_PLOT:
@@ -144,7 +151,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
             else:
                 epochs_without_improvement += 1
 
-            hcm.finish_epoch(ID, h, val_phase.accs[-1], val_fold - 1, best_epoch, timer() - start)
+            hcm.finish_epoch(ID, h, val_phase.accs[-1], val_fold - 1, best_epoch, (timer() - start)/60)
 
             if INTERMEDIATE_PLOTS:
                 plot.plot_metrics(metrics, model_save_dir)

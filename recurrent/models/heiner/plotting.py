@@ -13,6 +13,8 @@ def plot_metrics(metrics, save_dir):
         for metric_name, data in metrics.items():
             if type(data) is str:
                 continue
+            if 'bac2' in metric_name:
+                continue
             if 'gradient' in metric_name:
                 continue
             if 'class' in metric_name:
