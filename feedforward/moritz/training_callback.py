@@ -11,6 +11,7 @@ class MetricsCallback(Callback):
         self.runtime = []
         self.loss_train_per_batch = []
 
+        # TODO: adapt to last updates from heiner     added sens_spec_class and sens_spec_class_scene
         self.metrics_train = {'wbac': [],
                               'wbac_per_class': [],
                               'bac_per_class_scene': [],

@@ -14,7 +14,7 @@ from generator_extension import fit_and_predict_generator_with_sceneinst_metrics
 from constants import *
 from model import temporal_convolutional_network
 from batchloader import BatchLoader
-from hyperparams import obtain_residuallayers_refining_historysize
+from hyperparams import obtain_nextlarger_residuallayers_refining_historysize
 from training_callback import MetricsCallback
 from myutils import save_h5, load_h5, printerror, plotresults, printresults
 
@@ -53,9 +53,9 @@ parser.add_argument('--learningrate', type=float, default=0.001,
                         help='initial learning rate of the Adam optimizer')
 parser.add_argument('--batchsize', type=int, default=32,
                         help='number of time series per batch (should be power of two for efficiency)')
-parser.add_argument('--batchlength', type=int, default=3000,
+parser.add_argument('--batchlength', type=int, default=2999,
                         help='length of the time series per batch (should be significantly larger than history size '+
-                             'to allow for efficiency/parallelism)')
+                             'to allow for efficiency/parallelism)') # 2999 is the smallest scene instance length in our (training) data set
 parser.add_argument('--maxepochs', type=int, default=2,
                         help='maximal number of epochs (typically stopped early before reaching this value)')
 parser.add_argument('--noinputstandardization', action='store_true', default=False,
@@ -97,7 +97,7 @@ params['mask_value'] = MASK_VALUE
 # TODO: hyperparam sampling (will override specified param values)
 # TODO: hyperparam loading from file (will override all specified param values)
 
-initial_output = obtain_residuallayers_refining_historysize(params)
+initial_output = obtain_nextlarger_residuallayers_refining_historysize(params)
 
 # NAME
 
@@ -135,6 +135,9 @@ print('choosing gpu id {} on {}'.format(params['gpuid'], params['server']))
 os.environ["CUDA_VISIBLE_DEVICES"] = str(params['gpuid']) # cf. nvidia-smi ids
 
 # TODO: add output of nvidia-smi
+
+print('nvidia-smi: ')
+os.system('nvidia-smi')
 
 print(initial_output)
 
@@ -201,7 +204,7 @@ print('trainfolds: {}, validfold: {}'.format(params['trainfolds'], params['valid
 
 batchloader_training = BatchLoader(params=params, mode='train', fold_nbs=params['trainfolds'],
                                    scene_nbs=params['scenes_trainvalid'], batchsize=params['batchsize'],
-                                   timesteps=params['batchlength'], seed=1) # seed for testing
+                                   seed=1) # seed for testing
 
 # TODO: check data types within batch loader with real ones (features 32bit, labels?, weights? etc.)
 # batchloader_training = SingleProcBatchLoader(mode='training', batchsize=params['batchsize'],
@@ -293,6 +296,11 @@ printresults(results, params)
 
 ## add weightnorm (i.e., remove --noweightnorm)
 
+
+# TODO: change the following: not random_coarse via --hyper but rather have each arg via cmdline args set through hyperopt usage (within the respective folder)
+# TODO: make hyperopt resumable [check for that feature first with a dummy example]
+# TODO: iterate over filtersize [and vary over 3 history lengths respectively] => random bayesopt search over featuremaps/dropoutrate
+#   later: nested barplot [outer loop filtersize, inner loop historylength]
 ### use a python script for exploration of: featuremaps, dropoutrate (both random), kernelsize, historylength (both random or iterated)
 # python model_run.py --path=blockinterprete_2_hyper_main --validfold=3 --hyper=random_coarse
 
