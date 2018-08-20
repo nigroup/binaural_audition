@@ -142,8 +142,9 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                        'val_class_scene_accs_bac2': np.array(val_phase.class_scene_accs_bac2),
                        'val_scene_accs': np.array(val_phase.scene_accs),
                        'val_scene_accs_bac2': np.array(val_phase.scene_accs_bac2),
-                       'train_class_sens_spec': np.array(train_phase.class_sens_spec),
-                       'val_class_sens_spec': np.array(val_phase.class_sens_spec)}
+                       'train_class_sens_spec': np.array(train_phase.sens_spec_class_scene),
+                       'val_sens_spec_class_scene': np.array(val_phase.sens_spec_class_scene),
+                       'val_sens_spec_class': np.array(val_phase.sens_spec_class)}
             if GLOBAL_GRADIENT_NORM_PLOT:
                 metrics['global_gradient_norm'] = np.array(train_phase.global_gradient_norms)
             utils.pickle_metrics(metrics, model_save_dir)

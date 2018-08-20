@@ -100,7 +100,8 @@ class Phase:
         self.scene_accs = []
         self.scene_accs_bac2 = []
 
-        self.class_sens_spec = []
+        self.sens_spec_class_scene = []
+        self.sens_spec_class = []
 
         self.global_gradient_norms = []
 
@@ -197,13 +198,13 @@ class Phase:
                     m_ext.reset_with_keep_states(self.model, keep_states)
 
         if self.train:
-            final_acc, sens_spec_class = acc_u.train_accuracy(scene_instance_id_metrics_dict, metric=self.metric)
+            final_acc, sens_spec_class_scene = acc_u.train_accuracy(scene_instance_id_metrics_dict, metric=self.metric)
         else:
             # TODO: can get a mismatch here, as number of returned values may change depending on parameter 'ret'
             final_acc, final_acc_bac2, class_accuracies, class_accuracies_bac2, \
             class_scene_accuracies, class_scene_accuracies_bac2, \
             scene_accuracies, scene_accuracies_bac2, \
-            sens_spec_class = \
+            sens_spec_class_scene, sens_spec_class = \
                 acc_u.val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=self.ret)
             self.class_accs.append(class_accuracies)
             self.accs_bac2.append(final_acc_bac2)
@@ -212,8 +213,9 @@ class Phase:
             self.class_scene_accs_bac2.append(class_scene_accuracies_bac2)
             self.scene_accs.append(scene_accuracies)
             self.scene_accs_bac2.append(scene_accuracies_bac2)
+            self.sens_spec_class.append(sens_spec_class)
         self.accs.append(final_acc)
-        self.class_sens_spec.append(sens_spec_class)
+        self.sens_spec_class_scene.append(sens_spec_class_scene)
 
         acc_str = '{}_accuracy: {}'.format(self.prefix, final_acc)
         acc_log_str = '{:<20}  {:<20}  {:<20}  {:<20}'.format(self.val_fold_str, self.epoch_str, '', acc_str)

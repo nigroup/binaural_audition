@@ -283,6 +283,8 @@ class RandomSearch:
 
         # ARCH -> don't sample
 
+        self.MAXIMUM_NEURONS_PER_LAYER = 700
+
         # LSTM
         self.RANGE_NUMBER_OF_LSTM_LAYERS = [2, 3, 4]
         # MLP
@@ -304,9 +306,19 @@ class RandomSearch:
         # SAMPLE
 
         # total no of neurons in network
-        self.TOTAL_NO_OF_NEURONS = [500, 1000, 1500, 2000, 2500, 3000]
+        # TODO: reactivate after determining largest batch size
+        # self.SAMPLING_WEIGHTS = np.array([0.2, 0.2, 0.2, 0.2, 0.1, 0.1]) * 10
 
-        self.NO_OF_NEURONS_LIMIT_PER_LAYER = 600
+        self.SAMPLING_WEIGHTS = np.array([0, 0, 0, 0, 0, 1]) * 10
+
+        self.SAMPLING_WEIGHTS = np.round(self.SAMPLING_WEIGHTS).astype(np.int32)
+        assert np.isclose(np.sum(self.SAMPLING_WEIGHTS), 10)
+        self.TOTAL_NO_OF_NEURONS = [500] * self.SAMPLING_WEIGHTS[0] \
+                                   + [1000] * self.SAMPLING_WEIGHTS[1] \
+                                   + [1500] * self.SAMPLING_WEIGHTS[2] \
+                                   + [2000] * self.SAMPLING_WEIGHTS[3] \
+                                   + [2500] * self.SAMPLING_WEIGHTS[4] \
+                                   + [3000] * self.SAMPLING_WEIGHTS[5]
 
         self.GLOBAL_REGULARIZATION_STRENGTH = [0.25, 0.5, 0.75]
 
@@ -340,9 +352,9 @@ class RandomSearch:
         lstm_total_neurons = int(total_number_of_neurons*lstm_neuron_ratio)
         mlp_total_neurons = total_number_of_neurons - lstm_total_neurons
 
-        units_per_layer_lstm = [int(lstm_total_neurons / number_of_lstm_layers)] * number_of_lstm_layers
+        units_per_layer_lstm = [min(self.MAXIMUM_NEURONS_PER_LAYER, int(lstm_total_neurons // number_of_lstm_layers))] * number_of_lstm_layers
 
-        units_per_layer_mlp = [int(mlp_total_neurons / number_of_mlp_layers)] * number_of_mlp_layers
+        units_per_layer_mlp = [min(self.MAXIMUM_NEURONS_PER_LAYER, int(mlp_total_neurons // number_of_mlp_layers))] * number_of_mlp_layers
 
         # DROPOUT
 
@@ -361,10 +373,12 @@ class RandomSearch:
 
     def _get_hcombs_to_run(self, number_of_hcombs):
         from itertools import product
-        from random import shuffle
+
+        # TODO: delete because this favors expensive networks -> for finding expensive hyperparam comb.
+        self.RANGE_NUMBER_OF_LSTM_LAYERS = [3, 4, 2]
+
         architecture_params_list = list(product(self.RANGE_NUMBER_OF_LSTM_LAYERS, self.RANGE_NUMBER_OF_MLP_LAYERS,
                                            self.RANGE_LSTM_NEURON_RATIO, self.RANGE_REGULARIZATION_COMBINATION))
-        shuffle(architecture_params_list)
         return list(set([self._sample_hcomb(*architecture_params) for architecture_params in architecture_params_list[:number_of_hcombs]]))
 
     def save_hcombs_to_run(self, save_path, number_of_hcombs):

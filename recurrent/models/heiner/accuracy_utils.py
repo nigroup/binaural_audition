@@ -33,8 +33,10 @@ def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('f
     mode = 'val'
     ret_dict['per_class_scene_scene_instance'] = scene_instance_id_metrics_dict
 
-    scene_number_class_accuracies, sens_class, spec_class = \
+    scene_number_class_accuracies, sens_class_scene, spec_class_scene = \
         calculate_class_accuracies_per_scene_number(scene_instance_id_metrics_dict, mode, metric=metric)
+    sens_spec_class_scene = np.stack((sens_class_scene, spec_class_scene), axis=2)
+    sens_spec_class = calculate_sens_spec_per_class(sens_spec_class_scene, mode)
     ret_dict['per_class_scene'] = scene_number_class_accuracies
     ret_dict['per_scene'] = calculate_accuracy_per_scene(scene_number_class_accuracies)
 
@@ -49,7 +51,7 @@ def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('f
             r_v += list(ret_dict[r])
         else:
             r_v.append(ret_dict[r])
-    r_v.append(np.stack((sens_class, spec_class), axis=2))
+    r_v += [sens_spec_class_scene, sens_spec_class]
 
     return r_v[0] if len(r_v) == 1 else tuple(r_v)
 
@@ -148,7 +150,7 @@ def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict,
     return ret_scene_number_class_accuracies, sensitivity, specificity
 
 
-def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, mode):
+def get_scene_weights(mode):
     available_modes = ('train', 'val', 'test')
     if mode not in available_modes:
         raise ValueError('unknown mode. available: {}, wanted: {}'.format(available_modes, mode))
@@ -161,7 +163,7 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
                                 10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
         weights = weights / np.sum(weights)
     else:
-        weights = 1 / np.array([3,  3,  3,  60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50,
+        weights = 1 / np.array([3, 3, 3, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50,
                                 55, 60, 50, 55, 60, 50, 55, 60, 60, 50, 55, 60, 50, 55, 60, 50, 55,
                                 55, 60, 60, 60, 60, 60, 50, 50, 50, 50, 55, 55, 55, 55, 60, 60, 60,
                                 60, 50, 50, 50, 50, 55, 55, 55, 55, 60, 60, 60, 60, 50, 50, 50, 50,
@@ -173,6 +175,11 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
                                 50, 50, 50, 55, 55, 55, 55, 55, 55, 55, 55, 60, 60, 60, 60])
         weights = weights / np.sum(weights)
     weights = weights[:, np.newaxis]
+    return weights
+
+
+def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, mode):
+    weights = get_scene_weights(mode)
 
     if not type(scene_number_class_accuracies) is tuple:
         scene_number_class_accuracies = (scene_number_class_accuracies,)
@@ -185,6 +192,13 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
     else:
         return tuple(class_accuracies)
 
+
+def calculate_sens_spec_per_class(sens_spec_class_scene, mode):
+    weights = get_scene_weights(mode)
+    weights = weights[:, :, np.newaxis]     # nscenes x 1 x 1
+    sens_spec_class = sens_spec_class_scene * weights
+    sens_spec_class = np.sum(sens_spec_class, axis=0)
+    return sens_spec_class
 
 def calculate_accuracy_per_scene(scene_number_class_accuracies):
     if not type(scene_number_class_accuracies) is tuple:
