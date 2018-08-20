@@ -283,6 +283,7 @@ class RandomSearch:
 
         # ARCH -> don't sample
 
+        # TODO: to be determined
         self.MAXIMUM_NEURONS_PER_LAYER = 700
 
         # LSTM
@@ -300,7 +301,8 @@ class RandomSearch:
             (0, 0.5, 1),
             (0, 1, 0.5),
             (0, 0, 1),
-            (0, 0, 0.5)
+            (0, 0, 0.5),
+            (0, 0, 0)
         ]
 
         # SAMPLE

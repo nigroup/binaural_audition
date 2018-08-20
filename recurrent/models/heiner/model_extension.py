@@ -4,8 +4,10 @@ from keras import backend as K
 def _make_train_and_predict_function(model, calc_global_gradient_norm):
     if not hasattr(model, 'train_function'):
         raise RuntimeError('You must compile your model before using it.')
+    if not hasattr(model, 'train_and_predict_function'):
+        model.train_and_predict_function = None
     model._check_trainable_weights_consistency()
-    if model.train_function is None:
+    if model.train_and_predict_function is None:
         inputs = model._feed_inputs + model._feed_targets + model._feed_sample_weights
         if model.uses_learning_phase and not isinstance(K.learning_phase(), int):
             inputs += [K.learning_phase()]
@@ -97,7 +99,9 @@ def train_and_predict_on_batch(model, x, y,
 def _make_test_and_predict_function(model):
     if not hasattr(model, 'test_function'):
         raise RuntimeError('You must compile your model before using it.')
-    if model.test_function is None:
+    if not hasattr(model, 'test_and_predict_function'):
+        model.test_and_predict_function = None
+    if model.test_and_predict_function is None:
         inputs = model._feed_inputs + model._feed_targets + model._feed_sample_weights
         if model.uses_learning_phase and not isinstance(K.learning_phase(), int):
             inputs += [K.learning_phase()]

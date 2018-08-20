@@ -158,37 +158,67 @@ class Phase:
 
             is_val_loader_stateful = not self.train and self.dloader.val_stateful
 
+            iteration_start_time_data_loading = time.time()
             keep_states = None
             if is_val_loader_stateful:
                 b_x, b_y, keep_states = next(self.gen)
             else:
                 b_x, b_y = next(self.gen)
+            elapsed_time_data_loading = time.time() - iteration_start_time_data_loading
 
+            iteration_start_time_tf_graph = time.time()
+            tf_graph_verbose = True
+            tf_graph_time_spent_str = ''
             if self.train:
                 original_weights_and_masks = None
+
+                iteration_start_time_tf_graph_apply_dropout = time.time()
                 if self.apply_recurrent_dropout:
                     original_weights_and_masks = self._recurrent_dropout()
+                elapsed_time_tf_graph_apply_dropout = time.time() - iteration_start_time_tf_graph_apply_dropout
+
+                iteration_start_time_tf_graph_call = time.time()
                 loss, out, gradient_norm = m_ext.train_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0],
                                                                             calc_global_gradient_norm=self.calc_global_gradient_norm)
+                elapsed_time_tf_graph_call = time.time() - iteration_start_time_tf_graph_call
+
                 if self.calc_global_gradient_norm:
                     self.global_gradient_norms.append(gradient_norm)
 
+                iteration_start_time_tf_graph_dropout_load_original = time.time()
                 if self.apply_recurrent_dropout:
                     self._load_original_weights_updated(original_weights_and_masks)
                     del original_weights_and_masks
+                elapsed_time_tf_graph_dropout_load_original = time.time() - \
+                                                              iteration_start_time_tf_graph_dropout_load_original
+
+                tf_graph_time_spent_str = ' (apply drop: {}, train_predict: {}, drop load original: {})'\
+                    .format(
+                        time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph_apply_dropout)),
+                        time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph_call)),
+                        time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph_dropout_load_original))
+                )
             else:
                 loss, out = m_ext.test_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
             self.losses.append(loss)
+            elapsed_time_tf_graph = time.time() - iteration_start_time_tf_graph
 
+            iteration_start_time_accuracy_metrics = time.time()
             acc_u.calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
                                                                                  out, b_y,
                                                                                  self.OUTPUT_THRESHOLD, self.MASK_VAL)
-
+            elapsed_time_accuracy_metrics = time.time() - iteration_start_time_accuracy_metrics
             elapsed_time = time.time() - iteration_start_time
-            time_spent_str = 'time spent: {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
+            time_spent_str = 'time spent: {} (data loading: {}, tf graph: {}{}, accuracy metrics: {})'.format(
+                time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),
+                time.strftime("%H:%M:%S", time.gmtime(elapsed_time_data_loading)),
+                time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph)),
+                tf_graph_time_spent_str if tf_graph_verbose else '',
+                time.strftime("%H:%M:%S", time.gmtime(elapsed_time_accuracy_metrics))
+            )
             loss_str = 'loss: {}'.format(loss)
-            loss_log_str = '{:<20}  {:<20}  {:<20}  {:<20}  {:<25}'.format(self.val_fold_str, self.epoch_str, it_str,
-                                                                           loss_str, time_spent_str)
+            loss_log_str = '{:<20}  {:<20}  {:<20}  {:<26}  {}'.format(self.val_fold_str, self.epoch_str, it_str,
+                                                                      loss_str, time_spent_str)
             print(loss_log_str)
 
             if not self.train:
