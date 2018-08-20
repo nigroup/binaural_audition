@@ -138,6 +138,10 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                        'val_accs_bac2': np.array(val_phase.accs_bac2),
                        'val_class_accs': np.array(val_phase.class_accs),
                        'val_class_accs_bac2': np.array(val_phase.class_accs_bac2),
+                       'val_class_scene_accs': np.array(val_phase.class_scene_accs),
+                       'val_class_scene_accs_bac2': np.array(val_phase.class_scene_accs_bac2),
+                       'val_scene_accs': np.array(val_phase.scene_accs),
+                       'val_scene_accs_bac2': np.array(val_phase.scene_accs_bac2),
                        'train_class_sens_spec': np.array(train_phase.class_sens_spec),
                        'val_class_sens_spec': np.array(val_phase.class_sens_spec)}
             if GLOBAL_GRADIENT_NORM_PLOT:

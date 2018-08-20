@@ -54,7 +54,7 @@ class Phase:
     def __init__(self, train_or_val, model, dloader, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str,
                  calc_global_gradient_norm, recurrent_dropout=0.,
                  metric='BAC',
-                 ret=('final', 'per_class')):
+                 ret=('final', 'per_class', 'per_class_scene', 'per_scene')):
 
         self.prefix = train_or_val
         if train_or_val == 'train':
@@ -93,6 +93,12 @@ class Phase:
         self.class_accs = []
         self.accs_bac2 = []
         self.class_accs_bac2 = []
+
+        self.class_scene_accs = []
+        self.class_scene_accs_bac2 = []
+
+        self.scene_accs = []
+        self.scene_accs_bac2 = []
 
         self.class_sens_spec = []
 
@@ -194,11 +200,18 @@ class Phase:
             final_acc, sens_spec_class = acc_u.train_accuracy(scene_instance_id_metrics_dict, metric=self.metric)
         else:
             # TODO: can get a mismatch here, as number of returned values may change depending on parameter 'ret'
-            final_acc, final_acc_bac2, class_accuracies, class_accuracies_bac2, sens_spec_class = \
+            final_acc, final_acc_bac2, class_accuracies, class_accuracies_bac2, \
+            class_scene_accuracies, class_scene_accuracies_bac2, \
+            scene_accuracies, scene_accuracies_bac2, \
+            sens_spec_class = \
                 acc_u.val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=self.ret)
             self.class_accs.append(class_accuracies)
             self.accs_bac2.append(final_acc_bac2)
             self.class_accs_bac2.append(class_accuracies_bac2)
+            self.class_scene_accs.append(class_scene_accuracies)
+            self.class_scene_accs_bac2.append(class_scene_accuracies_bac2)
+            self.scene_accs.append(scene_accuracies)
+            self.scene_accs_bac2.append(scene_accuracies_bac2)
         self.accs.append(final_acc)
         self.class_sens_spec.append(sens_spec_class)
 

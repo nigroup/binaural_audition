@@ -22,8 +22,8 @@ def train_accuracy(scene_instance_id_metrics_dict, metric='BAC'):
     return calculate_accuracy_final(class_accuracies), np.stack((sens_class, spec_class), axis=2)
 
 
-def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('final', 'per_class')):
-    available_ret = ('final', 'per_class', 'per_class_scene', 'per_class_scene_scene_instance')
+def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_scene')):
+    available_ret = ('final', 'per_class', 'per_class_scene', 'per_scene', 'per_class_scene_scene_instance')
     for r in ret:
         if r not in available_ret:
             raise ValueError('unknown ret. available: {}, wanted: {}'.format(available_ret, r))
@@ -36,6 +36,7 @@ def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('f
     scene_number_class_accuracies, sens_class, spec_class = \
         calculate_class_accuracies_per_scene_number(scene_instance_id_metrics_dict, mode, metric=metric)
     ret_dict['per_class_scene'] = scene_number_class_accuracies
+    ret_dict['per_scene'] = calculate_accuracy_per_scene(scene_number_class_accuracies)
 
     class_accuracies = calculate_class_accuracies_weighted_average(scene_number_class_accuracies, mode)
     ret_dict['per_class'] = class_accuracies
@@ -185,6 +186,18 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
         return tuple(class_accuracies)
 
 
+def calculate_accuracy_per_scene(scene_number_class_accuracies):
+    if not type(scene_number_class_accuracies) is tuple:
+        scene_number_class_accuracies = (scene_number_class_accuracies,)
+    final_scene_number_accuracies = []
+    for scene_number_class_accuracies_i in scene_number_class_accuracies:
+        final_scene_number_accuracies.append(np.mean(scene_number_class_accuracies_i, axis=0))
+    if len(final_scene_number_accuracies) == 1:
+        return final_scene_number_accuracies[0]
+    else:
+        return tuple(final_scene_number_accuracies)
+
+
 def calculate_accuracy_final(class_accuracies):
     if not type(class_accuracies) is tuple:
         class_accuracies = (class_accuracies,)
@@ -266,7 +279,7 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
             calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
                                                                            p_y, b_y, output_threshold,
                                                                            mask_val)
-    r = val_accuracy(scene_instance_id_metrics_dict, metric='BAC')
+    r = val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'))
     scenes_i = np.array(scenes) - 1
     # print(np.mean(sens_spec_per_class_and_scene[scenes_i, :, :]))
     return None
