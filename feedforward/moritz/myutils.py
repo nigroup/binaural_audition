@@ -5,33 +5,21 @@ from constants import *
 
 def calculate_metrics(scene_instance_id_metrics_dict):
 
-    # TODO: adapt to last updates from heiner     added sens_spec_class and sens_spec_class_scene
-    # (also training_callback initializer)
-
-    # Heiner's guide:
-    # default return ist jetzt: ('final', 'per_class', 'per_scene')
-    # wenn BAC und BAC2 wird returned: 2-tupel, 2-tupel, 2-tupel, sens_spec_array
-    # 'per_class_scene' kann auch in return eingesetzt werden, dann gibt es nochmal ein 2-tupel für die genauigkeiten pro klasse und scene ohne irgendeine mittelung
-
-    # calculate weighted bac, weighted bac2 [class-averaged from weighted bac* per class],
-    #           weighted bac per class, weighted bac2 per class [scene-weighted-averaged from bac*_per_class_scene],
-    #           bac per scene, bac2_per_scene [class-averaged from bac*_per_class_scene],
-    #           bac per class per scene, bac2 per class per scene [averaging over the scene-instances],
-    #           sensitivity per class and scene, specificity per class and scene [as 2x scene x classes array]
-    #           sensitivity per class, specificity per class [as 2x classes array]
     (wbac, wbac2), (wbac_per_class, wbac2_per_class), (bac_per_scene, bac2_per_scene), \
-        (bac_per_class_scene, wbac2_per_class_scene), sens_spec_per_class = \
-            heiner_val_accuracy(scene_instance_id_metrics_dict,
-                                metric=('BAC', 'BAC2'),
-                                ret=('final', 'per_class', 'per_scene', 'per_class_scene'))
+                       (bac_per_class_scene, wbac2_per_class_scene), \
+                       sens_spec_per_class_scene, sens_spec_per_class = \
+            heiner_val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'),
+                        ret=('final', 'per_class', 'per_scene', 'per_class_scene'))
 
     # collect into dict and return
-    metrics = {'wbac': wbac,
-               'wbac_per_class': wbac_per_class,
-               'bac_per_class_scene': bac_per_class_scene,
-               'sens_spec_per_class': sens_spec_per_class,
-               'wbac2': wbac2,
-               'wbac2_per_class': wbac2_per_class}
+    metrics = {'wbac': wbac,                                        # balanced accuracy: scalar (weighted scene avg, class avg)
+               'wbac_per_class': wbac_per_class,                    # balanced accuracy: per class (weighted scene avg)
+               'bac_per_scene': bac_per_scene,                      # balanced accuracy: per scene (class avg)
+               'bac_per_class_scene': bac_per_class_scene,          # balanced accuracy: per scene, per class
+               'sens_spec_per_class': sens_spec_per_class,          # sensitivity/specificity: per scene (class avg)
+               'sens_spec_per_class_scene': sens_spec_per_class,    # sensitivity/specificity: per scene, per class
+               'wbac2': wbac2,                                      # balanced accuracy v2: scalar (weighted scene avg, class avg)
+               'wbac2_per_class': wbac2_per_class}                  # balanced accuracy v2: per class (weighted scene avg)
 
     return metrics
 
