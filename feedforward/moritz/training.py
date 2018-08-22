@@ -53,7 +53,7 @@ parser.add_argument('--learningrate', type=float, default=0.001,
                         help='initial learning rate of the Adam optimizer')
 parser.add_argument('--batchsize', type=int, default=32,
                         help='number of time series per batch (should be power of two for efficiency)')
-parser.add_argument('--batchlength', type=int, default=2999,
+parser.add_argument('--batchlength', type=int, default=2500, # 2500 batchlength corresponds to 75% of all scene instances to fit into two batches (with a hist size up to 1200 determining the necessary overlap)
                         help='length of the time series per batch (should be significantly larger than history size '+
                              'to allow for efficiency/parallelism)') # 2999 is the smallest scene instance length in our (training) data set
 parser.add_argument('--maxepochs', type=int, default=2,
@@ -206,19 +206,11 @@ batchloader_training = BatchLoader(params=params, mode='train', fold_nbs=params[
                                    scene_nbs=params['scenes_trainvalid'], batchsize=params['batchsize'],
                                    seed=1) # seed for testing
 
-# TODO: check data types within batch loader with real ones (features 32bit, labels?, weights? etc.)
-# batchloader_training = SingleProcBatchLoader(mode='training', batchsize=params['batchsize'],
-#                                              batchlength=params['batchlength'],
-#                                              filenames=list_of_scene_instance_files,
-#                                              instant_labels=params['instantlabels'],
-#                                              sceneinstances_number_max=params['sceneinstancebufsize'],
-#                                              mean_features_training=mean_features_training,
-#                                              std_features_training=std_features_training)
-
 if params['validfold'] == -1:
     batchloader_validation = None
 else:
-    batchloader_validation = None # TODO
+    batchloader_validation = BatchLoader(params=params, mode='val', fold_nbs=params['validfold'],
+                                         scene_nbs=params['scenes_trainvalid'], batchsize=params['batchsize'])  # seed for testing
 
 params['batches_per_trainepoch'] = len(batchloader_training)
 

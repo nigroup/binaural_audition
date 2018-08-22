@@ -7,7 +7,7 @@ def calculate_metrics(scene_instance_id_metrics_dict):
 
     (wbac, wbac2), (wbac_per_class, wbac2_per_class), (bac_per_scene, bac2_per_scene), \
                        (bac_per_class_scene, wbac2_per_class_scene), \
-                       sens_spec_per_class_scene, sens_spec_per_class = \
+                       (sens_spec_per_class_scene, sens_spec_per_class) = \
             heiner_val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'),
                         ret=('final', 'per_class', 'per_scene', 'per_class_scene'))
 
