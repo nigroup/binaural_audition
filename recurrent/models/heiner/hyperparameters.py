@@ -16,7 +16,8 @@ class H:
                  PATIENCE_IN_EPOCHS=5,
                  ALL_FOLDS=range(1, 7), STAGE=1,
                  LABEL_MODE='blockbased',
-                 MASK_VAL=-1, VAL_STATEFUL=True, METRIC='BAC'):
+                 MASK_VAL=-1, VAL_STATEFUL=True, METRIC='BAC',
+                 HOSTNAME=''):
         ################################################################################################################
 
         # Not by Random Search
@@ -69,6 +70,8 @@ class H:
 
 
         self.METRIC = METRIC
+
+        self.HOSTNAME = HOSTNAME
         ################################################################################################################
 
         # Metrics
@@ -185,7 +188,22 @@ class HCombManager:
 
             return index, hcomb_list[index], is_overwrite
 
+    def set_hostname_and_batch_size(self, id_, h, hostname, batch_size):
+        with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
+            hcomb_list = self._read_hcomb_list(handle)
+
+            h = h.__dict__
+
+            h['HOSTNAME'] = hostname
+            h['BATCH_SIZE'] = batch_size
+
+            self.replace_at_id(hcomb_list, id_, h)
+
+            self._write_hcomb_list(hcomb_list, handle)
+
     def _make_comparable(self, hcomb, h):
+        hcomb['BATCH_SIZE'] = h['BATCH_SIZE']
+        hcomb['HOSTNAME'] = h['HOSTNAME']
         hcomb['finished'] = h['finished']
         hcomb['epochs_finished'] = h['epochs_finished']
         hcomb['best_epochs'] = h['best_epochs']
@@ -274,7 +292,7 @@ class HCombManager:
 
 class RandomSearch:
 
-    def __init__(self, number_of_hcombs, available_gpus, metric_used='BAC', STAGE=1, time_steps=1000):
+    def __init__(self, metric_used='BAC', STAGE=1, time_steps=1000):
 
         # TODO: find time-steps
 
@@ -283,46 +301,45 @@ class RandomSearch:
 
         # ARCH -> don't sample
 
-        # TODO: to be determined
-        self.MAXIMUM_NEURONS_PER_LAYER = 700
-
-        # LSTM
-        self.RANGE_NUMBER_OF_LSTM_LAYERS = [2, 3, 4]
-        # MLP
-        self.RANGE_NUMBER_OF_MLP_LAYERS = [2]
-
-        self.RANGE_LSTM_NEURON_RATIO = [0.75, 0.5, 0.25]
+        self.MAXIMUM_NEURONS_LSTM = 2100    # is upper limit with 3 layers as reference
+        self.MAXIMUM_NEURONS_MLP = 1200     # is upper limit with 1 layers as reference
 
         # Regularization
 
-        # comb: (Input, Recurrent, Output)
+        # comb: (Input, Recurrent, LSTM Output, MLP Output) -> factors for global regularization strength
         self.RANGE_REGULARIZATION_COMBINATION = [
-            (0, 1, 1),
-            (0, 0.5, 1),
-            (0, 1, 0.5),
-            (0, 0, 1),
-            (0, 0, 0.5),
-            (0, 0, 0)
+            (0, 0.5, 0.5, 1),  # 0.5 -> later, now uniformly
+            (0, 1, 1, 1),         # 0.1
+            (0, 1, 0, 1),           # 0.1
+            (0, 0, 0, 0)            # 0.1
         ]
+
+        # LSTM
+        self.RANGE_NUMBER_OF_LSTM_LAYERS = [3, 4, 5]
+        # MLP
+        self.RANGE_NUMBER_OF_MLP_LAYERS = [1, 2]
+
+        self.RANGE_LSTM_NEURON_RATIO = [0.75, 0.5, 0.25]
+
 
         # SAMPLE
 
         # total no of neurons in network
-        # TODO: reactivate after determining largest batch size
-        # self.SAMPLING_WEIGHTS = np.array([0.2, 0.2, 0.2, 0.2, 0.1, 0.1]) * 10
+        # self.SAMPLING_WEIGHTS = np.array([0.15, 0.1, 0.1, 0.3, 0.2, 0.1, 0.05]) * 10
+        #
+        # self.SAMPLING_WEIGHTS = np.round(self.SAMPLING_WEIGHTS).astype(np.int32)
+        # assert np.isclose(np.sum(self.SAMPLING_WEIGHTS), 10)
+        # self.TOTAL_NO_OF_NEURONS = [500] * self.SAMPLING_WEIGHTS[0] \
+        #                            + [1000] * self.SAMPLING_WEIGHTS[1] \
+        #                            + [1500] * self.SAMPLING_WEIGHTS[2] \
+        #                            + [2000] * self.SAMPLING_WEIGHTS[3] \
+        #                            + [2500] * self.SAMPLING_WEIGHTS[4] \
+        #                            + [3000] * self.SAMPLING_WEIGHTS[5] \
+        #                            + [3500] * self.SAMPLING_WEIGHTS[6]
 
-        self.SAMPLING_WEIGHTS = np.array([0, 0, 0, 0, 0, 1]) * 10
+        self.RANGE_TOTAL_NO_OF_NEURONS = (500, 3000)
 
-        self.SAMPLING_WEIGHTS = np.round(self.SAMPLING_WEIGHTS).astype(np.int32)
-        assert np.isclose(np.sum(self.SAMPLING_WEIGHTS), 10)
-        self.TOTAL_NO_OF_NEURONS = [500] * self.SAMPLING_WEIGHTS[0] \
-                                   + [1000] * self.SAMPLING_WEIGHTS[1] \
-                                   + [1500] * self.SAMPLING_WEIGHTS[2] \
-                                   + [2000] * self.SAMPLING_WEIGHTS[3] \
-                                   + [2500] * self.SAMPLING_WEIGHTS[4] \
-                                   + [3000] * self.SAMPLING_WEIGHTS[5]
-
-        self.GLOBAL_REGULARIZATION_STRENGTH = [0.25, 0.5, 0.75]
+        self.RANGE_GLOBAL_REGULARIZATION_STRENGTH = (0.25, 0.75)
 
         #TODO: implement in model
         # self.RANGE_L2 = None
@@ -333,7 +350,7 @@ class RandomSearch:
         self.PATIENCE_IN_EPOCHS = 5     # patience for early stopping
 
 
-        # Data characteristics TODO: find size limit -> check when sampling the product of both
+        # Data characteristics
         self.RANGE_TIME_STEPS = [1000, 500, 50]  # one frame = 10ms = 0.01 s
         if time_steps in self.RANGE_TIME_STEPS:
             self.TIME_STEPS = time_steps
@@ -341,22 +358,22 @@ class RandomSearch:
             print('Given time_steps: {} not in range of expected {}. Using {} nevertheless.'
                   .format(time_steps, self.RANGE_TIME_STEPS, time_steps))
             self.TIME_STEPS = time_steps
-        self.RANGE_BATCH_SIZE = [32]
+        self.BATCH_SIZE = 128
 
         self.metric_used = metric_used
 
     def _sample_hcomb(self, number_of_lstm_layers, number_of_mlp_layers, lstm_neuron_ratio, regularization_combination):
 
         # sampling
-        total_number_of_neurons = np.random.choice(self.TOTAL_NO_OF_NEURONS)
-        global_regularization_strength = np.random.choice(self.GLOBAL_REGULARIZATION_STRENGTH)
+        total_number_of_neurons = int(np.random.uniform(*self.RANGE_TOTAL_NO_OF_NEURONS))
+        global_regularization_strength = np.random.uniform(*self.RANGE_GLOBAL_REGULARIZATION_STRENGTH)
 
         lstm_total_neurons = int(total_number_of_neurons*lstm_neuron_ratio)
         mlp_total_neurons = total_number_of_neurons - lstm_total_neurons
 
-        units_per_layer_lstm = [min(self.MAXIMUM_NEURONS_PER_LAYER, int(lstm_total_neurons // number_of_lstm_layers))] * number_of_lstm_layers
+        units_per_layer_lstm = [int(min(self.MAXIMUM_NEURONS_LSTM, lstm_total_neurons) // number_of_lstm_layers)] * number_of_lstm_layers
 
-        units_per_layer_mlp = [min(self.MAXIMUM_NEURONS_PER_LAYER, int(mlp_total_neurons // number_of_mlp_layers))] * number_of_mlp_layers
+        units_per_layer_mlp = [int(min(self.MAXIMUM_NEURONS_MLP, mlp_total_neurons) // number_of_mlp_layers)] * number_of_mlp_layers
 
         # DROPOUT
 
@@ -368,7 +385,7 @@ class RandomSearch:
 
         return H(UNITS_PER_LAYER_LSTM=units_per_layer_lstm, UNITS_PER_LAYER_MLP=units_per_layer_mlp,
                  PATIENCE_IN_EPOCHS=self.PATIENCE_IN_EPOCHS,
-                 BATCH_SIZE=self.RANGE_BATCH_SIZE[0], TIME_STEPS=self.TIME_STEPS,
+                 BATCH_SIZE=self.BATCH_SIZE, TIME_STEPS=self.TIME_STEPS,
                  INPUT_DROPOUT=input_dropout, RECURRENT_DROPOUT=recurrent_dropout,
                  LSTM_OUTPUT_DROPOUT=lstm_output_dropout, MLP_OUTPUT_DROPOUT=mlp_output_dropout,
                  METRIC=self.metric_used, STAGE=self.STAGE)
@@ -377,10 +394,11 @@ class RandomSearch:
         from itertools import product
 
         # TODO: delete because this favors expensive networks -> for finding expensive hyperparam comb.
-        self.RANGE_NUMBER_OF_LSTM_LAYERS = [3, 4, 2]
+        # self.RANGE_NUMBER_OF_LSTM_LAYERS = [3, 4, 5]
+        # self.RANGE_NUMBER_OF_MLP_LAYERS = [1, 2]
 
-        architecture_params_list = list(product(self.RANGE_NUMBER_OF_LSTM_LAYERS, self.RANGE_NUMBER_OF_MLP_LAYERS,
-                                           self.RANGE_LSTM_NEURON_RATIO, self.RANGE_REGULARIZATION_COMBINATION))
+        architecture_params_list = list(product(self.RANGE_REGULARIZATION_COMBINATION, self.RANGE_NUMBER_OF_LSTM_LAYERS, self.RANGE_NUMBER_OF_MLP_LAYERS,
+                                           self.RANGE_LSTM_NEURON_RATIO))
         return list(set([self._sample_hcomb(*architecture_params) for architecture_params in architecture_params_list[:number_of_hcombs]]))
 
     def save_hcombs_to_run(self, save_path, number_of_hcombs):

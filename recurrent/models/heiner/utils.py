@@ -7,6 +7,7 @@ from tensorflow.python.ops.nn_impl import weighted_cross_entropy_with_logits
 
 import pickle
 import sys
+import platform
 
 
 class UnbufferedLogAndPrint:
@@ -28,6 +29,22 @@ class UnbufferedLogAndPrint:
        # this handles the flush command by doing nothing.
        # you might want to specify some extra behavior here.
        pass
+
+
+def get_buffer_size_wrt_time_steps(time_steps):
+    hostname = platform.node()
+    ref_time_steps = 1000
+    buffer_dict = {'eltanin' : 100, 'sabik' : 60, 'elnath' : 200, 'merope' : 20}
+    return int(buffer_dict[hostname]*ref_time_steps // time_steps)
+
+
+def get_hostname_batch_size_wrt_time_steps(time_steps):
+    hostname = platform.node()
+    ref_time_steps = 1000
+    batch_size_dict = {'eltanin' : 128, 'sabik' : 128, 'elnath' : 32, 'merope' : 64}
+    bs = int(2 ** (np.ceil(np.log(batch_size_dict[hostname] * ref_time_steps / time_steps) / np.log(2))))
+    maximum_bs = 512
+    return hostname, min(bs, maximum_bs)
 
 
 def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/binaural/data/scenes2018/',

@@ -34,7 +34,7 @@ def _make_train_and_predict_function(model, calc_global_gradient_norm):
                                                               # added model.outputs
                                                               [model.total_loss] + model.metrics_tensors + model.outputs + [norm],
                                                               updates=updates,
-                                                              name='train_function',
+                                                              name='train_and_predict_function',
                                                               **model._function_kwargs)
 
 def train_and_predict_on_batch(model, x, y,
@@ -110,8 +110,8 @@ def _make_test_and_predict_function(model):
         model.test_and_predict_function = K.function(inputs,
                                                      # added model.outputs
                                                      [model.total_loss] + model.metrics_tensors + model.outputs,
-                                                     updates=model.state_updates + model.metrics_updates,
-                                                     name='test_function',
+                                                     updates=model.state_updates,
+                                                     name='test_and_predict_function',
                                                      **model._function_kwargs)
 
 

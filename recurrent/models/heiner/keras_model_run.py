@@ -9,17 +9,16 @@ from keras.layers import Dense, Input, CuDNNLSTM, Dropout
 from keras.models import Model
 from keras.optimizers import Adam
 
-import heiner.hyperparameters as hp
+from heiner import hyperparameters as hp
 from heiner import train_utils as tr_utils
 from heiner import utils
 from heiner import plotting as plot
-# from heiner.model_extension import RecurrentDropoutCuDNNLSTM
 
 from timeit import default_timer as timer
 
-import heiner.use_tmux as use_tmux
+from heiner import use_tmux as use_tmux
 
-from tmuxprocess import TmuxProcess
+from heiner.my_tmuxprocess import TmuxProcess
 import datetime
 
 def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT):
@@ -49,7 +48,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
 
         print('\nBuild model...\n')
 
-        x = Input(batch_shape=(h.BATCH_SIZE, None, h.N_FEATURES), name='Input', dtype='float32')
+        x = Input(batch_shape=(h.BATCH_SIZE, h.TIME_STEPS, h.N_FEATURES), name='Input', dtype='float32')
         y = x
 
         # Input dropout
@@ -95,9 +94,13 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
         print('\nModel compiled.\n')
 
         ################################################# DATA LOADER
+        use_multiprocessing = False
+        BUFFER = utils.get_buffer_size_wrt_time_steps(h.TIME_STEPS)
+        BUFFER = int(BUFFER // 2) - 5 if use_multiprocessing else BUFFER
         train_loader, val_loader = tr_utils.create_dataloaders(h.LABEL_MODE, TRAIN_FOLDS, h.TRAIN_SCENES, h.BATCH_SIZE,
                                                                h.TIME_STEPS, h.MAX_EPOCHS, h.N_FEATURES, h.N_CLASSES,
-                                                               [val_fold], h.VAL_STATEFUL, BUFFER=50)
+                                                               [val_fold], h.VAL_STATEFUL,
+                                                               BUFFER=BUFFER, use_multiprocessing=use_multiprocessing)
 
         ################################################# CALLBACKS
         model_ckp_last = ModelCheckpoint(os.path.join(model_save_dir,
@@ -112,10 +115,10 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
         args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str, GLOBAL_GRADIENT_NORM_PLOT, h.RECURRENT_DROPOUT, h.METRIC]
 
         # training phase
-        train_phase = tr_utils.Phase('train', model, train_loader, *args)
+        train_phase = tr_utils.Phase('train', model, train_loader, BUFFER, *args)
 
         # validation phase
-        val_phase = tr_utils.Phase('val', model, val_loader, *args)
+        val_phase = tr_utils.Phase('val', model, val_loader, BUFFER, *args)
 
         # needed for early stopping
         best_val_acc = -1
@@ -145,8 +148,10 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                        'train_class_sens_spec': np.array(train_phase.sens_spec_class_scene),
                        'val_sens_spec_class_scene': np.array(val_phase.sens_spec_class_scene),
                        'val_sens_spec_class': np.array(val_phase.sens_spec_class)}
+
             if GLOBAL_GRADIENT_NORM_PLOT:
                 metrics['global_gradient_norm'] = np.array(train_phase.global_gradient_norms)
+
             utils.pickle_metrics(metrics, model_save_dir)
 
             if val_phase.accs[-1] > best_val_acc:
@@ -214,6 +219,7 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
         if h.finished:
             print('Hyperparameter Combination for this model version already evaluated. ABORT.')
             continue
+        hcm.set_hostname_and_batch_size(ID, h, *utils.get_hostname_batch_size_wrt_time_steps(h.TIME_STEPS))
 
         model_dir = os.path.join(save_path, 'stage' + str(h.STAGE), 'hcomb_' + str(ID))
 
@@ -225,8 +231,8 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
 
         if use_tmux.use_tmux:
 
-            p_hcomb = TmuxProcess(target=run_hcomb, args=(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS,
-                                                          GLOBAL_GRADIENT_NORM_PLOT),
+            p_hcomb = TmuxProcess(session_name=use_tmux.session_name, target=run_hcomb,
+                                  args=(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT),
                                   name='gpu{}_run_hcomb_{}'.format(gpu, ID))
             print('Running hcomb_{} on GPU {}.'.format(ID, gpu))
             print('Start: {}'.format(datetime.datetime.now().isoformat()))

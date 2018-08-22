@@ -24,18 +24,15 @@ def generator_np_arrays_from_batch(batch):
 def mean_std(generator_data_mean, generator_data_std, total_length, features=160):
     N = 0
     sum = np.zeros((1, features))
-    for data in tqdm(generator_data_mean, total=total_length):
+    sum_sq = np.zeros((1, features))
+    for i, data in enumerate(generator_data_mean):
         N += data.shape[1]
         sum += np.sum(data, axis=1)
+        sum_sq += np.sum(data ** 2, axis=1)
     mean = sum / N
+    var = sum_sq / N - mean ** 2
+    std = np.sqrt(var)
     mean = mean[np.newaxis, :, :]
-
-    sum_mean_sq = np.zeros((1, features))
-    for data in tqdm(generator_data_std, total=total_length):
-        x = data
-        x = (x - mean) ** 2
-        sum_mean_sq += np.sum(x, axis=1)
-    std = np.sqrt(sum_mean_sq / N)
     std = std[np.newaxis, :, :]
 
     return (mean, std)

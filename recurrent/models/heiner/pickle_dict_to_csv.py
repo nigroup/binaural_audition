@@ -6,15 +6,17 @@ import pickle
 
 def write_to_csv(file):
     with open(file, 'rb') as handle:
-        dict = pickle.load(handle)
-    if not type(dict) is list:
-        dict = [dict]
-    keys = dict[0].keys()
+        d = pickle.load(handle)
+    if not type(d) is list:
+        d = [d]
+    if not type(d[0]) is dict:
+        d = [d_.__dict__ for d_ in d]
+    keys = d[0].keys()
     filename = file.replace('.pickle', '')
     with open(filename+'.csv', 'w') as output_file:
         dict_writer = csv.DictWriter(output_file, keys)
         dict_writer.writeheader()
-        dict_writer.writerows(dict)
+        dict_writer.writerows(d)
 
 if __name__ == '__main__':
     write_to_csv(sys.argv[1])

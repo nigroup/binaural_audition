@@ -3,6 +3,9 @@ from heiner import accuracy_utils as acc_u
 from heiner.dataloader import DataLoader
 from keras.layers import CuDNNLSTM
 from keras import backend as K
+from keras.utils.data_utils import GeneratorEnqueuer
+
+
 import numpy as np
 import glob
 import os
@@ -18,11 +21,18 @@ def create_generator(dloader):
         yield ret
 
 
+def create_generator_multiprocessing(dloader, BUFFER):
+    standard_gen = create_generator(dloader)
+    dloader_enqueuer = GeneratorEnqueuer(standard_gen, use_multiprocessing=True)
+    dloader_enqueuer.start(workers=1, max_queue_size=BUFFER+10)
+    return dloader_enqueuer.get()
+
+
 def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
-                       VAL_FOLDS, VAL_STATEFUL, BUFFER):
+                       VAL_FOLDS, VAL_STATEFUL, BUFFER, use_multiprocessing=True):
     train_loader = DataLoader('train', LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, batchsize=BATCHSIZE,
                               timesteps=TIMESTEPS, epochs=EPOCHS, features=NFEATURES, classes=NCLASSES,
-                              buffer=BUFFER)
+                              buffer=BUFFER, use_multiprocessing=use_multiprocessing)
     train_loader_len = train_loader.len()
     print('Number of batches per epoch (training): ' + str(train_loader_len))
 
@@ -51,7 +61,7 @@ def update_latest_model_ckp(model_ckp_last, model_save_dir, e, acc):
 
 class Phase:
 
-    def __init__(self, train_or_val, model, dloader, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str,
+    def __init__(self, train_or_val, model, dloader, BUFFER, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str,
                  calc_global_gradient_norm, recurrent_dropout=0.,
                  metric='BAC',
                  ret=('final', 'per_class', 'per_class_scene', 'per_scene')):
@@ -73,6 +83,7 @@ class Phase:
 
         self.model = model
         self.dloader = dloader
+        self.BUFFER = BUFFER
         self.e = 0
         self.OUTPUT_THRESHOLD = OUTPUT_THRESHOLD
         self.MASK_VAL = MASK_VAL
@@ -85,7 +96,10 @@ class Phase:
         self.metric = metric
         self.ret = ret
 
-        self.gen = create_generator(dloader)
+        if dloader.use_multiprocessing:
+            self.gen = create_generator_multiprocessing(dloader, BUFFER)
+        else:
+            self.gen = create_generator(dloader)
         self.dloader_len = dloader.len()
 
         self.losses = []
@@ -167,7 +181,7 @@ class Phase:
             elapsed_time_data_loading = time.time() - iteration_start_time_data_loading
 
             iteration_start_time_tf_graph = time.time()
-            tf_graph_verbose = True
+            tf_graph_verbose = False
             tf_graph_time_spent_str = ''
             if self.train:
                 original_weights_and_masks = None

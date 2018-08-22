@@ -1,14 +1,15 @@
 import os
-import heiner.hyperparameters as hp
-import heiner.keras_model_run as run
+from heiner import hyperparameters as hp
+from heiner import keras_model_run as run
 
-import multiprocessing
 from functools import partial
 
-import heiner.use_tmux as use_tmux
+from heiner import use_tmux as use_tmux
 
-from tmuxprocess import TmuxProcess
+from heiner.my_tmuxprocess import TmuxProcess
 import datetime
+
+import platform
 
 import sys
 import argparse
@@ -24,10 +25,17 @@ sys.excepthook = my_handler
 
 def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, reset_hcombs, time_steps):
     use_tmux.set_use_tmux(tmux)
+    gpu_str = ''
+    if type(available_gpus) is int:
+        gpu_str += '_' + str(available_gpus)
+    else:
+        for gpu in available_gpus:
+            gpu_str += '_' + str(gpu)
+    use_tmux.set_session_name(platform.node() + gpu_str)
 
     ################################################# RANDOM SEARCH SETUP
 
-    rs = hp.RandomSearch(number_of_hcombs, available_gpus, metric_used=metric_used, STAGE=STAGE, time_steps=time_steps)
+    rs = hp.RandomSearch(metric_used=metric_used, STAGE=STAGE, time_steps=time_steps)
 
     ################################################# MODEL LOG AND CHECKPOINT SETUP DEPENDENT ON HYPERPARAMETERS
 
@@ -52,7 +60,7 @@ def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, r
                 .format(str(number_of_hcombs), str(available_gpus), metric_used, str(STAGE), datetime.datetime.now().isoformat())
             print(intro)
 
-        p_intro = TmuxProcess(target=intro, name='dummy')
+        p_intro = TmuxProcess(session_name=use_tmux.session_name, target=intro, name='dummy')
         print('Run')
         print("  tmux attach -t {}".format(p_intro.tmux_sess))
         print("to interact with each process.")
@@ -63,7 +71,7 @@ def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, r
 
         for gpu in available_gpus:
 
-            p_gpu = TmuxProcess(target=run_function, mode='inout', args=(gpu), name='run_gpu_{}'.format(gpu))
+            p_gpu = TmuxProcess(session_name=use_tmux.session_name, target=run_function, mode='inout', args=(gpu), name='run_gpu_{}'.format(gpu))
             print('Run')
             print("  tmux attach -t {}".format(p_gpu.tmux_sess))
             print("to interact with each process.")
@@ -122,7 +130,7 @@ if __name__ == "__main__":
                         dest="reset_hcombs",
                         metavar="<reset hcombs>",
                         help="resets hcomb if not finished otherwise would resume. default: False (resume)")
-    parser.add_argument('-t', '--time_steps',
+    parser.add_argument('-ts', '--time_steps',
                         required=False,
                         type=int,
                         default=1000,
