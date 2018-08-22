@@ -160,12 +160,15 @@ def pickle_metrics(metrics_dict, folder_path):
     with open(path.join(folder_path, 'metrics.pickle'), 'wb') as handle:
         pickle.dump(metrics_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+def load_metrics(folder_path):
+    with open(path.join(folder_path, 'metrics.pickle'), 'rb') as handle:
+        return pickle.load(handle)
 
 def latest_training_state(model_save_dir):
     all_available_weights = glob.glob(path.join(model_save_dir, 'model_ckp_*.hdf5'))
 
     if len(all_available_weights) == 0:
-        return None, None, None
+        return None, None, None, None, None
 
     all_available_weights.sort()
     latest_weights_path = all_available_weights[-1]
@@ -178,4 +181,22 @@ def latest_training_state(model_save_dir):
     epochs_finished = int(latest_weights_path[epoch_start:epoch_start + 2])
     val_acc = float(latest_weights_path[val_acc_start:val_acc_start + 5])
 
-    return latest_weights_path, epochs_finished, val_acc
+    # for best model
+
+    all_best_available_weights = glob.glob(path.join(model_save_dir, 'best_model_ckp_*.hdf5'))
+
+    all_best_available_weights.sort()
+    best_latest_weights_path = all_best_available_weights[-1]
+
+    if len(all_best_available_weights) == 0:
+        best_epoch = epochs_finished
+        best_val_acc = val_acc
+    else:
+        best_epoch_start = find_start(best_latest_weights_path, 'epoch')
+        best_val_acc_start = find_start(best_latest_weights_path, 'val_acc')
+        best_epoch = int(best_latest_weights_path[best_epoch_start:best_epoch_start + 2])
+        best_val_acc = float(best_latest_weights_path[best_val_acc_start:best_val_acc_start + 5])
+
+    epochs_without_improvement = epochs_finished - best_epoch
+
+    return latest_weights_path, epochs_finished, val_acc, best_epoch, best_val_acc, epochs_without_improvement

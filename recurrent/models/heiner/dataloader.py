@@ -615,8 +615,8 @@ class DataLoader:
                     if self.priority_queue:
                         heap = [(l + left_lengths[i], i) for i, l in enumerate(sim_lengths)]
                         heapq.heapify(heap)
-            effective_length = length
             if self.use_every_timestep:
+                effective_length = length
                 sim_and_left_lengths = sim_lengths + left_lengths
                 effective_length += (np.sum(sim_and_left_lengths) - skipped_steps) / (self.timesteps * self.batchsize)
                 last_batch_defining_row = np.max(sim_and_left_lengths)
@@ -624,6 +624,7 @@ class DataLoader:
             else:
                 last_batch_defining_row = np.min(sim_lengths)
                 length += last_batch_defining_row // self.timesteps
+                effective_length = length
             self.effective_length.append(effective_length)
             self.length.append(length)
 

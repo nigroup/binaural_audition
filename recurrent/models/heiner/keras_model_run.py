@@ -81,9 +81,13 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
 
         ################################################# LOAD CHECKPOINTED MODEL
 
-        latest_weights_path, epochs_finished, val_acc = utils.latest_training_state(model_save_dir)
+        model_is_resumed = False
+        latest_weights_path, epochs_finished, val_acc, best_epoch_, best_val_acc_, epochs_without_improvement_ \
+            = utils.latest_training_state(model_save_dir)
         if latest_weights_path is not None:
             model.load_weights(latest_weights_path)
+
+            model_is_resumed = True
 
             if h.epochs_finished[i_val_fold] != epochs_finished:
                 print('MISMATCH: Latest state in hyperparameter combination list is different to checkpointed state.')
@@ -126,9 +130,11 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
         val_phase = tr_utils.Phase('val', model, val_loader, BUFFER, *args)
 
         # needed for early stopping
-        best_val_acc = -1
-        best_epoch = 0
-        epochs_without_improvement = 0
+        best_val_acc = -1 if not model_is_resumed else best_val_acc_
+        best_epoch = 0 if not model_is_resumed else best_epoch_
+        epochs_without_improvement = 0 if not model_is_resumed else epochs_without_improvement_
+
+        metrics_were_merged = False
 
         for e in range(h.epochs_finished[i_val_fold], h.MAX_EPOCHS):
 
@@ -156,6 +162,21 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
 
             if GLOBAL_GRADIENT_NORM_PLOT:
                 metrics['global_gradient_norm'] = np.array(train_phase.global_gradient_norms)
+
+            if model_is_resumed and not metrics_were_merged:
+                # reason for after running the first: detect differences per code changes
+
+                # load old metrics
+                old_metrics = utils.load_metrics(model_save_dir)
+
+                # merge metrics
+
+                # np.concatenate on axis 0
+
+                # set old metrics in the phases
+                # if they match
+                metrics_were_merged = True
+                pass
 
             utils.pickle_metrics(metrics, model_save_dir)
 

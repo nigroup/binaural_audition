@@ -40,9 +40,8 @@ def _plot_acc_over_folds(metrics, save_dir):
     x = np.arange(1, len(metrics['val_class_accs_over_folds']) +1, 1)
     plt.figure(figsize=(15, 15))
 
-    labels = ['alarm', 'baby', 'crash', 'dog', 'engine', 'femaleScreammaleScream', 'femaleSpeech', 'fire',
-              'footsteps',
-              'knock', 'maleSpeech', 'phone', 'piano']
+    labels = ['alarm', 'baby', 'femaleSpeech',  'fire', 'crash', 'dog', 'engine', 'footsteps', 'knock', 'phone',
+              'piano', 'maleSpeech', 'femaleScreammaleScream']
     colors = np.linspace(0.2, 0.8, len(labels))
     cmap = plt.get_cmap('gnuplot2')
     colors = [cmap(val) for val in colors]
@@ -97,9 +96,8 @@ def _plot_loss_and_acc(metric_name, data, save_dir, over_classes=False):
     plt.figure(figsize=(15, 15))
 
     if over_classes:
-        labels = ['alarm', 'baby', 'crash', 'dog', 'engine', 'femaleScreammaleScream', 'femaleSpeech', 'fire',
-                  'footsteps',
-                  'knock', 'maleSpeech', 'phone', 'piano']
+        labels = ['alarm', 'baby', 'femaleSpeech',  'fire', 'crash', 'dog', 'engine', 'footsteps', 'knock', 'phone',
+                  'piano', 'maleSpeech', 'femaleScreammaleScream']
     else:
         data = data[:, np.newaxis]
         labels = ['weighted average'] if 'acc' in metric_name else [None]
@@ -128,9 +126,8 @@ def _plot_sens_spec(metric_name, data, save_dir):
 
     n_plots = data.shape[1] // gridsize
 
-    labels = ['alarm', 'baby', 'crash', 'dog', 'engine', 'femaleScreammaleScream', 'femaleSpeech', 'fire',
-              'footsteps',
-              'knock', 'maleSpeech', 'phone', 'piano']
+    labels = ['alarm', 'baby', 'femaleSpeech',  'fire', 'crash', 'dog', 'engine', 'footsteps', 'knock', 'phone',
+              'piano', 'maleSpeech', 'femaleScreammaleScream']
     colors = np.linspace(0.2, 0.8, len(labels))
     cmap = plt.get_cmap('gnuplot2')
     colors = [cmap(val) for val in colors]

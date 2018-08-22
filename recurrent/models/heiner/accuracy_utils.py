@@ -162,6 +162,8 @@ def get_scene_weights(mode):
                                 21, 20, 29, 29, 20, 21, 29, 29, 20, 21, 29, 20, 21, 21, 29, 20, 10,
                                 10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
         weights = weights / np.sum(weights)
+        # TODO deactivate again
+        # weights = np.ones(80) / 2
     else:
         weights = 1 / np.array([3, 3, 3, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50,
                                 55, 60, 50, 55, 60, 50, 55, 60, 60, 50, 55, 60, 50, 55, 60, 50, 55,
@@ -205,7 +207,7 @@ def calculate_accuracy_per_scene(scene_number_class_accuracies):
         scene_number_class_accuracies = (scene_number_class_accuracies,)
     final_scene_number_accuracies = []
     for scene_number_class_accuracies_i in scene_number_class_accuracies:
-        final_scene_number_accuracies.append(np.mean(scene_number_class_accuracies_i, axis=0))
+        final_scene_number_accuracies.append(np.mean(scene_number_class_accuracies_i, axis=1))
     if len(final_scene_number_accuracies) == 1:
         return final_scene_number_accuracies[0]
     else:
@@ -260,13 +262,13 @@ def test_val_accuracy(with_wrong_predictions=False):
     # print(batches[batches[:, :, :, 0, 1] == 80000008][:, :, 0])
     return val_accuracy(scene_instance_id_metrics_dict)
 
-def test_val_accuracy_real_data(with_wrong_predictions=False):
+def test_val_accuracy_real_data(with_wrong_predictions=True):
     import heiner.train_utils as tr_utils
     epochs = 1
     output_threshold = 0.5
     mask_val = -1
     scenes = list(range(11, 13))
-    train_loader, val_loader = tr_utils.create_dataloaders('blockbased', [1, 2, 4, 5, 6], scenes, 20,
+    train_loader, val_loader = tr_utils.create_dataloaders('blockbased', [1, 2, 4, 5, 6], scenes, 100,
                                                            1000, epochs, 160, 13,
                                                            [3], True, BUFFER=50)
     dloader = val_loader
@@ -274,25 +276,40 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
 
     scene_instance_id_metrics_dict = dict()
 
-    for e in range(epochs):
+    for _ in range(epochs):
         for it in range(1, dloader.len() + 1):
             ret = next(gen)
             if len(ret) == 2:
                 b_x, b_y = ret
             else:
                 b_x, b_y, keep_states = ret
+
             np.random.seed(it)
-            p_y_shape = b_y.shape[:-1]
             if with_wrong_predictions:
-                pad = np.random.choice([True, False], (p_y_shape[0], p_y_shape[1], 1))
-                pad = np.tile(pad, p_y_shape[2])
-                p_y = np.random.choice([0, 1], p_y_shape)
+                p_y = np.copy(b_y[:, :, :, 0])
+                pad = b_y[:, :, :, 1] == mask_val
+
+                # test final -> passes
+
+                # p_y = np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape))  # [0, 1] should be roughly 50% -> [0, 1, 1] shoudl be roughly 33%
+
+                # test per class -> passes
+
+                # p_y[:, :, 3] = np.abs(p_y[:, :, 3] - np.random.choice([0, 1, 1], p_y[:, :, 3].shape))
+                # p_y[:, :, 6] = np.abs(p_y[:, :, 6] - np.random.choice([0, 1, 1], p_y[:, :, 6].shape))
+
+                # test per scene -> passes
+
+                p_y = np.where(b_y[:, :, :, 1] // 1e6 == 11, np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape)), p_y)
+                p_y = np.where(b_y[:, :, :, 1] // 1e6 == 12, np.abs(p_y - np.random.choice([0, 1], p_y.shape)), p_y)
+
                 p_y[pad] = mask_val
             else:
                 p_y = np.copy(b_y[:, :, :, 0])
             calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
                                                                            p_y, b_y, output_threshold,
                                                                            mask_val)
+
     r = val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'))
     scenes_i = np.array(scenes) - 1
     # print(np.mean(sens_spec_per_class_and_scene[scenes_i, :, :]))
@@ -300,4 +317,5 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
 
 if __name__ == '__main__':
     # print(test_val_accuracy(with_wrong_predictions=True))
+    print()
     print(test_val_accuracy_real_data())
