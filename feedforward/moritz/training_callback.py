@@ -11,18 +11,23 @@ class MetricsCallback(Callback):
         self.runtime = []
         self.loss_train_per_batch = []
 
+        # TODO: adapt to last updates from heiner     added sens_spec_class and sens_spec_class_scene
         self.metrics_train = {'wbac': [],
                               'wbac_per_class': [],
+                              'bac_per_scene': [],
                               'bac_per_class_scene': [],
                               'sens_spec_per_class': [],
+                              'sens_spec_per_class_scene': [],
                               'wbac2': [],
                               'wbac2_per_class': []}
 
         if self.myparams['validfold'] != -1:
             self.metrics_valid = {'wbac': [],
                                   'wbac_per_class': [],
+                                  'bac_per_scene': [],
                                   'bac_per_class_scene': [],
                                   'sens_spec_per_class': [],
+                                  'sens_spec_per_class_scene': [],
                                   'wbac2': [],
                                   'wbac2_per_class': []}
 

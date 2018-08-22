@@ -4,22 +4,22 @@ from heiner.accuracy_utils import val_accuracy as heiner_val_accuracy
 from constants import *
 
 def calculate_metrics(scene_instance_id_metrics_dict):
-    # calculate balanced accuracy
-    wbac, wbac_per_class, bac_per_class_scene, sens_spec_per_class = \
-        heiner_val_accuracy(scene_instance_id_metrics_dict, metric='BAC', ret=('final', 'per_class', 'per_class_scene'))
 
-    # calculate balanced accuracy v2
-    wbac2, wbac2_per_class, _= \
-        heiner_val_accuracy(scene_instance_id_metrics_dict, metric='BAC2', ret=('final', 'per_class'))
-    assert (sens_spec_per_class == _).all()
+    (wbac, wbac2), (wbac_per_class, wbac2_per_class), (bac_per_scene, bac2_per_scene), \
+                       (bac_per_class_scene, wbac2_per_class_scene), \
+                       sens_spec_per_class_scene, sens_spec_per_class = \
+            heiner_val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'),
+                        ret=('final', 'per_class', 'per_scene', 'per_class_scene'))
 
     # collect into dict and return
-    metrics = {'wbac': wbac,
-               'wbac_per_class': wbac_per_class,
-               'bac_per_class_scene': bac_per_class_scene,
-               'sens_spec_per_class': sens_spec_per_class,
-               'wbac2': wbac2,
-               'wbac2_per_class': wbac2_per_class}
+    metrics = {'wbac': wbac,                                        # balanced accuracy: scalar (weighted scene avg, class avg)
+               'wbac_per_class': wbac_per_class,                    # balanced accuracy: per class (weighted scene avg)
+               'bac_per_scene': bac_per_scene,                      # balanced accuracy: per scene (class avg)
+               'bac_per_class_scene': bac_per_class_scene,          # balanced accuracy: per scene, per class
+               'sens_spec_per_class': sens_spec_per_class,          # sensitivity/specificity: per scene (class avg)
+               'sens_spec_per_class_scene': sens_spec_per_class,    # sensitivity/specificity: per scene, per class
+               'wbac2': wbac2,                                      # balanced accuracy v2: scalar (weighted scene avg, class avg)
+               'wbac2_per_class': wbac2_per_class}                  # balanced accuracy v2: per class (weighted scene avg)
 
     return metrics
 
@@ -52,6 +52,8 @@ def plotresults(results, params):
     #
     # TODO: wBAC train over epochs (class-averaged)
     # TODO: wBAC test over epochs (for each class and class-averaged), same axis
+
+    # TODO: plot sensitivity/specificity (for each class)
 
     # TODO: include respectively plotting best epoch so-far [max. wBAC]
 

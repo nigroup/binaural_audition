@@ -1,19 +1,30 @@
 import math
 
+# TODO: use hyperopt to define the two (main and fine) optimization tracks
+
 # calculates the next larger historysize that corresponds to an integer residuallayers and saves both in params dict
 # the output is not printed directly in order to have it in the logfile that can be created only after the hyperparams are fixed
-def obtain_residuallayers_refining_historysize(params):
-    params['residuallayers'] = math.ceil(math.log2(params['historylength']/params['kernelsize']) + 1)
+# remark: we enumerate the residual layers with 1,2,...,params['residuallayers']  (see model.py),
+#         i.e., input layer is 0 not the first residual layer
+# historylength calculation see assert in this functino
+def obtain_nextlarger_residuallayers_refining_historysize(params):
+    params['residuallayers'] = math.ceil(math.log2((params['historylength'] - 1)/(params['kernelsize']-1))) + 1
 
-    output = 'computed from given historysize {} the (next larger) number of residuallayers {}'.format(params['historylength'],
-                                                                                         params['residuallayers'])
+    output = ''
 
-    new_historylength = params['kernelsize'] * 2 ** (params['residuallayers'] - 1)
+    new_historylength = (params['kernelsize'] - 1) * 2 ** (params['residuallayers'] - 1) + 1
     if new_historylength != params['historylength']:
         params['historylength'] = new_historylength
+        changestr = '(next larger) '
         output = output + '\nhistorysize was updated to {} (corresponding to the next residuallayer)'.format(new_historylength)
+    else:
+        changestr = ''
 
-    assert params['historylength'] == params['kernelsize'] * 2 ** (params['residuallayers'] - 1)
+    output = 'computed from given historysize {} the {}number of residuallayers {}'.format(params['historylength'],
+                                                                                           changestr,
+                                                                                           params['residuallayers'])
+
+    assert params['historylength'] == (params['kernelsize'] - 1) * 2 ** (params['residuallayers'] - 1) + 1
 
     return output
 

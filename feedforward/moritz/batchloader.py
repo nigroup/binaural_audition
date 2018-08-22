@@ -1,66 +1,292 @@
 import numpy as np
 import multiprocessing as mp
+import os
 import time
 import random
+import math
+import glob
+from tqdm import tqdm
+import pickle
 import copy
 from heiner.dataloader import DataLoader as HeinerDataloader
 from myutils import printerror
 from constants import *
 
+# TODO: validate buffer with manual iterating over all files => use that as __length__ script respecting overlap [to be added to batchloader]
+# TODO go through to dos (e.g. no nan processing necessary anymore => is in data :-))
+
+
+# buffer of a single scene instance (is instantiated e.g. 2000 times in a BatchLoader object in train mode)
+class SceneInstanceBuffer:
+
+    def __init__(self, filename, batchloader, mode, params):
+        # #self.filename_and_or_sceneinstance_id = filename_and_or_sceneinstance_id
+        self.mode = mode
+        self.params = params
+        self.filename = filename
+        self.batchloader = batchloader
+
+        # scene instance id
+        self.scene_instance_id = self.batchloader.scene_instance_ids_dict[filename]
+        # length
+        self.scene_instance_length = self.batchloader.length_dict[filename]
+
+        # load data
+        with np.load(filename) as data:
+            # features
+            self.x = data['x']
+            # remark: input standardization will be done in buffer for the final batch (to be compatible with Heiner's code)
+
+            # labels
+            self.y = data['y'] if params['instantlabels'] else data['y_block']
+
+        assert self.x.shape[1] == self.scene_instance_length
+
+
+    def __len__(self):
+        return self.scene_instance_length
+
+
+    def get_block_generator(self):
+
+        # TODO: move call to constructor (and adapt to get_or_calc scheme via filename)
+        positions, overlaps = self.batchloader.positions_and_overlaps_dict[self.filename]
+
+        empty = False
+        blockid = 0
+        while (not empty):
+
+            # get current position and overlap
+            position = positions[blockid]
+            overlap = overlaps[blockid]
+
+            # collect batchlength long features and labels from frame index position
+            x_block = self.x[:, position:position+self.params['batchlength'], :]
+            y_block = self.y[:, position:position+self.params['batchlength'], :]
+
+            # set mask values (overlapping frames should not be counted twice for loss and accuracy metrics)
+            if overlap > 0: # except first overlap (would though be respected by following slicing as well)
+                y_block[:, position:position+overlap, :] = MASK_VALUE
+
+            # adding scene instance id as second label id
+            # remark: for compatibility with Heiner's accuracy utils we need to provide the scene instance id for each
+            # frame although in our case all frames have the same scene instance id
+            sid_block = self.scene_instance_id * np.ones_like(y_block[:,:, np.newaxis], dtype=DTYPE_DATA)
+            y_concat_sid_block = np.zeros((1, self.params['batchlength'], y_block.shape[1], 2), dtype=DTYPE_DATA)
+            y_concat_sid_block[:, :, :, 0] = y_block
+            y_concat_sid_block[:, :, :, 1] = sid_block
+
+            yield x_block, y_concat_sid_block
+
+            # last blockid processed:
+            if blockid == len(position)-1:
+                empty = True
+            # next blockid:
+            else:
+                blockid += 1
+
+
 class BatchLoader(HeinerDataloader):
     def __init__(self, params, mode, fold_nbs, scene_nbs, batchsize, seed=None):
+        label_mode = 'instant' if params['instantlabels'] else 'blockbased'
         # initializing super constructor with values from above or with their defaults (copied from super init)
-        super().__init__(mode=mode, label_mode='instant' if params['instantlabels'] else 'blockbased',
+        super().__init__(mode=mode, label_mode=label_mode,
                        fold_nbs=fold_nbs, scene_nbs=scene_nbs, batchsize=batchsize, timesteps=params['batchlength'], epochs=params['maxepochs'],
                        buffer=10, features=DIM_FEATURES, classes=DIM_LABELS, path_pattern=DATA_ROOT+'/',
                        seed=seed, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=MASK_VALUE,
                        val_stateful=False, k_scenes_to_subsample=-1,
                        input_standardization=not params['noinputstandardization'])
 
-        self.length = self._get_length_by_loading_or_calculating()
-        print('created batchloader with mode {} using {} labels '.format(mode, label_mode))
+        self.params = params
+        self.calculate_batchnumber() # get number of batches per epoch
 
-        # (re)initialize state of the batch loader
-        self.seed_changes = 0 # ignored if seed is None
-        self.reset(reinit=False)
+        print('created batchloader ({} batches of size {} and length {}) with mode {} using {} labels'.
+              format(self.batches_per_epoch, params['batchsize'], params['batchlength'], mode, label_mode))
 
-    def reset(self, reinit=True):
-        # set new seed
-        if self.seed is not None:
-            self.seed_changes += 1
-            random.seed(self.seed * self.seed_changes) # to have new seed per epoch (also for validation set)
+        # calculate or load filename->scene instance id, filename->scene instance length, filename->positions,overlaps dicts
+        self._scene_instance_ids_dict()
+        self._length_dict()
+        self._block_positions_and_overlaps_dict()
 
-        textre = 're' if reinit > 0 else ''
-        print('batchloader (mode {}) was {}initialized'.format(self.mode, textre))
-        pass
+        # initialize state of the batch loader
+        self.epoch = 0
+        self.init_epoch(first=True)
+
+    def calculate_batchnumber(self):
+        blocks = 0
+        for filename in self.filenames:
+            positions, overlaps = self.positions_and_overlaps_dict[filename]
+            blocks += len(positions)
+
+        self.batches_per_epoch = int(math.ceil(blocks/self.params['batchsize']))
+
+
+    def _block_positions_and_overlaps_dict(self):
+        if self.block_positions_and_overlaps_dict is None:
+            pickle_path = os.path.join(self.pickle_path, 'block_positions_and_overlaps_dict.pickle')
+
+            # update stored dict if current parametrization is not yet contained:
+            if not os.path.exists(pickle_path):
+                self._create_block_positions_and_overlaps_dict(pickle_path=pickle_path)
+
+            # read stored dict(batchlength,historylength) of dicts(filename)
+            with open(pickle_path, 'rb') as handle:
+                all_block_positions_and_overlaps_dict = pickle.load(handle)
+
+            dict_key = (self.params['batchlength'], self.params['historylength'])
+
+            # update stored dict if current parametrization is not yet contained:
+            if dict_key not in all_block_positions_and_overlaps_dict:
+                self._create_block_positions_and_overlaps_dict(pickle_path=pickle_path)
+                with open(pickle_path, 'rb') as handle:
+                    all_block_positions_and_overlaps_dict = pickle.load(handle)
+
+            # now we have ensured that the current parametrization exists in all_* dict
+            self.block_positions_and_overlaps_dict = all_block_positions_and_overlaps_dict[dict_key]
+
+        return self.block_positions_and_overlaps_dict
+
+    def _create_block_positions_and_overlaps_dict(self, pickle_path):
+
+        # calculate positions (startind frame indices) and overlaps (number of frames) of consecutive blocks
+        # of a scene instance that is represented here only by its length
+        # remark: the overlap with the previous block can vary though:
+        #         first block (no overlap at all), intermediate blocks (overlap historysize-1) and
+        #         the last block (overlap s.t. the end of the scene instance is exactly approached => quite large overlap possible)
+        def calculate_block_positions_and_overlaps(scene_instance_length, batch_length, history_length):
+            # TODO: optimize this costly part by saving/pickling these lists and loading ondemand => wrap this function by get_or_calc => needs filename as argument, check and adapt two calling positions
+
+            # assume that at least one full block (with batchlength) exists in the the scene instance
+            assert batch_length <= scene_instance_length
+
+            # first block
+            block_idx = 0
+            positions = [0]
+            overlaps = [0]
+
+            # there are more blocks, at least a second block:
+            if batch_length < scene_instance_length:
+                last_block = False
+            # first block is the only block:
+            else:
+                last_block = True
+
+            # until we have collected all blocks
+            while (not last_block):
+                # next block
+                block_idx += 1
+
+                # position candidate
+                position = positions[block_idx - 1] + batch_length
+
+                # for intermediate block overlapsuch that the first history_length-1 elements are shared with previous block
+                # and the history_length's element is the first new frame (the overlapping part will be masked)
+                overlap = history_length - 1
+
+                # last block only:
+                if position - overlap + batch_length >= scene_instance_length:
+                    last_block = True
+                    overlap = position + batch_length - scene_instance_length + 1
+                    # ensure overlap is nonnegative and smaller than batch_length
+                    assert overlap >= 0 and overlap < batch_length
+
+                # update position to include overlap
+                position -= overlap
+
+                # ensure that beginning and end of block are within 0...scene_instance_length-1
+                assert position >= 0 and position <= scene_instance_length - 1
+
+                if last_block:
+                    # ensure that last block really is last block
+                    assert position == scene_instance_length - batch_length - 1
+
+                positions.append(position)
+                overlaps.append(overlaps)
+
+            # the length of both returned lists is the number of (batchlength long) blocks
+            return positions, overlaps
+
+        # initialize the dicitionary for filename->positions,overlap
+        new_dict = {}
+
+        # we need the scene instance lengths for each filename
+        self._length_dict()
+
+        all_existing_files = glob.glob(self.pickle_path_pattern)
+        all_existing_files = sorted(all_existing_files)
+        for filename in tqdm(all_existing_files):
+            positions, overlaps = calculate_block_positions_and_overlaps(self.length_dict[filename],
+                                                                         self.params['batchlength'],
+                                                                         self.params['historylength'])
+            new_dict[filename] = (positions, overlaps)
+
+        # load overall dictionary from file or, if file not existing, initialize it
+        try:
+            with open(pickle_path, 'rb') as handle:
+                all_block_positions_and_overlaps_dict = pickle.load(handle)
+        except IOError: #
+            all_block_positions_and_overlaps_dict = {}
+
+        # the to be pickled overall dictionary: dict(batchlength,historylength)->dict(filename->positions,overlaps)
+        all_block_positions_and_overlaps_dict[(self.params['batchlength'], self.params['historylength'])] = new_dict
+
+        with open(pickle_path, 'wb') as handle:
+            pickle.dump(all_block_positions_and_overlaps_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+    def fill_scene_instance_buffers(self):
+        # add more scene instance buffers until buffer full or all files consumed (e.g. in test mode for a single scene)
+        while (len(self.scene_instance_buffers) < min(len(self.scene_instance_buffers)+len(self.filenames),
+                                                      self.params['sceneinstancebufsize'])):
+            filename = self.filenames.pop()
+            scene_instance_length = self.length_dict[filename]
+            scene_instance_id = self.scene_instance_ids_dict[filename]
+
+            scene_instance_buf = SceneInstanceBuffer(self, filename,  self, self.mode, self.params)
+            self.scene_instance_buffers.append(scene_instance_buf)
+
+
+    def init_epoch(self, first=False):
+
+        if first:
+            self.epoch = 0
+            self.scene_instance_buffers = []
+        else:
+            self.epoch += 1
+            # ensure that the scene instance buffer list is empty
+            assert not self.scene_instance_buffers
+
+        # recover original list of all filenames
+        self.filenames = self.filenames_all.copy()
+
+        # set new seed [only applicable in training mode, valid and test scene instances are always processed in order]
+        if self.mode == 'train':
+            # set new seed if wished (for reproducible results)
+            if self.seed is not None:
+                random.seed(self.seed * (self.epoch+1)) # to have new seed per epoch (also for validation set)
+
+            # shuffle filenames (not required for valid/test sets)
+            self.filenames = random.shuffle(self.filenames)
+
+        self.fill_scene_instance_buffers()
+        print('batchloader (mode {}) is prepared for epoch {} having its scene instance buffers filled'.format(self.mode, self.epoch+1))
+
+        # TODO: potentially add more to reset (position, buffers etc)
 
     def __iter__(self):
-        pass
+        return self
 
     def __next__(self):
-        print('DEBUG: batchloader is sending next element')
+        # TODO: random sampling only for train mode, otherwise do in order
+        # TODO: give longer scene instances higher probability to prevent very long remaining scene instances (and thus many correlated batches)
+        # TODO: model epochs here (i.e., reset after each epoch and end after maxepoch epochs)
         pass
 
     def __len__(self): # required for the generators in generator_extension generally and also the progress bar
         return self.batches_per_epoch
 
-    def _get_length_by_loading_or_calculating(self):
-        # TODO fill content
-        print('naive version 1: missing')
-
-        print('better (final) version 2: missing')
-
-        print('validation of version 2: missing')
-
-        printerror('DOH: specifying dummy value 3 as batchloader size')
-        self.batches_per_epoch = 3
 
 
-class SceneInstance
-
-
-# TODO: implement loader
-# mode=train => nan to 1, mode=valid_test => nan to -1 (=filter) -- check with test data definition
 
 
 # meta parameters
