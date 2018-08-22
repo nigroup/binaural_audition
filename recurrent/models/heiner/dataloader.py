@@ -14,7 +14,8 @@ class DataLoader:
                  buffer=10, features=160, classes=13, path_pattern='/mnt/binaural/data/scenes2018/',
                  seed=1, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=-1.0,
                  val_stateful=False, k_scenes_to_subsample=-1,
-                 input_standardization=False): #TODO change to True and copy
+                 input_standardization=True,
+                 use_multiprocessing=False):
 
         self.mode = mode
         self.path_pattern = path_pattern
@@ -80,6 +81,11 @@ class DataLoader:
         self.input_standardization_metrics = None
 
         self.train_on_all_folds = False
+
+        self.use_multiprocessing = use_multiprocessing
+        self.copy_on_return = True
+        if self.use_multiprocessing:
+            self.copy_on_return = False
 
         if self.mode != 'test' and self.input_standardization:
             if type(self.fold_nbs) is int:
@@ -194,20 +200,18 @@ class DataLoader:
 
             N = 0
             sum = np.zeros((1, self.features))
+            sum_sq = np.zeros((1, self.features))
+
             for file in tqdm(all_existing_files):
                 with np.load(file) as data:
                     N += data['x'].shape[1]
                     sum += np.sum(data['x'], axis=1)
-            mean = sum / N
-            mean = mean[np.newaxis, :, :]
+                    sum_sq += np.sum(data['x']**2, axis=1)
 
-            sum_mean_sq = np.zeros((1, self.features))
-            for file in tqdm(all_existing_files):
-                with np.load(file) as data:
-                    x = data['x']
-                    x = (x - mean) ** 2
-                    sum_mean_sq += np.sum(x, axis=1)
-            std = np.sqrt(sum_mean_sq / N)
+            mean = sum / N
+            var = sum_sq / N - mean**2
+            std = np.sqrt(var)
+            mean = mean[np.newaxis, :, :]
             std = std[np.newaxis, :, :]
 
             return (mean, std)
@@ -429,8 +433,10 @@ class DataLoader:
 
         def batches_with_timesteps():
             last_ind = self.row_start + self.timesteps - 1
-            x = self.buffer_x[:, self.row_start:self.row_start + self.timesteps, :].copy()
-            y = self.buffer_y[:, self.row_start:self.row_start + self.timesteps, :, :].copy()
+            x = self.buffer_x[:, self.row_start:self.row_start + self.timesteps, :]
+            x = np.copy(x) if self.copy_on_return else x
+            y = self.buffer_y[:, self.row_start:self.row_start + self.timesteps, :, :]
+            y = np.copy(y) if self.copy_on_return else y
             self.row_start += self.timesteps
             if self.val_stateful:
                 if last_ind + 1 < self.buffer_size:
@@ -640,7 +646,7 @@ class DataLoader:
 
         def get_length(file):
             with np.load(file) as data:
-                return data['x'].shape[1]
+                return data['y'].shape[1] if self.instant_mode else data['y_block'].shape[1]
 
         d = {file: get_length(file) for file in tqdm(all_existing_files)}
         with open(path.join(self.pickle_path, 'file_lengths.pickle'), 'wb') as handle:
