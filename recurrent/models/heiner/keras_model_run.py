@@ -26,6 +26,11 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
     sys.stdout = utils.UnbufferedLogAndPrint(os.path.join(model_dir, 'logfile'), sys.stdout)
     sys.stderr = utils.UnbufferedLogAndPrint(os.path.join(model_dir, 'errorfile'), sys.stderr)
 
+    ################################################# HCOMB
+
+    print(5 * '\n' + 'Hyperparameter combination...\n')
+    print(h.__dict__)
+
     ################################################# CROSS VALIDATION
     start = timer()
 
@@ -88,7 +93,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
 
         ################################################# COMPILE MODEL
 
-        adam = Adam(lr=h.LEARNING_RATE)
+        adam = Adam(lr=h.LEARNING_RATE, clipnorm=1.)
         model.compile(optimizer=adam, loss=my_loss, metrics=None)
 
         print('\nModel compiled.\n')
@@ -131,7 +136,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
             val_phase.run()
 
             tr_utils.update_latest_model_ckp(model_ckp_last, model_save_dir, e, val_phase.accs[-1])
-            model_ckp_best.on_epoch_end(e, logs={'val_final_acc': val_phase.accs[-1]})
+            tr_utils.update_best_model_ckp(model_ckp_best, model_save_dir, e, val_phase.accs[-1])
 
             metrics = {'metric': h.METRIC,
                        'train_losses': np.array(train_phase.losses),
@@ -215,7 +220,7 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
         if h is None:
             return gpu
 
-        ID, h.__dict__, is_overwrite = hcm.get_hcomb_id(h)
+        ID, h.__dict__, already_contained = hcm.get_hcomb_id(h)
         if h.finished:
             print('Hyperparameter Combination for this model version already evaluated. ABORT.')
             continue
@@ -223,7 +228,7 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
 
         model_dir = os.path.join(save_path, 'stage' + str(h.STAGE), 'hcomb_' + str(ID))
 
-        if reset_hcombs and is_overwrite and os.path.exists(model_dir):
+        if reset_hcombs and already_contained and os.path.exists(model_dir):
             shutil.rmtree(model_dir)
 
         os.makedirs(model_dir, exist_ok=True)

@@ -35,6 +35,7 @@ def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTE
                               buffer=BUFFER, use_multiprocessing=use_multiprocessing)
     train_loader_len = train_loader.len()
     print('Number of batches per epoch (training): ' + str(train_loader_len))
+    print('Data efficiency per epoch (training): ' + str(train_loader.data_efficiency()))
 
     val_loader = DataLoader('val', LABEL_MODE, VAL_FOLDS, TRAIN_SCENES, epochs=EPOCHS, batchsize=BATCHSIZE,
                             timesteps=TIMESTEPS, features=NFEATURES, classes=NCLASSES, val_stateful=VAL_STATEFUL,
@@ -42,17 +43,28 @@ def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTE
 
     val_loader_len = val_loader.len()
     print('Number of batches per epoch (validation): ' + str(val_loader_len))
+    print('Data efficiency per epoch (validation): ' + str(val_loader.data_efficiency()))
 
     return train_loader, val_loader
 
+def update_best_model_ckp(best_model_ckp_last, model_save_dir, e, acc):
+    best_model_ckp_last.on_epoch_end(e, logs={'val_final_acc': acc})
+    created_best_checkpoints = glob.glob(os.path.join(model_save_dir, 'best_model_ckp_epoch*.hdf5'))
+    if len(created_best_checkpoints) > 1:   # new one is better than the old
+        created_best_checkpoints = sorted(created_best_checkpoints)
+        if os.path.exists(created_best_checkpoints[0]):
+            os.remove(created_best_checkpoints[0])
+        else:
+            raise ValueError('Model checkpoint found by glob but is not a file.')
+
 def update_latest_model_ckp(model_ckp_last, model_save_dir, e, acc):
-    created_checkpoint = glob.glob(os.path.join(model_save_dir, 'model_ckp_epoch*.hdf5'))
-    if len(created_checkpoint) > 1:
+    created_checkpoints = glob.glob(os.path.join(model_save_dir, 'model_ckp_epoch*.hdf5'))
+    if len(created_checkpoints) > 1:
         raise ValueError('Just one latest Model checkpoint besides the best should exist. N:{} exist.'.format(
-            len(created_checkpoint)))
-    if len(created_checkpoint) == 1:
-        if os.path.exists(created_checkpoint[0]):
-            os.remove(created_checkpoint[0])
+            len(created_checkpoints)))
+    if len(created_checkpoints) == 1:
+        if os.path.exists(created_checkpoints[0]):
+            os.remove(created_checkpoints[0])
         else:
             raise ValueError('Model checkpoint found by glob but is not a file.')
 

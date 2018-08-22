@@ -83,7 +83,7 @@ class DataLoader:
         self.train_on_all_folds = False
 
         self.use_multiprocessing = use_multiprocessing
-        self.copy_on_return = True
+        self.copy_on_return = False     # TODO investigate if it gives speed up and if it's correct
         if self.use_multiprocessing:
             self.copy_on_return = False
 
@@ -162,10 +162,10 @@ class DataLoader:
                 self.filenames = [tup[1] for tup in sorted(length_tuples, key=lambda x: x[0], reverse=True)]
                 self.filenames_deque = deque(self.filenames)
 
-    def _input_standardization_if_wanted(self, x, y):
+    def _input_standardization_if_wanted(self, x):
         if self.input_standardization:
             mean, std = self._input_standardization_metrics()
-            return np.where(y[:, :, 0, 0][:, :, np.newaxis] != self.mask_val, (x - mean) / std, self.mask_val)
+            return (x - mean) / std
         return x
 
     def _input_standardization_metrics(self):
@@ -449,8 +449,8 @@ class DataLoader:
                 else:
                     keep_states = self.row_leftover[:, 0] != -1
                 keep_states = keep_states[:, np.newaxis]
-                return self._input_standardization_if_wanted(x, y), y, keep_states
-            return self._input_standardization_if_wanted(x, y), y
+                return self._input_standardization_if_wanted(x), y, keep_states
+            return self._input_standardization_if_wanted(x), y
 
         if self.row_start == self.buffer_size:
             self._clear_buffers()
@@ -482,7 +482,7 @@ class DataLoader:
             with np.load(self.filenames.pop()) as data:
                 sequence = data['x']
                 labels = data['y'] if self.instant_mode else data['y_block']
-                return self._input_standardization_if_wanted(sequence, labels), labels
+                return self._input_standardization_if_wanted(sequence), labels
         else:
             return None, None
 
@@ -511,7 +511,7 @@ class DataLoader:
                 scene_instance_id = self._scene_instance_ids_dict()[next_filename]
                 b_y[r, :length, :, 1] = scene_instance_id
                 r += 1
-            return self._input_standardization_if_wanted(b_x, b_y), b_y
+            return self._input_standardization_if_wanted(b_x), b_y
         else:
             self.act_epoch += 1
             if self.act_epoch > self.epochs:

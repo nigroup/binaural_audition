@@ -9,7 +9,7 @@ import portalocker
 
 
 class H:
-    def __init__(self, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=64, MAX_EPOCHS=50,
+    def __init__(self, ID=-1, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=64, MAX_EPOCHS=50,
                  UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001,
                  RECURRENT_DROPOUT=0.25, INPUT_DROPOUT=0., LSTM_OUTPUT_DROPOUT=0.25, MLP_OUTPUT_DROPOUT=0.25,
                  OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 81),
@@ -19,6 +19,8 @@ class H:
                  MASK_VAL=-1, VAL_STATEFUL=True, METRIC='BAC',
                  HOSTNAME=''):
         ################################################################################################################
+
+        self.ID = ID
 
         # Not by Random Search
         self.N_CLASSES = N_CLASSES
@@ -167,7 +169,7 @@ class HCombManager:
             self._write_hcomb_list(hcombs_to_run, handle)
             return hcomb_to_run
 
-    def get_hcomb_id(self, h, overwrite_hcombs=True):
+    def get_hcomb_id(self, h, always_append_hcombs=False):
         with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
@@ -176,17 +178,18 @@ class HCombManager:
             hcomb_list_copy = deepcopy(hcomb_list)
             for hcomb in hcomb_list_copy:
                 self._make_comparable(hcomb, h)
-            if h in hcomb_list_copy and overwrite_hcombs:
+            if h in hcomb_list_copy and not always_append_hcombs:
                 index = hcomb_list_copy.index(h)
-                is_overwrite = True
+                already_contained = True
             else:
+                h['ID'] = len(hcomb_list)
                 hcomb_list.append(h)
                 index = hcomb_list.index(h)
-                is_overwrite = False
+                already_contained = False
 
             self._write_hcomb_list(hcomb_list, handle)
 
-            return index, hcomb_list[index], is_overwrite
+            return index, hcomb_list[index], already_contained
 
     def set_hostname_and_batch_size(self, id_, h, hostname, batch_size):
         with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
@@ -202,6 +205,8 @@ class HCombManager:
             self._write_hcomb_list(hcomb_list, handle)
 
     def _make_comparable(self, hcomb, h):
+        hcomb['ID'] = h['BATCH_SIZE']
+        hcomb['STAGE'] = h['STAGE']
         hcomb['BATCH_SIZE'] = h['BATCH_SIZE']
         hcomb['HOSTNAME'] = h['HOSTNAME']
         hcomb['finished'] = h['finished']
@@ -293,8 +298,6 @@ class HCombManager:
 class RandomSearch:
 
     def __init__(self, metric_used='BAC', STAGE=1, time_steps=1000):
-
-        # TODO: find time-steps
 
         # random search stage
         self.STAGE = STAGE
