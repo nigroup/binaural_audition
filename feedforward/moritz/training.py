@@ -39,7 +39,7 @@ parser.add_argument('--dropoutrate', type=float, default=0.0,
                         help='rate of the two spatial dropout layers within each residual block')
 parser.add_argument('--kernelsize', type=int, default=3,
                         help='size of the temporal kernels')
-parser.add_argument('--historylength', type=int, default=500,
+parser.add_argument('--historylength', type=int, default=1000,
                         help='effective receptive field of the model; historylength is increased to next multiple of '+
                              '(filtersize-1) * 2^(resblocks - 1) + 1 => the no of resblocks is determined via this formula. '+
                              'recommendation: ensure that batchlength is significantly larger (i.e., at least threefold) '+
@@ -51,16 +51,16 @@ parser.add_argument('--weightnorm', action='store_true', default=False,
                         help='disables the weight norm version of the Adam optimizer, i.e., falls back to regular Adam')
 parser.add_argument('--learningrate', type=float, default=0.001,
                         help='initial learning rate of the Adam optimizer')
-parser.add_argument('--batchsize', type=int, default=32,
+parser.add_argument('--batchsize', type=int, default=128, #256,
                         help='number of time series per batch (should be power of two for efficiency)')
 parser.add_argument('--batchlength', type=int, default=2500, # 2500 batchlength corresponds to 75% of all scene instances to fit into two batches (with a hist size up to 1200 determining the necessary overlap)
                         help='length of the time series per batch (should be significantly larger than history size '+
                              'to allow for efficiency/parallelism)') # 2999 is the smallest scene instance length in our (training) data set
-parser.add_argument('--maxepochs', type=int, default=2,
+parser.add_argument('--maxepochs', type=int, default=30,
                         help='maximal number of epochs (typically stopped early before reaching this value)')
 parser.add_argument('--noinputstandardization', action='store_true', default=False,
                         help='disables input standardization')
-parser.add_argument('--earlystop', type=int, default=5,
+parser.add_argument('--earlystop', type=int, default=4,
                         help='early stop patience, i.e., number of number of non-improving epochs; -1 => no early stopping')
 parser.add_argument('--validfold', type=int, default=3,
                         help='number of validation fold (1, ..., 6); -1 => use all 6 for training [latter incompatible with earlystopping]')
@@ -73,7 +73,7 @@ parser.add_argument('--firstsceneonly', action='store_true', default=False,
                         help='if chosen: only the first scene is used for training/validation, otherwise all (80)')
 parser.add_argument('--instantlabels', action='store_true', default=False,
                         help='if chosen: instant labels; otherwise: block-interprete labels')
-parser.add_argument('--sceneinstancebufsize', type=int, default=2000,
+parser.add_argument('--sceneinstancebufsize', type=int, default=3000,
                         help='number of buffered scene instances from which to draw the time series of a batch')
 # parser.add_argument('--batchbufmultiproc', action='store_true', default=False,
 #                         help='multiprocessing mode of the batchcreator')
@@ -209,13 +209,13 @@ batchloader_training = BatchLoader(params=params, mode='train', fold_nbs=params[
 if params['validfold'] == -1:
     batchloader_validation = None
 else:
-    batchloader_validation = BatchLoader(params=params, mode='val', fold_nbs=params['validfold'],
+    batchloader_validation = BatchLoader(params=params, mode='val', fold_nbs=[params['validfold']],
                                          scene_nbs=params['scenes_trainvalid'], batchsize=params['batchsize'])  # seed for testing
 
-params['batches_per_trainepoch'] = len(batchloader_training)
+params['batches_per_epoch'] = batchloader_training.batches_per_epoch
 
 print('starting training for at most {} epochs ({} batches per epoch)'.format(params['maxepochs'],
-                                                                              params['batches_per_trainepoch']))
+                                                                              params['batches_per_epoch']))
 
 # collect train and validation metrics after each epoch (loss, wbac, wbac_per_class, bac_per_class_scene, wbac2,
 # wbac2_per_class, sensitivies, specificities, gradient statistics, runtime) and after each batch (loss, gradient statistics)
@@ -235,12 +235,13 @@ fit_and_predict_generator_with_sceneinst_metrics(model,
                                                  generator=batchloader_training,
                                                  params=params,
                                                  epochs=params['maxepochs'],
-                                                 steps_per_epoch=params['batches_per_trainepoch'],
+                                                 steps_per_epoch=params['batches_per_epoch'],
                                                  callbacks=callbacks,
                                                  max_queue_size=params['batchbufsize'],
                                                  workers=1,
                                                  use_multiprocessing=True,
-                                                 validation_data=batchloader_validation)
+                                                 validation_data=batchloader_validation,
+                                                 validation_steps=params['batches_per_epoch'])
 
 # collecting and saving results
 results = metricscallback.results

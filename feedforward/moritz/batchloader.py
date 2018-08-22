@@ -8,7 +8,7 @@ import math
 import glob
 from tqdm import tqdm
 import pickle
-import copy
+import gc
 from heiner.dataloader import DataLoader as HeinerDataloader
 from myutils import printerror
 from constants import *
@@ -105,6 +105,8 @@ class BatchLoader(HeinerDataloader):
                        input_standardization=not params['noinputstandardization'])
 
         self.params = params
+
+        self.free_memory_batches = 10 # run garbage collector after 10 batches
 
         # we require scene instance buffers to be larger than the batchsize (assumed in refill logic)
         assert self.params['sceneinstancebufsize'] > self.params['batchsize']
@@ -270,7 +272,7 @@ class BatchLoader(HeinerDataloader):
             # create buffer and append it to buffers list
             scene_instance_buf = SceneInstanceBuffer(filename,  self, self.mode, self.params)
             self.scene_instance_buffers.append(scene_instance_buf)
-            if mode == 'train':
+            if self.mode == 'train':
                 self.scene_instance_buffers_last = np.append(self.scene_instance_buffers_last, 10000)
                 self.scene_instance_buffers_remaining.append(len(scene_instance_buf))
 
@@ -285,7 +287,8 @@ class BatchLoader(HeinerDataloader):
         if first:
             self.epoch = 0
             self.scene_instance_buffers = []
-            if mode == 'train':
+            if self.mode == 'train':
+                # data for biased sampling from scene instance buffer ids in training mode
                 self.scene_instance_buffers_last = np.array([], dtype=np.int)
                 self.scene_instance_buffers_remaining = []
         else:
@@ -342,6 +345,10 @@ class BatchLoader(HeinerDataloader):
         if self.mode == 'train':
             self.scene_instance_buffers_last += 1
 
+        # free memory (unreferenced scene instance buffers) after every few batches
+        if self.batchid % self.free_memory_batches == 0:
+            gc.collect()
+
         # add blocks to our batch until we have filled the batch or there are no blocks in the buffer left (last batch)
         while (blockid < self.params['batchsize'] and len(self.scene_instance_buffers) > 0):
 
@@ -349,9 +356,8 @@ class BatchLoader(HeinerDataloader):
             if self.mode == 'train':
                     probs = self._scene_instance_buffer_probs()
                     sibuf_id = np.random.choice(len(self.scene_instance_buffers), size=1, replace=False, p=probs)[0]
-                    pass
-                # old version (whithout random.choice etc.)
-                # sibuf_id = random.randint(0, len(self.scene_instance_buffers)-1)
+                    # old version (without respecting batch correlation, without biasing towards longer sequences)
+                    # sibuf_id = random.randint(0, len(self.scene_instance_buffers)-1)
 
             # validation/test mode: simply take the first scene instance:
             else:
@@ -365,15 +371,7 @@ class BatchLoader(HeinerDataloader):
             if buffer_output is not None:
                 self.batch_x[blockid, :, :], self.batch_y[blockid, :, :, :] = buffer_output
 
-                # print(
-                #     'receiving block from scene instance buffer idx {} => {} (remaining before {}, last seen in {} batches before)'
-                #     .format(sibuf_id, self.scene_instance_buffers[sibuf_id].filename,
-                #             self.scene_instance_buffers_remaining[sibuf_id],
-                #             self.scene_instance_buffers_last[sibuf_id]))
-                # print(
-                #     'receiving block from scene instance buffer idx {} => {}'
-                #     .format(sibuf_id, self.scene_instance_buffers[sibuf_id].filename))
-
+                # we fetched a valid block => update data for biased sampling
                 if self.mode == 'train':
                     self.scene_instance_buffers_last[sibuf_id] = 0
                     self.scene_instance_buffers_remaining[sibuf_id] -= 1
@@ -385,6 +383,7 @@ class BatchLoader(HeinerDataloader):
             else:
                 remove_buffer = True
 
+            # remove scene instance that is completely used
             if remove_buffer:
                 self.scene_instance_buffers.pop(sibuf_id)
                 if self.mode == 'train':
@@ -406,6 +405,11 @@ class BatchLoader(HeinerDataloader):
 
         return self._input_standardization_if_wanted(effective_batch_x), effective_batch_y
 
+    # calculate probabilities that weight each scene instance buffer with its sequence lengt and also decrease weights of
+    # scene instances that were sampled in the previous batch, i.e., decrease ensure that the last batches do not consist
+    # of several batches of the last remaining long sequences, and also generally correlation between any two directly
+    # successive batches are removed
+    # optional improvement: decrease probability also if a block was taken two batches before (e.g. weight by inverse last seen)
     def _scene_instance_buffer_probs(self):
         assert len(self.scene_instance_buffers_remaining) == len(self.scene_instance_buffers_last) == len(self.scene_instance_buffers)
         remaining_squared = np.array(self.scene_instance_buffers_remaining)**2
