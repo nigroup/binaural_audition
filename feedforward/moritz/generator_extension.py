@@ -1,9 +1,7 @@
 # this file extends the generators on keras original keras/engine/training_generator.py as follows
 # 1) fit and predict are combined into one generator
 # 2) evaluate and predict are combined into one generator
-# 3) both generators calculate the (sceneinstance-based) metrics after each batch
-#    and save it for final processing using a callback
-# 4) the fit_predict_generator_with_metrics
+# 3) both generators calculate the sceneinstance-based metrics after each batch (for further processing via callback)
 
 """Part of the training engine related to Python generators of array data.
 """
@@ -239,8 +237,10 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                 # Epoch finished.
                 if steps_done >= steps_per_epoch and do_validation:
                     if val_gen:
-                        val_outs = model.evaluate_and_predict_generator(
+                        val_outs = evaluate_and_predict_generator_with_sceneinst_metrics(
+                            model, 
                             val_enqueuer_gen,
+                            params, 
                             validation_steps,
                             workers=0)
                     else:
@@ -276,7 +276,9 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
     return model.history
 
 
-def evaluate_and_predict_generator_with_sceneinst_metrics(model, generator, params,
+def evaluate_and_predict_generator_with_sceneinst_metrics(model, 
+                       generator, 
+                       params,
                        steps=None,
                        max_queue_size=10,
                        workers=1,
