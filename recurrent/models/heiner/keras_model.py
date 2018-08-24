@@ -20,13 +20,10 @@ logger = logging.getLogger('exceptions_logger')
 def my_handler(type, value, tb):
     logger.exception("Uncaught exception: {0}".format(str(value)))
 
-# Install exception handler
-sys.excepthook = my_handler
-
 def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, reset_hcombs, time_steps):
     use_tmux.set_use_tmux(tmux)
     gpu_str = ''
-    if type(available_gpus) is int:
+    if type(available_gpus) is str:
         gpu_str += '_' + str(available_gpus)
     else:
         for gpu in available_gpus:
@@ -80,11 +77,15 @@ def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, r
         print('\nAll available GPUs are started.')
         sys.exit(0)
     else:
-
-        run.run_gpu('2', save_path, reset_hcombs)
+        if type(available_gpus) is list:
+            available_gpus = available_gpus[0]
+        run.run_gpu(available_gpus, save_path, reset_hcombs)
         sys.exit(0)
 
 if __name__ == "__main__":
+    # Install exception handler
+    sys.excepthook = my_handler
+
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--tmux',
                         required=False,
