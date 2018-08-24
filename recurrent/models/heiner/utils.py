@@ -56,6 +56,8 @@ def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/binaura
     weights_array = np.load(save_path)
     if type(fold_nbs) is int:
         fold_nbs = [fold_nbs]
+    if scene_nbs == -1:
+        scene_nbs = list(range(1, 81))
     if type(scene_nbs) is int:
         scene_nbs = [scene_nbs]
     fold_nbs = np.array(fold_nbs) - 1
@@ -163,6 +165,39 @@ def pickle_metrics(metrics_dict, folder_path):
 def load_metrics(folder_path):
     with open(path.join(folder_path, 'metrics.pickle'), 'rb') as handle:
         return pickle.load(handle)
+
+def create_metrics_over_folds_dict(best_val_class_accs_over_folds, best_val_accs_over_folds,
+                                   best_val_class_accs_over_folds_bac2, best_val_accs_over_folds_bac2):
+    metrics_over_folds = {
+        'best_val_class_accs_over_folds': best_val_class_accs_over_folds,
+        'best_val_class_accs_mean_over_folds': np.array(np.mean(
+            best_val_class_accs_over_folds[np.all(best_val_class_accs_over_folds != 0, axis=1), :],
+            axis=0)),
+        'best_val_class_accs_std_over_folds': np.array(np.std(
+            best_val_class_accs_over_folds[np.all(best_val_class_accs_over_folds != 0, axis=1), :],
+            axis=0)),
+        'best_val_acc_over_folds': best_val_accs_over_folds,
+        'best_val_acc_mean_over_folds': np.array(
+            np.mean(best_val_accs_over_folds[best_val_accs_over_folds != 0])),
+        'best_val_acc_std_over_folds': np.array(
+            np.std(best_val_accs_over_folds[best_val_accs_over_folds != 0])),
+
+        'best_val_class_accs_over_folds_bac2': best_val_class_accs_over_folds_bac2,
+        'best_val_class_accs_mean_over_folds_bac2': np.array(np.mean(
+            best_val_class_accs_over_folds_bac2[np.all(best_val_class_accs_over_folds_bac2 != 0, axis=1),
+            :],
+            axis=0)),
+        'best_val_class_accs_std_over_folds_bac2': np.array(np.std(
+            best_val_class_accs_over_folds_bac2[np.all(best_val_class_accs_over_folds_bac2 != 0, axis=1),
+            :],
+            axis=0)),
+        'best_val_acc_over_folds_bac2': best_val_accs_over_folds_bac2,
+        'best_val_acc_mean_over_folds_bac2': np.array(np.mean(
+            best_val_accs_over_folds_bac2[best_val_accs_over_folds_bac2 != 0])),
+        'best_val_acc_std_over_folds_bac2': np.array(
+            np.std(best_val_accs_over_folds_bac2[best_val_accs_over_folds_bac2 != 0]))
+    }
+    return metrics_over_folds
 
 def latest_training_state(model_save_dir):
     all_available_weights = glob.glob(path.join(model_save_dir, 'model_ckp_*.hdf5'))
