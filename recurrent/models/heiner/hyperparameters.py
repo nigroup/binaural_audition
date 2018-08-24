@@ -1,8 +1,7 @@
 import pickle
 from copy import deepcopy
-from os import path
 from operator import add
-from collections import deque
+from os import path
 
 import numpy as np
 import portalocker
@@ -12,9 +11,9 @@ class H:
     def __init__(self, ID=-1, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=64, MAX_EPOCHS=50,
                  UNITS_PER_LAYER_LSTM=None, UNITS_PER_LAYER_MLP=None, LEARNING_RATE=0.001,
                  RECURRENT_DROPOUT=0.25, INPUT_DROPOUT=0., LSTM_OUTPUT_DROPOUT=0.25, MLP_OUTPUT_DROPOUT=0.25,
-                 OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=range(1, 81),
+                 OUTPUT_THRESHOLD=0.5, TRAIN_SCENES=-1,
                  PATIENCE_IN_EPOCHS=5,
-                 ALL_FOLDS=range(1, 7), STAGE=1,
+                 ALL_FOLDS=-1, STAGE=1,
                  LABEL_MODE='blockbased',
                  MASK_VAL=-1, VAL_STATEFUL=True, METRIC='BAC',
                  HOSTNAME=''):
@@ -33,9 +32,9 @@ class H:
 
         self.OUTPUT_THRESHOLD = OUTPUT_THRESHOLD
 
-        self.TRAIN_SCENES = list(TRAIN_SCENES)
+        self.TRAIN_SCENES = list(TRAIN_SCENES) if TRAIN_SCENES != -1 else TRAIN_SCENES
 
-        self.ALL_FOLDS = list(ALL_FOLDS)
+        self.ALL_FOLDS = list(ALL_FOLDS) if ALL_FOLDS != -1 else ALL_FOLDS
 
         self.STAGE = STAGE
 
@@ -77,15 +76,21 @@ class H:
         ################################################################################################################
 
         # Metrics
-        self.epochs_finished = [0] * len(self.ALL_FOLDS)
+        self.epochs_finished = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
 
-        self.best_epochs = [0] * len(self.ALL_FOLDS)
+        self.best_epochs = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
 
-        self.val_acc = [0] * len(self.ALL_FOLDS)
 
-        self.val_acc_mean = -1
+        self.val_acc = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
+        self.best_val_acc = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
+        self.best_val_acc_mean = -1
+        self.best_val_acc_std = -1
 
-        self.val_acc_std = -1
+
+        self.val_acc_bac2 = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
+        self.best_val_acc_bac2 = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
+        self.best_val_acc_mean_bac2 = -1
+        self.best_val_acc_std_bac2 = -1
 
         # indicates whether this combination is already finished
         self.finished = False
@@ -123,7 +128,7 @@ class H:
         elif self.STAGE == 3:
             return [2]
         else:
-            return self.ALL_FOLDS
+            return list(range(1, 7))
 
     @property
     def K_SCENES_TO_SUBSAMPLE(self):
@@ -156,7 +161,7 @@ class HCombManager:
         self.timeout = timeout
 
         if not path.exists(self.filepath_to_run):
-            raise ValueError('Filepath "{}" should exist beforehand. '.format(self.filepath_to_run))
+            return None
 
         with portalocker.Lock(self.filepath_to_run, mode='r+b', timeout=self.timeout) as handle:
             hcombs_to_run = pickle.load(handle)
@@ -173,7 +178,7 @@ class HCombManager:
         with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
-            h = h.__dict__
+            # h = h.__dict__
 
             hcomb_list_copy = deepcopy(hcomb_list)
             for hcomb in hcomb_list_copy:
@@ -189,7 +194,9 @@ class HCombManager:
 
             self._write_hcomb_list(hcomb_list, handle)
 
-            return index, hcomb_list[index], already_contained
+            h = H()
+            h.__dict__ = hcomb_list[index]
+            return index, h, already_contained
 
     def set_hostname_and_batch_size(self, id_, h, hostname, batch_size):
         with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
@@ -205,7 +212,7 @@ class HCombManager:
             self._write_hcomb_list(hcomb_list, handle)
 
     def _make_comparable(self, hcomb, h):
-        hcomb['ID'] = h['BATCH_SIZE']
+        hcomb['ID'] = h['ID']       # if the same hcomb id drawn again
         hcomb['STAGE'] = h['STAGE']
         hcomb['BATCH_SIZE'] = h['BATCH_SIZE']
         hcomb['HOSTNAME'] = h['HOSTNAME']
@@ -213,29 +220,64 @@ class HCombManager:
         hcomb['epochs_finished'] = h['epochs_finished']
         hcomb['best_epochs'] = h['best_epochs']
         hcomb['METRIC'] = h['METRIC']
+
         hcomb['val_acc'] = h['val_acc']
-        hcomb['val_acc_mean'] = h['val_acc_mean']
-        hcomb['val_acc_std'] = h['val_acc_std']
+        hcomb['best_val_acc'] = h['best_val_acc']
+        hcomb['best_val_acc_mean'] = h['best_val_acc_mean']
+        hcomb['best_val_acc_std'] = h['best_val_acc_std']
+
+        hcomb['val_acc_bac2'] = h['val_acc_bac2']
+        hcomb['best_val_acc_bac2'] = h['best_val_acc_bac2']
+        hcomb['best_val_acc_mean_bac2'] = h['best_val_acc_mean_bac2']
+        hcomb['best_val_acc_std_bac2'] = h['best_val_acc_std_bac2']
+
         hcomb['elapsed_time_minutes'] = h['elapsed_time_minutes']
 
-    def finish_hcomb(self, id_, h, val_acc_mean, val_acc_std, elapsed_time_minutes):
+    def finish_stage(self, id_, h, best_val_acc_mean, best_val_acc_std, best_val_acc_mean_bac2, best_val_acc_std_bac2,
+                     elapsed_time_minutes):
         with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
             h = h.__dict__
 
-            h['finished'] = True
+            # finished all
+            h['finished'] = False
             h['elapsed_time_minutes'] = elapsed_time_minutes
-            self._update_val_metrics_mean_std(h, val_acc_mean, val_acc_std)
+            self._update_val_metrics_mean_std(h, best_val_acc_mean, best_val_acc_std, best_val_acc_mean_bac2, best_val_acc_std_bac2)
 
-            if h['STAGE'] == 2:
-                self._merge_with_stage_1(h)
+            # if h['STAGE'] == 2:
+            #     self._merge_with_stage_1(h)
 
             self.replace_at_id(hcomb_list, id_, h)
 
             self._write_hcomb_list(hcomb_list, handle)
 
-    def finish_epoch(self, id_, h, val_acc, fold_ind, best_epoch, elapsed_time_minutes):
+    def next_stage(self, id_, h):
+        with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
+            hcomb_list = self._read_hcomb_list(handle)
+
+            h = h.__dict__
+
+            h['STAGE'] += 1
+
+            self.replace_at_id(hcomb_list, id_, h)
+            self._write_hcomb_list(hcomb_list, handle)
+
+    def finish_hcomb(self, id_, h):
+        with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
+            hcomb_list = self._read_hcomb_list(handle)
+
+            h = h.__dict__
+
+            # finished all
+            h['finished'] = True
+
+            self.replace_at_id(hcomb_list, id_, h)
+
+            self._write_hcomb_list(hcomb_list, handle)
+
+    def finish_epoch(self, id_, h, val_acc, best_val_acc, val_acc_bac2, best_val_acc_bac2,
+                     fold_ind, best_epoch, elapsed_time_minutes):
         with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
@@ -244,18 +286,24 @@ class HCombManager:
             h['epochs_finished'][fold_ind] += 1
             h['best_epochs'][fold_ind] = best_epoch
             h['elapsed_time_minutes'] = elapsed_time_minutes
-            self._update_val_metrics(h, val_acc, fold_ind)
+            self._update_val_metrics(h, val_acc, best_val_acc, val_acc_bac2, best_val_acc_bac2, fold_ind)
 
             self.replace_at_id(hcomb_list, id_, h)
 
             self._write_hcomb_list(hcomb_list, handle)
 
-    def _update_val_metrics(self, h, val_acc, fold_ind):
+    def _update_val_metrics(self, h, val_acc, best_val_acc, val_acc_bac2, best_val_acc_bac2, fold_ind):
         h['val_acc'][fold_ind] = val_acc
+        h['best_val_acc'][fold_ind] = best_val_acc
 
-    def _update_val_metrics_mean_std(self, h, val_acc_mean, val_acc_std):
-        h['val_acc_mean'] = val_acc_mean
-        h['val_acc_std'] = val_acc_std
+        h['val_acc_bac2'][fold_ind] = val_acc_bac2
+        h['best_val_acc_bac2'][fold_ind] = best_val_acc_bac2
+
+    def _update_val_metrics_mean_std(self, h, best_val_acc_mean, best_val_acc_std, best_val_acc_mean_bac2, best_val_acc_std_bac2):
+        h['best_val_acc_mean'] = best_val_acc_mean
+        h['best_val_acc_std'] = best_val_acc_std
+        h['best_val_acc_mean_bac2'] = best_val_acc_mean_bac2
+        h['best_val_acc_std_bac2'] = best_val_acc_std_bac2
 
     def replace_at_id(self, hcomb_list, id_, h):
         if type(h) is not dict:
@@ -264,28 +312,37 @@ class HCombManager:
         hcomb_list[id_] = h
 
     # IMPORTANT: happens if hcomb finished
-    def _merge_with_stage_1(self, h):
-        with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
-            hcomb_list = self._read_hcomb_list(handle)
-
-            hcomb_list_copy = deepcopy(hcomb_list)
-            for hcomb in hcomb_list_copy:
-                self._make_comparable(hcomb, h)
-                hcomb['STAGE'] = h['STAGE']
-            if h in hcomb_list_copy:
-                index = hcomb_list_copy.index(h)
-                h['epochs_finished'] = list(map(add, h['epochs_finished'], hcomb_list[index]['epochs_finished']))
-                h['best_epochs'] = list(zip(hcomb_list[index]['best_epochs'], h['best_epochs']))
-                h['val_acc'] = list(map(add, h['val_acc'], hcomb_list[index]['val_acc']))
-                h['val_acc_mean'] = np.mean(h['val_acc'])
-                h['val_acc_std'] = np.std(h['val_acc'])
-                h['elapsed_time_minutes'] += hcomb_list[index]['elapsed_time_minutes']
-            else:
-                raise ValueError('Cannot find HComb in Stage 1')
-
-            self.replace_at_id(hcomb_list, index, h)
-
-            self._write_hcomb_list(hcomb_list, handle)
+    # def _merge_with_stage_1(self, h):
+    #     with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
+    #         hcomb_list = self._read_hcomb_list(handle)
+    #
+    #         hcomb_list_copy = deepcopy(hcomb_list)
+    #         for hcomb in hcomb_list_copy:
+    #             self._make_comparable(hcomb, h)
+    #             hcomb['STAGE'] = h['STAGE']
+    #         if h in hcomb_list_copy:
+    #             index = hcomb_list_copy.index(h)
+    #             h['epochs_finished'] = list(map(add, h['epochs_finished'], hcomb_list[index]['epochs_finished']))
+    #             h['best_epochs'] = list(zip(hcomb_list[index]['best_epochs'], h['best_epochs']))
+    #             h['val_acc'] = list(map(add, h['val_acc'], hcomb_list[index]['val_acc']))
+    #             h['best_val_acc'] = list(map(add, h['best_val_acc'], hcomb_list[index]['best_val_acc']))
+    #             val_acc = np.array(h['val_acc'])
+    #             h['best_val_acc_mean'] = np.mean(val_acc[val_acc != 0])
+    #             h['best_val_acc_std'] = np.std(val_acc[val_acc != 0])
+    #
+    #             h['val_acc_bac2'] = list(map(add, h['val_acc_bac2'], hcomb_list[index]['val_acc_bac2']))
+    #             h['best_val_acc_bac2'] = list(map(add, h['best_val_acc_bac2'], hcomb_list[index]['best_val_acc_bac2']))
+    #             val_acc_bac2 = np.array(h['val_acc_bac2'])
+    #             h['best_val_acc_mean_bac2'] = np.mean(val_acc[val_acc_bac2 != 0])
+    #             h['best_val_acc_std_bac2'] = np.std(val_acc[val_acc_bac2 != 0])
+    #
+    #             h['elapsed_time_minutes'] += hcomb_list[index]['elapsed_time_minutes']
+    #         else:
+    #             raise ValueError('Cannot find HComb in Stage 1')
+    #
+    #         self.replace_at_id(hcomb_list, index, h)
+    #
+    #         self._write_hcomb_list(hcomb_list, handle)
 
     def _read_hcomb_list(self, handle):
         return pickle.load(handle)
@@ -307,25 +364,34 @@ class RandomSearch:
         self.MAXIMUM_NEURONS_LSTM = 2100    # is upper limit with 3 layers as reference
         self.MAXIMUM_NEURONS_MLP = 1200     # is upper limit with 1 layers as reference
 
+        # SAMPLE
+
         # Regularization
 
         # comb: (Input, Recurrent, LSTM Output, MLP Output) -> factors for global regularization strength
         self.RANGE_REGULARIZATION_COMBINATION = [
             (0, 0.5, 0.5, 1),  # 0.5 -> later, now uniformly
-            (0, 1, 1, 1),         # 0.1
-            (0, 1, 0, 1),           # 0.1
-            (0, 0, 0, 0)            # 0.1
+            (0, 1, 1, 1),  # 0.1
+            (0, 0, 1, 1),  # 0.1
+            (0, 1, 0, 1),  # 0.1
+            (0, 0, 0, 1),  # 0.1
+            (0, 0, 0, 0)  # 0.1
         ]
+        self.SAMPLING_RANGE_REGULARIZATION_COMBINATION = np.random.choice
+
+        # with weights
+        # from functools import partial
+        # self.SAMPLING_RANGE_REGULARIZATION_COMBINATION = partial(np.random.choice, p=[1, 0, 0, 0])
 
         # LSTM
         self.RANGE_NUMBER_OF_LSTM_LAYERS = [3, 4, 5]
+        self.SAMPLING_RANGE_NUMBER_OF_LSTM_LAYERS = np.random.choice
         # MLP
         self.RANGE_NUMBER_OF_MLP_LAYERS = [1, 2]
+        self.SAMPLING_RANGE_NUMBER_OF_MLP_LAYERS = np.random.choice
 
         self.RANGE_LSTM_NEURON_RATIO = [0.75, 0.5, 0.25]
-
-
-        # SAMPLE
+        self.SAMPLING_RANGE_LSTM_NEURON_RATIO = np.random.choice
 
         # total no of neurons in network
         # self.SAMPLING_WEIGHTS = np.array([0.15, 0.1, 0.1, 0.3, 0.2, 0.1, 0.05]) * 10
@@ -380,37 +446,44 @@ class RandomSearch:
 
         # DROPOUT
 
-        input_factor, recurrent_factor, output_factor = regularization_combination
+        input_factor, recurrent_factor, lstm_output_factor, mlp_output_factor = regularization_combination
         input_dropout = input_factor * global_regularization_strength
         recurrent_dropout = recurrent_factor * global_regularization_strength
-        lstm_output_dropout = output_factor * global_regularization_strength
-        mlp_output_dropout = output_factor * global_regularization_strength
+        lstm_output_dropout = lstm_output_factor * global_regularization_strength
+        mlp_output_dropout = mlp_output_factor * global_regularization_strength
 
         return H(UNITS_PER_LAYER_LSTM=units_per_layer_lstm, UNITS_PER_LAYER_MLP=units_per_layer_mlp,
                  PATIENCE_IN_EPOCHS=self.PATIENCE_IN_EPOCHS,
                  BATCH_SIZE=self.BATCH_SIZE, TIME_STEPS=self.TIME_STEPS,
                  INPUT_DROPOUT=input_dropout, RECURRENT_DROPOUT=recurrent_dropout,
                  LSTM_OUTPUT_DROPOUT=lstm_output_dropout, MLP_OUTPUT_DROPOUT=mlp_output_dropout,
-                 METRIC=self.metric_used, STAGE=self.STAGE)
+                 METRIC=self.metric_used, STAGE=self.STAGE).__dict__
 
     def _get_hcombs_to_run(self, number_of_hcombs):
-        from itertools import product
 
         # TODO: delete because this favors expensive networks -> for finding expensive hyperparam comb.
         # self.RANGE_NUMBER_OF_LSTM_LAYERS = [3, 4, 5]
         # self.RANGE_NUMBER_OF_MLP_LAYERS = [1, 2]
 
-        architecture_params_list = list(product(self.RANGE_REGULARIZATION_COMBINATION, self.RANGE_NUMBER_OF_LSTM_LAYERS, self.RANGE_NUMBER_OF_MLP_LAYERS,
-                                           self.RANGE_LSTM_NEURON_RATIO))
+        # architecture_params_list = list(product(self.RANGE_REGULARIZATION_COMBINATION, self.RANGE_NUMBER_OF_LSTM_LAYERS, self.RANGE_NUMBER_OF_MLP_LAYERS,
+        #                                    self.RANGE_LSTM_NEURON_RATIO))
+        architecture_params_list = [(
+            self.SAMPLING_RANGE_NUMBER_OF_LSTM_LAYERS(self.RANGE_NUMBER_OF_LSTM_LAYERS),
+            self.SAMPLING_RANGE_NUMBER_OF_MLP_LAYERS(self.RANGE_NUMBER_OF_MLP_LAYERS),
+            self.SAMPLING_RANGE_LSTM_NEURON_RATIO(self.RANGE_LSTM_NEURON_RATIO),
+            self.RANGE_REGULARIZATION_COMBINATION[self.SAMPLING_RANGE_REGULARIZATION_COMBINATION(range(len(self.RANGE_REGULARIZATION_COMBINATION)))]
+        ) for _ in range(number_of_hcombs)]
+
         return list(set([self._sample_hcomb(*architecture_params) for architecture_params in architecture_params_list[:number_of_hcombs]]))
 
     def save_hcombs_to_run(self, save_path, number_of_hcombs):
-
         # name has to be same as in HCombManager
         pickle_name = 'hyperparameter_combinations_to_run.pickle'
 
         filepath = path.join(save_path, pickle_name)
 
+        if number_of_hcombs == 0:
+            return
         if not path.exists(filepath):
             with open(filepath, 'wb') as handle:
                 pickle.dump(self._get_hcombs_to_run(number_of_hcombs), handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -418,6 +491,34 @@ class RandomSearch:
             with open(filepath, 'rb') as handle:
                 hcombs_old = pickle.load(handle)
             hcombs_old += self._get_hcombs_to_run(number_of_hcombs)
-            hcombs_new = list(set(hcombs_old))
+            if len(hcombs_old) > 1:
+                hcombs_new = list(set(hcombs_old))
             with open(filepath, 'wb') as handle:
+                pickle.dump(hcombs_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def add_hcombs_to_run_via_id(self, ids, save_path):
+        if type(ids) is int:
+            ids = [ids]
+
+        pickle_name_to_run = 'hyperparameter_combinations_to_run.pickle'
+        pickle_name_hcomb_list = 'hyperparameter_combinations.pickle'
+
+        filepath_to_run = path.join(save_path, pickle_name_to_run)
+        filepath_hcomb_list = path.join(save_path, pickle_name_hcomb_list)
+
+        with open(filepath_hcomb_list, 'rb') as handle:
+            hcomb_list = pickle.load(handle)
+
+        hs_to_run = [hcomb_list[id_] for id_ in ids]
+
+        if not path.exists(filepath_to_run):
+            with open(filepath_to_run, 'wb') as handle:
+                pickle.dump(hs_to_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            with open(filepath_to_run, 'rb') as handle:
+                hcombs_old = pickle.load(handle)
+            hcombs_new = hs_to_run + hcombs_old
+            if len(hcombs_new) > 1:
+                hcombs_new = list(set(hcombs_new))
+            with open(filepath_to_run, 'wb') as handle:
                 pickle.dump(hcombs_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
