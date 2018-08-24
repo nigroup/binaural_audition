@@ -165,7 +165,10 @@ class DataLoader:
     def _input_standardization_if_wanted(self, x):
         if self.input_standardization:
             mean, std = self._input_standardization_metrics()
-            return (x - mean) / std
+            #return (x - mean) / std
+            # large efficiency improvement: changed the previous line to the following inplace operations:
+            x -= mean
+            x /= std
         return x
 
     def _input_standardization_metrics(self):
