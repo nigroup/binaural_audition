@@ -29,11 +29,16 @@ from constants import *
 #     - generator: 2.6s (cf. above)
 #     - train_predict: 0.7s
 #     - metrics: 0.9s
-#   - multithreading (1 worker) / multiprocessing False (same condition as others)
+#   - multithreading (1 worker) / multiprocessing False (same condition as others) [with standardization]
 #       - total: ~3.6  (after ~200 batches)
 #       - generator: 1.4s
-#       - train_predict: 1.1s
+#       - train_predict: 1.25s
 #       - metrics: 0.95s
+#   - multithreading (1 worker) / multiprocessing False (same condition as others) [without standardization]
+#       - total: ~???  (after ~??? batches)
+#       - generator: ???s
+#       - train_predict: ???s
+#       - metrics: ???s
 #   - multiprocessing (1 worker) / multiprocessing True (note that the cpu was not freely available to me but similar to above/singleproc experiment)
 #       - total: ~ 12.8s (here/below: avg after 60 batches)
 #       - generator: ~10.0s [higher than singleproc!]
