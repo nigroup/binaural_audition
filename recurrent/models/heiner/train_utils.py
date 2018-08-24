@@ -35,6 +35,7 @@ def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTE
                               buffer=BUFFER, use_multiprocessing=use_multiprocessing)
     train_loader_len = train_loader.len()
     print('Number of batches per epoch (training): ' + str(train_loader_len))
+
     print('Data efficiency per epoch (training): ' + str(train_loader.data_efficiency()))
 
     val_loader = DataLoader('val', LABEL_MODE, VAL_FOLDS, TRAIN_SCENES, epochs=EPOCHS, batchsize=BATCHSIZE,
@@ -43,6 +44,7 @@ def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTE
 
     val_loader_len = val_loader.len()
     print('Number of batches per epoch (validation): ' + str(val_loader_len))
+
     print('Data efficiency per epoch (validation): ' + str(val_loader.data_efficiency()))
 
     return train_loader, val_loader
