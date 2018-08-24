@@ -3,6 +3,7 @@
 import csv
 import sys
 import pickle
+from heiner.hyperparameters import H
 
 def write_to_csv(file):
     with open(file, 'rb') as handle:
@@ -12,6 +13,12 @@ def write_to_csv(file):
     if not type(d[0]) is dict:
         d = [d_.__dict__ for d_ in d]
     keys = d[0].keys()
+    if 'hyperparameter' in file:
+        h = H()
+        h = h.__dict__
+        h_keys = h.keys()
+        if set(keys) == set(h_keys):
+            keys = h_keys
     filename = file.replace('.pickle', '')
     with open(filename+'.csv', 'w') as output_file:
         dict_writer = csv.DictWriter(output_file, keys)
