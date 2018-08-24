@@ -3,7 +3,6 @@ import sys
 import argparse
 import socket
 import time
-import numpy as np
 from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping, ModelCheckpoint, TerminateOnNaN
 
@@ -239,7 +238,7 @@ fit_and_predict_generator_with_sceneinst_metrics(model,
                                                  callbacks=callbacks,
                                                  max_queue_size=params['batchbufsize'],
                                                  workers=1,
-                                                 use_multiprocessing=True,
+                                                 use_multiprocessing=False, #True,
                                                  validation_data=batchloader_validation,
                                                  validation_steps=params['batches_per_epoch'])
 

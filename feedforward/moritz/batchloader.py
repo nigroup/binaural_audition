@@ -16,6 +16,29 @@ from constants import *
 # TODO: check efficiency of batchloader via multiprocessing queue:
 # => efficiency optimization one lock per scene instance and one global batchloader lock (for lists and length) these
 
+# efficiency remarks (evaluated on sabik with batch size 128, sceneinstancebufsize 2000):
+# - direct runtimes (via running this file):
+#   - total time: ~2-3 sec
+#   - instantiating scene instance buffers (i.e., loading file): 1...1.6 sec
+#   - assignment of blocks to the batch array: 0.2 sec
+#   - standardization: 0.8 sec
+#   - all other parts are negligible
+# - effective runtimes (via running training.py => generator_extension.py)
+#   - singleprocessing (0 workers) / multiprocessing False
+#     - total: ~4.4s (here/below: avg after 100 batches)
+#     - generator: 2.6s (cf. above)
+#     - train_predict: 0.7s
+#     - metrics: 0.9s
+#   - multithreading (1 worker) / multiprocessing False (same condition as others)
+#       - total: ~3.6  (after ~200 batches)
+#       - generator: 1.4s
+#       - train_predict: 1.1s
+#       - metrics: 0.95s
+#   - multiprocessing (1 worker) / multiprocessing True (note that the cpu was not freely available to me but similar to above/singleproc experiment)
+#       - total: ~ 12.8s (here/below: avg after 60 batches)
+#       - generator: ~10.0s [higher than singleproc!]
+#       - train_predict: 1.25s [strange: higher than singleproc??]
+#       - metrics 1.1s [strange: higher than singleproc??]
 
 # buffer of a single scene instance (is instantiated e.g. 2000 times in a BatchLoader object in train mode)
 class SceneInstanceBuffer:
@@ -42,8 +65,6 @@ class SceneInstanceBuffer:
 
             # labels
             self.y = data['y'] if params['instantlabels'] else data['y_block']
-
-        assert self.x.shape[1] == self.scene_instance_length
 
         # saving iterator as attribute
         self.iter = self.block_iterator()
@@ -256,31 +277,53 @@ class BatchLoader(HeinerDataloader):
 
 
     def fill_scene_instance_buffers(self):
+
+        t_start_allfill = time()
+
         if (len(self.scene_instance_buffers) == 0):
             complete_fill = True
-            t_start = time()
+            t_start_buffer_filling = time() # keep (only) this time measurement after profiling
             print('filling empty buffer with {} scene instances...'.format(self.params['sceneinstancebufsize']))
         else:
             complete_fill = False
 
+        runtime_filename = 0.
+        runtime_instantiation = 0.
+        runtime_appending = 0.
+        runtime_lengthcalc = 0.
         # add more scene instance buffers until buffer full or all files consumed (e.g. in test mode for a single scene)
         while (len(self.scene_instance_buffers) < self.params['sceneinstancebufsize'] and len(self.filenames) > 0):
 
+            t_start = time()
             # get next of the (in train mode shuffled) filenames
             filename = self.filenames.pop()
+            runtime_filename += time()-t_start
 
+
+            t_start = time()
             # create buffer and append it to buffers list
             scene_instance_buf = SceneInstanceBuffer(filename,  self, self.mode, self.params)
+            runtime_instantiation += time()-t_start
+
+            t_start = time()
             self.scene_instance_buffers.append(scene_instance_buf)
             if self.mode == 'train':
                 self.scene_instance_buffers_last = np.append(self.scene_instance_buffers_last, 10000)
                 self.scene_instance_buffers_remaining.append(len(scene_instance_buf))
+            runtime_appending += time()-t_start
 
+            t_start = time()
             # calculate the total number of blocks in alle scene instance buffers
             self.blocks_allbuffers += len(scene_instance_buf)
+            runtime_lengthcalc += time()-t_start
 
         if complete_fill:
-            print('...filled buffer in {:.2f} sec'.format(time()-t_start))
+            print('...filled buffer in {:.2f} sec'.format(time()-t_start_buffer_filling))
+
+        runtime_fillbuffer = time()-t_start_allfill
+
+        print('batchloader: fill scene instance buffers took {:.2f} => filename {:.2f}, instantiation {:.2f}, appending {:.2f}, lengthcalc {:.2f}'
+              .format(runtime_fillbuffer, runtime_filename, runtime_instantiation, runtime_appending, runtime_lengthcalc))
 
     def init_epoch(self, first=False):
 
@@ -323,6 +366,10 @@ class BatchLoader(HeinerDataloader):
 
     def __next__(self):
 
+        t_start_nextbatch = time()
+
+
+        t_start = time()
         # all batches created => next epoch or stop iteration
         if self.batchid > 0 and len(self.scene_instance_buffers) == 0:
             assert self.batches_per_epoch == self.batchid + 1 # TODO: remove if multiproc
@@ -349,9 +396,19 @@ class BatchLoader(HeinerDataloader):
         if self.batchid % self.free_memory_batches == 0:
             gc.collect()
 
+        runtime_sample_index = 0.
+        runtime_next_block = 0.
+        runtime_postproc_block = 0.
+        runtime_postproc_block_assignment = 0.
+        runtime_postproc_block_listops = 0.
+        runtime_remove_block = 0.
+
+        runtime_start = time()-t_start
+
         # add blocks to our batch until we have filled the batch or there are no blocks in the buffer left (last batch)
         while (blockid < self.params['batchsize'] and len(self.scene_instance_buffers) > 0):
 
+            t_start = time()
             # training mode: get random scene instance buffer:
             if self.mode == 'train':
                     probs = self._scene_instance_buffer_probs()
@@ -363,14 +420,22 @@ class BatchLoader(HeinerDataloader):
             else:
                 sibuf_id = 0
 
+            runtime_sample_index += time()-t_start
+
             # extract next block from chosen scene instance (if existing)
+            t_start = time()
             scene_instance_buffer = self.scene_instance_buffers[sibuf_id]
             buffer_output = next(scene_instance_buffer.iter, None)
+            runtime_next_block += time()-t_start
 
+            t_start = time()
             remove_buffer = False
             if buffer_output is not None:
+                t_start_inner = time()
                 self.batch_x[blockid, :, :], self.batch_y[blockid, :, :, :] = buffer_output
+                runtime_postproc_block_assignment += time()-t_start_inner
 
+                t_start_inner = time()
                 # we fetched a valid block => update data for biased sampling
                 if self.mode == 'train':
                     self.scene_instance_buffers_last[sibuf_id] = 0
@@ -380,9 +445,13 @@ class BatchLoader(HeinerDataloader):
                     else:
                         remove_buffer = False
                 blockid += 1
+                runtime_postproc_block_listops = time()-t_start_inner
             else:
                 remove_buffer = True
 
+            runtime_postproc_block += time()-t_start
+
+            t_start = time()
             # remove scene instance that is completely used
             if remove_buffer:
                 self.scene_instance_buffers.pop(sibuf_id)
@@ -390,6 +459,9 @@ class BatchLoader(HeinerDataloader):
                     self.scene_instance_buffers_last = np.delete(self.scene_instance_buffers_last, sibuf_id)
                     self.scene_instance_buffers_remaining.pop(sibuf_id)
 
+            runtime_remove_block += time()-t_start
+
+        t_start = time()
         effective_batchsize = blockid # after the while loop blockid corresponds to the no of blocks taken
 
         # update number of remaining blocks
@@ -402,6 +474,12 @@ class BatchLoader(HeinerDataloader):
         else:
             effective_batch_x = self.batch_x
             effective_batch_y = self.batch_y
+
+        runtime_finish = time()-t_start
+
+        runtime_nextbatch_total = time()-t_start_nextbatch
+        print('batchloader: total time to get the batch was {:.2f} => start {:.2f}, sample {:.2f}, next block {:.2f}, postproc block {:.2f} (assignment {:.2f}, listops {:.2f}), remove block {:.2f}, finish {:.2f}'
+              .format(runtime_nextbatch_total, runtime_start, runtime_sample_index, runtime_next_block, runtime_postproc_block, runtime_postproc_block_assignment, runtime_postproc_block_listops, runtime_remove_block, runtime_finish))
 
         return self._input_standardization_if_wanted(effective_batch_x), effective_batch_y
 
@@ -434,9 +512,9 @@ if __name__ == '__main__':
     # scenes = [1, 2]
     inputstd = True
     # inputstd = False
-    params = {'sceneinstancebufsize': 1000,
+    params = {'sceneinstancebufsize': 2000,
               'historylength': 1017,
-              'batchsize': 32,
+              'batchsize': 128,
               'batchlength': 2500,
               'instantlabels': False,
               'maxepochs': 2,

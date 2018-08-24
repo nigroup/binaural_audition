@@ -11,6 +11,7 @@ from __future__ import print_function
 
 import warnings
 import numpy as np
+from time import time
 
 from keras import backend as K
 from keras.utils.data_utils import Sequence
@@ -183,8 +184,20 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
             callbacks.on_epoch_begin(epoch)
             steps_done = 0
             batch_index = 0
+
+            runtime_generator_cumulated = 0.
+            runtime_train_and_predict_on_batch_cumulated = 0.
+            runtime_class_accuracies_cumulated = 0.
+            skip = 5 # skipping the first few batches to reduce bias due to inital extra time
+
             while steps_done < steps_per_epoch:
+                t_start_batch = time()
+                t_start = time()
                 generator_output = next(output_generator)
+                runtime_generator_next = time() - t_start
+
+                if batch_index >= skip:
+                        runtime_generator_cumulated += runtime_generator_next
 
                 if not hasattr(generator_output, '__len__'):
                     raise ValueError('Output of generator should be '
@@ -216,23 +229,48 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                     batch_size = x.shape[0]
                 batch_logs['batch'] = batch_index
                 batch_logs['size'] = batch_size
+                t_start = time()
                 callbacks.on_batch_begin(batch_index, batch_logs)
+                runtime_callbacks_on_batch_begin = time()-t_start
 
                 # remark on label shape: last (fourth) dimension contains in 0 the true labels, in 1 the corresponding sceneinstid (millioncode)
+                t_start = time()
                 batch_loss, y_pred_probs, gradient_norm = heiner_train_and_predict_on_batch(model, x, y[:, :, :, 0],
                                                          calc_global_gradient_norm=params['calcgradientnorm'])
+                runtime_train_and_predict_on_batch = time()-t_start
+                if batch_index >= skip:
+                    runtime_train_and_predict_on_batch_cumulated += runtime_train_and_predict_on_batch
 
                 batch_logs['loss'] = batch_loss
 
                 model.gradient_norm = gradient_norm
 
+                t_start = time()
                 heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch(model.scene_instance_id_metrics_dict_train,
                                                               y_pred_probs, y, params['outputthreshold'], params['mask_value'])
+                runtime_class_accuracies = time()-t_start
+                if batch_index >= skip:
+                    runtime_class_accuracies_cumulated += runtime_class_accuracies
 
+
+                t_start = time()
                 callbacks.on_batch_end(batch_index, batch_logs)
+                runtime_callbacks_on_batch_end = time()-t_start
+
+                runtime_batch = time()-t_start_batch
+                print((' ----> batch {} in epoch {} took in total {:.2f} sec => generator {:.2f} ' +
+                       'train_and_predict {:.2f}, metrics {:.2f}')
+                      .format(batch_index + 1, epoch + 1, runtime_batch, runtime_generator_next,
+                              runtime_train_and_predict_on_batch,
+                              runtime_class_accuracies))
 
                 batch_index += 1
                 steps_done += 1
+
+
+                if steps_done > skip:
+                    print('===> after batch {} we have average runtimes: generator {:.2f}, train_predict {:.2f}, metrics {:.2f}'.
+                        format(batch_index, runtime_generator_cumulated/(steps_done-skip), runtime_train_and_predict_on_batch_cumulated/(steps_done-skip), runtime_class_accuracies_cumulated/(steps_done-skip)))
 
                 # Epoch finished.
                 if steps_done >= steps_per_epoch and do_validation:
