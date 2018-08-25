@@ -21,6 +21,12 @@ from heiner.my_tmuxprocess import TmuxProcess
 
 
 def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT):
+    # Memory leak fix
+    cfg = K.tf.ConfigProto()
+    cfg.gpu_options.allow_growth = True
+    K.set_session(K.tf.Session(config=cfg))
+
+
     # LOGGING
     sys.stdout = utils.UnbufferedLogAndPrint(os.path.join(model_dir, 'logfile'), sys.stdout)
     sys.stderr = utils.UnbufferedLogAndPrint(os.path.join(model_dir, 'errorfile'), sys.stderr)
@@ -115,13 +121,13 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
             print('\nModel compiled.\n')
 
             ################################################# DATA LOADER
-            use_multiprocessing = False
+            use_multithreading = True
             BUFFER = utils.get_buffer_size_wrt_time_steps(h.TIME_STEPS)
-            BUFFER = int(BUFFER // 2) - 5 if use_multiprocessing else BUFFER
+            BUFFER = int(BUFFER // 2) - 5 if use_multithreading else BUFFER
             train_loader, val_loader = tr_utils.create_dataloaders(h.LABEL_MODE, TRAIN_FOLDS, h.TRAIN_SCENES, h.BATCH_SIZE,
                                                                    h.TIME_STEPS, h.MAX_EPOCHS, h.N_FEATURES, h.N_CLASSES,
                                                                    [val_fold], h.VAL_STATEFUL,
-                                                                   BUFFER=BUFFER, use_multiprocessing=use_multiprocessing)
+                                                                   BUFFER=BUFFER, use_multithreading=use_multithreading)
 
             ################################################# CALLBACKS
             model_ckp_last = ModelCheckpoint(os.path.join(model_save_dir,
