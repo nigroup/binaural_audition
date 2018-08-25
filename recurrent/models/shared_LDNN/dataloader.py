@@ -293,45 +293,52 @@ def get_sub_scenes_weight(path_list):
     pos = [x / total for x in count_pos]
     neg = [x / total for x in count_neg]
     return [y / x for x, y in zip(pos, neg)]
-def get_bac2(df):
-    w_xsrcs = [0.1, 0.047619047619047616, 0.034482758620689655, 0.05]
-    weight_index = [1, 0, 2, 1, 2, 1, 1, 0, 3, 3, 2, 1, 2, 2, 1, 1, 0, 3, 1, 2,
-     3, 3, 2, 2, 1, 3, 2, 2, 3, 1, 1, 2, 0, 0, 2, 1, 1, 2,2, 2, 1, 1, 2, 0, 3,
-     2, 2, 3, 3, 3, 2, 1, 3, 2, 2, 3, 1, 2, 2, 3, 1, 2, 3, 1, 1, 2, 3, 0, 0, 2,
-     0, 3, 2, 3, 2, 0,3, 2, 1, 3]
-    w = [0] * 80
-    for i in range(80):
-        w[i] = w_xsrcs[weight_index[i]]
 
-    scale_list = np.array([]).reshape(0, 52)
-    df = df.groupby('sceneID').mean()
-    for row in df.iterrows():
-        sceneid = int(row[0].replace('scene', ''))
-        weight = w[sceneid - 1]
-        temp = np.array(row[1].tolist()) * weight
-        #     (80, 52)
-        scale_list = np.append(scale_list, temp.reshape(1, 52), axis=0)
-
-    four_list = scale_list.mean(axis=0)
-    classes_performance = []
+def cal_class_acc(four_list,weight):
+    # cauculate BAC1 and BAC2 for each class and each scene
+    # four_list is a 52-dimension vector
     classes_performance_bac1 = []
+    classes_performance_bac2 = []
     class_sens_spes = []
     for i in range(13):
         start = i * 4
         TP = four_list[start]
-        TN = four_list[start + 1]
-        FP = four_list[start + 2]
-        FN = four_list[start + 3]
+        TN = four_list[start+1]
+        FP = four_list[start+2]
+        FN = four_list[start+3]
         sensiticity = TP / (TP + FN)
         specificity = TN / (TN + FP)
-        bac2 = 1 - (((1 - sensiticity) ** 2 + (1 - specificity) ** 2) / 2) ** 0.5
-        classes_performance.append(bac2)
-        classes_performance_bac1.append((sensiticity + specificity) / 2)
-        class_sens_spes.append((sensiticity,specificity))
-    final = sum(classes_performance) / len(classes_performance)
-    # ivo want sens and spes for each class
-    return sum(classes_performance_bac1) / len(classes_performance_bac1), class_sens_spes
-    # return final
+        classes_performance_bac1.append((sensiticity+specificity)/2)
+        bac2 = 1 - (((1-sensiticity)**2 + (1-specificity)**2)/2)**0.5
+        classes_performance_bac2.append(bac2)
+        class_sens_spes.append((sensiticity, specificity))
+    bac1 = np.array(classes_performance_bac1)*weight
+    bac2 = np.array(classes_performance_bac2)*weight
+    class_sens_spes = np.array(class_sens_spes) * weight
+    return bac1,bac2,class_sens_spes
+def get_bac(df):
+    w = 1 / np.array([21, 10, 29, 21, 29, 21, 21, 10, 20, 20, 29, 21, 29, 29, 21, 21, 10,
+                      20, 21, 29, 20, 20, 29, 29, 21, 20, 29, 29, 20, 21, 21, 29, 10, 10,
+                      29, 21, 21, 29, 29, 29, 21, 21, 29, 10, 20, 29, 29, 20, 20, 20, 29,
+                      21, 20, 29, 29, 20, 21, 29, 29, 20, 21, 29, 20, 21, 21, 29, 20, 10,
+                      10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
+    w = w / np.sum(w)
+
+    bac1 = np.array([]).reshape(0, 13)
+    bac2 = np.array([]).reshape(0, 13)
+    class_sens_spes = []
+    df = df.groupby('sceneID').mean()
+    for row in df.iterrows():
+        sceneid = int(row[0].replace('scene', ''))
+        weight = w[sceneid - 1]
+        temp = np.array(row[1].tolist())
+        bac_one,bac_two,sens_spes  = cal_class_acc(temp, weight)
+        bac1 = np.append(bac1, bac_one.reshape(1, 13), axis=0)
+        bac2 = np.append(bac2, bac_two.reshape(1, 13), axis=0)
+    final_bac1 = bac1.sum(axis=0).mean(axis=0)
+    final_bac2 = bac2.sum(axis=0).mean(axis=0)
+    class_sens_spes = np.array(class_sens_spes).sum(axis=0)
+    return final_bac1,final_bac2,class_sens_spes
 
 def get_performence(true_pos,true_neg,false_pos,false_neg, index):
     # TP = np.array(true_pos[index])
@@ -387,21 +394,7 @@ def average_performance(list,dir,epoch_num,folder):
     df = pd.DataFrame(list,columns=header)
     dir += 'folder'+ str(folder) + '_' +str(epoch_num) + '.pkl'
     df.to_pickle(dir)
-    # bac2 performance
-    bac1, class_sens_spes = get_bac2(df)
-    # return bac2
-    #
-    # # Below is for bac1
-    # df1 = df.groupby('sceneID').mean()
-    # four_list = df1.mean().tolist()
-    # classes_performance = []
-    # for i in range(13):
-    #     start = i * 4
-    #     TP = four_list[start]
-    #     TN = four_list[start+1]
-    #     FP = four_list[start+2]
-    #     FN = four_list[start+3]
-    #     sensiticity = TP / (TP + FN)
-    #     specificity = TN / (TN + FP)
-    #     classes_performance.append((sensiticity+specificity)/2)
+
+    bac1,bac2,class_sens_spes = get_bac(df)
+
     return bac1, class_sens_spes
