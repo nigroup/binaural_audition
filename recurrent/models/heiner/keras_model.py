@@ -1,19 +1,16 @@
+import argparse
+import datetime
+import logging
 import os
-from heiner import hyperparameters as hp
-from heiner import keras_model_run as run
-
+import platform
+import sys
 from functools import partial
 
+from heiner import hyperparameters as hp
+from heiner import keras_model_run as run
 from heiner import use_tmux as use_tmux
-
 from heiner.my_tmuxprocess import TmuxProcess
-import datetime
 
-import platform
-
-import sys
-import argparse
-import logging
 logger = logging.getLogger('exceptions_logger')
 # Configure logger to write to a file...
 
@@ -45,7 +42,7 @@ def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, r
     if use_tmux.use_tmux:
 
         def intro():
-            intro ='''Running {} hcombs.
+            intro = '''Running {} new hcombs.
             GPUs: {},
             Metric used: {},
             Stage: {},
@@ -53,7 +50,7 @@ def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, r
             
             Skip a HComb by CTRL + C.
             
-            KILL THIS WINDOW ONLY IF YOU WANT TO END THE WHOLE EXPERIMENT!'''\
+            KILL THIS WINDOW ONLY IF YOU WANT TO END THE WHOLE EXPERIMENT!''' \
                 .format(str(number_of_hcombs), str(available_gpus), metric_used, str(STAGE), datetime.datetime.now().isoformat())
             print(intro)
 

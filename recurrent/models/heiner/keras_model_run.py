@@ -123,7 +123,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
             ################################################# DATA LOADER
             use_multithreading = True
             BUFFER = utils.get_buffer_size_wrt_time_steps(h.TIME_STEPS)
-            BUFFER = int(BUFFER // 2) - 5 if use_multithreading else BUFFER
+
             train_loader, val_loader = tr_utils.create_dataloaders(h.LABEL_MODE, TRAIN_FOLDS, h.TRAIN_SCENES, h.BATCH_SIZE,
                                                                    h.TIME_STEPS, h.MAX_EPOCHS, h.N_FEATURES, h.N_CLASSES,
                                                                    [val_fold], h.VAL_STATEFUL,
