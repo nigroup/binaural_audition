@@ -15,7 +15,7 @@ class DataLoader:
                  seed=1, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=-1.0,
                  val_stateful=False, k_scenes_to_subsample=-1,
                  input_standardization=True,
-                 use_multiprocessing=False):
+                 use_multithreading=False):
 
         self.mode = mode
         self.path_pattern = path_pattern
@@ -82,9 +82,9 @@ class DataLoader:
 
         self.train_on_all_folds = False
 
-        self.use_multiprocessing = use_multiprocessing
+        self.use_multithreading = use_multithreading
         self.copy_on_return = False     # TODO investigate if it gives speed up and if it's correct
-        if self.use_multiprocessing:
+        if self.use_multithreading:
             self.copy_on_return = False
 
         if self.mode != 'test' and self.input_standardization:
