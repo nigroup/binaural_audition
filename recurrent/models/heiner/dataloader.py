@@ -83,9 +83,9 @@ class DataLoader:
         self.train_on_all_folds = False
 
         self.use_multithreading = use_multithreading
-        self.copy_on_return = False     # TODO investigate if it gives speed up and if it's correct
+        self.copy_on_return_before_refill = False
         if self.use_multithreading:
-            self.copy_on_return = False
+            self.copy_on_return_before_refill = True
 
         if self.mode != 'test' and self.input_standardization:
             if type(self.fold_nbs) is int:
@@ -435,9 +435,11 @@ class DataLoader:
         def batches_with_timesteps():
             last_ind = self.row_start + self.timesteps - 1
             x = self.buffer_x[:, self.row_start:self.row_start + self.timesteps, :]
-            x = np.copy(x) if self.copy_on_return else x
+            copy_on_return_before_refill = self.copy_on_return_before_refill \
+                                           and self.row_start + self.timesteps == self.buffer_size
+            x = np.copy(x) if copy_on_return_before_refill else x
             y = self.buffer_y[:, self.row_start:self.row_start + self.timesteps, :, :]
-            y = np.copy(y) if self.copy_on_return else y
+            y = np.copy(y) if copy_on_return_before_refill else y
             self.row_start += self.timesteps
             if self.val_stateful:
                 if last_ind + 1 < self.buffer_size:
