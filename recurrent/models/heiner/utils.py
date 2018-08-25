@@ -236,5 +236,5 @@ def latest_training_state(model_save_dir):
 
     return latest_weights_path, epochs_finished, val_acc, best_epoch, best_val_acc, epochs_without_improvement
 
-def unique_dict(d):
-    return list({v['id']: v for v in d}.values())
+def unique_dict(ds):
+    return list(map(dict, set(tuple(sorted(d.items())) for d in ds)))
