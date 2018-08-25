@@ -110,7 +110,7 @@ class Phase:
         self.metric = metric
         self.ret = ret
 
-        if dloader.use_multiprocessing:
+        if dloader.use_multithreading:
             self.gen = create_generator_multithreading(dloader)
         else:
             self.gen = create_generator(dloader)
