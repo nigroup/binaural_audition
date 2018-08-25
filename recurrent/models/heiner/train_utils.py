@@ -21,18 +21,18 @@ def create_generator(dloader):
         yield ret
 
 
-def create_generator_multiprocessing(dloader, BUFFER):
+def create_generator_multithreading(dloader):
     standard_gen = create_generator(dloader)
-    dloader_enqueuer = GeneratorEnqueuer(standard_gen, use_multiprocessing=True)
-    dloader_enqueuer.start(workers=1, max_queue_size=BUFFER+10)
+    dloader_enqueuer = GeneratorEnqueuer(standard_gen, use_multiprocessing=False)
+    dloader_enqueuer.start(workers=1, max_queue_size=1)
     return dloader_enqueuer.get()
 
 
 def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
-                       VAL_FOLDS, VAL_STATEFUL, BUFFER, use_multiprocessing=True):
+                       VAL_FOLDS, VAL_STATEFUL, BUFFER, use_multithreading=True):
     train_loader = DataLoader('train', LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, batchsize=BATCHSIZE,
                               timesteps=TIMESTEPS, epochs=EPOCHS, features=NFEATURES, classes=NCLASSES,
-                              buffer=BUFFER, use_multiprocessing=use_multiprocessing)
+                              buffer=BUFFER, use_multithreading=use_multithreading)
     train_loader_len = train_loader.len()
     print('Number of batches per epoch (training): ' + str(train_loader_len))
 
@@ -40,7 +40,7 @@ def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTE
 
     val_loader = DataLoader('val', LABEL_MODE, VAL_FOLDS, TRAIN_SCENES, epochs=EPOCHS, batchsize=BATCHSIZE,
                             timesteps=TIMESTEPS, features=NFEATURES, classes=NCLASSES, val_stateful=VAL_STATEFUL,
-                            buffer=BUFFER)
+                            buffer=BUFFER, use_multithreading=use_multithreading)
 
     val_loader_len = val_loader.len()
     print('Number of batches per epoch (validation): ' + str(val_loader_len))
@@ -111,7 +111,7 @@ class Phase:
         self.ret = ret
 
         if dloader.use_multiprocessing:
-            self.gen = create_generator_multiprocessing(dloader, BUFFER)
+            self.gen = create_generator_multithreading(dloader)
         else:
             self.gen = create_generator(dloader)
         self.dloader_len = dloader.len()
