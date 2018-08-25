@@ -8,6 +8,7 @@ from tensorflow.python.ops.nn_impl import weighted_cross_entropy_with_logits
 import pickle
 import sys
 import platform
+import json
 
 
 class UnbufferedLogAndPrint:
@@ -237,4 +238,11 @@ def latest_training_state(model_save_dir):
     return latest_weights_path, epochs_finished, val_acc, best_epoch, best_val_acc, epochs_without_improvement
 
 def unique_dict(ds):
-    return list(map(dict, set(tuple(sorted(d.items())) for d in ds)))
+    ds_unique = []
+    ds_string_unique = []
+    for d in ds:
+        ds_string = json.dumps(d, sort_keys=True)
+        if ds_string not in ds_string_unique:
+            ds_string_unique.append(ds_string)
+            ds_unique.append(d)
+    return ds_unique
