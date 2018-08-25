@@ -31,11 +31,11 @@ def _read_py_function(filename,mean,std):
     # the total length was defined before
     for instance in filename.split('@'):
         p, start, end = instance.split('&')
-        data = np.load(p)
-        x = data['x'][0]
-        y = data['y'][0]
-        fx = np.concatenate((fx, x[int(start):int(end)]), axis=0)
-        fy = np.concatenate((fy, y[int(start):int(end)]), axis=0)
+        with np.load(p) as data:
+            x = data['x'][0]
+            y = data['y'][0]
+            fx = np.concatenate((fx, x[int(start):int(end)]), axis=0)
+            fy = np.concatenate((fy, y[int(start):int(end)]), axis=0)
     fx = (fx-mean)/std
     l = np.array([fx.shape[0]])
     # print('multi processes:',time.ctime())
@@ -61,14 +61,15 @@ def read_trainset(path_set, batchsize,mean,std):
 '''
 def _read_py_function1(filename,mean,std):
     filename = filename.decode(sys.getdefaultencoding())
-    data = np.load(filename)
-    x = data['x'][0]
-    x = (x-mean)/std
-    y = data['y'][0]
-    # for padding value 0, change OFF'0'-> 2
-    y[y == 0] = 2
-    l = np.array([x.shape[0]])
-    return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
+    with np.load(filename) as data:
+        x = data['x'][0]
+        x = (x - mean) / std
+        y = data['y'][0]
+        # for padding value 0, change OFF'0'-> 2
+        y[y == 0] = 2
+        l = np.array([x.shape[0]])
+        return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
+
 def read_validationset(path_set, batchsize,mean,std):
     # shuffle path_set
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
@@ -101,7 +102,7 @@ def read_validationset2(path_set, batchsize,mean,std):
 # related function for rectangle-----------------------------------------
 def get_index(paths):
     result = []
-    pkl_file = open(MACRO_PATH+'/mnt/raid/data/ni/twoears/scenes2018/train/file_lengths.pickle','rb')
+    pkl_file = open(MACRO_PATH+'/mnt/binaural/data/scenes2018/train/file_lengths.pickle','rb')
     data = pickle.load(pkl_file)
     for i,p in enumerate(paths):
         result.append([i,data[p],p])
@@ -183,7 +184,7 @@ def get_train_data(cv_id, scenes, epochs, timelengths):
     for s in scenes:
         for f in range(1, 7):
             if f == cv_id: continue
-            p = MACRO_PATH+'/mnt/raid/data/ni/twoears/scenes2018/train/fold' + str(f) + '/' + s
+            p = MACRO_PATH+'/mnt/binaural/data/scenes2018/train/fold' + str(f) + '/' + s
             path = glob(p + '/**/**/*.npz', recursive=True)
             paths += path
 
@@ -205,7 +206,7 @@ def get_train_subdata(cv_id, K, epochs, timelengths):
         if fold == cv_id: continue
         # get scene instances name
         abosolute_paths = []
-        p = MACRO_PATH + '/mnt/raid/data/ni/twoears/scenes2018/train/fold' +str(fold) +'/scene1'
+        p = MACRO_PATH + '/mnt/binaural/data/scenes2018/train/fold' +str(fold) +'/scene1'
         temp = glob(p + '/*.npz', recursive=True)
         for i in temp:
             abs_path = i.split('/')[-1]
@@ -214,7 +215,7 @@ def get_train_subdata(cv_id, K, epochs, timelengths):
         for i in abosolute_paths:
             random_index = random.sample(range(1, 81), K)
             for index in random_index:
-                construct_path = MACRO_PATH + '/mnt/raid/data/ni/twoears/scenes2018/train/fold' + str(fold) + '/scene' + str(index) + '/' + i
+                construct_path = MACRO_PATH + '/mnt/binaural/data/scenes2018/train/fold' + str(fold) + '/scene' + str(index) + '/' + i
                 paths.append(construct_path)
 
     INDEX_PATH = get_index(paths)
@@ -224,7 +225,7 @@ def get_train_subdata(cv_id, K, epochs, timelengths):
 def get_valid_data(cv_id, scenes, epochs, timelengths):
     paths = []
     for s in scenes:
-        p = MACRO_PATH+'/mnt/raid/data/ni/twoears/scenes2018/train/fold'+ str(cv_id)+ '/' + s
+        p = MACRO_PATH+'/mnt/binaural/data/scenes2018/train/fold'+ str(cv_id)+ '/' + s
         path = glob(p + '/**/**/*.npz', recursive=True)
         paths += path
     INDEX_PATH = get_index(paths)
@@ -232,7 +233,7 @@ def get_valid_data(cv_id, scenes, epochs, timelengths):
 def get_validation_data(cv_id, scenes, epochs, timelengths):
     paths = []
     for s in scenes:
-        p = MACRO_PATH+'/mnt/raid/data/ni/twoears/scenes2018/train/fold'+ str(cv_id)+ '/' + s
+        p = MACRO_PATH+'/mnt/binaural/data/scenes2018/train/fold'+ str(cv_id)+ '/' + s
         path = glob(p + '/**/**/*.npz', recursive=True)
         paths += path
     # get index, length, path
@@ -292,39 +293,52 @@ def get_sub_scenes_weight(path_list):
     pos = [x / total for x in count_pos]
     neg = [x / total for x in count_neg]
     return [y / x for x, y in zip(pos, neg)]
-def get_bac2(df):
-    w_xsrcs = [0.1, 0.047619047619047616, 0.034482758620689655, 0.05]
-    weight_index = [1, 0, 2, 1, 2, 1, 1, 0, 3, 3, 2, 1, 2, 2, 1, 1, 0, 3, 1, 2,
-     3, 3, 2, 2, 1, 3, 2, 2, 3, 1, 1, 2, 0, 0, 2, 1, 1, 2,2, 2, 1, 1, 2, 0, 3,
-     2, 2, 3, 3, 3, 2, 1, 3, 2, 2, 3, 1, 2, 2, 3, 1, 2, 3, 1, 1, 2, 3, 0, 0, 2,
-     0, 3, 2, 3, 2, 0,3, 2, 1, 3]
-    w = [0] * 80
-    for i in range(80):
-        w[i] = w_xsrcs[weight_index[i]]
 
-    scale_list = np.array([]).reshape(0, 52)
+def cal_class_acc(four_list,weight):
+    # cauculate BAC1 and BAC2 for each class and each scene
+    # four_list is a 52-dimension vector
+    classes_performance_bac1 = []
+    classes_performance_bac2 = []
+    class_sens_spes = []
+    for i in range(13):
+        start = i * 4
+        TP = four_list[start]
+        TN = four_list[start+1]
+        FP = four_list[start+2]
+        FN = four_list[start+3]
+        sensiticity = TP / (TP + FN)
+        specificity = TN / (TN + FP)
+        classes_performance_bac1.append((sensiticity+specificity)/2)
+        bac2 = 1 - (((1-sensiticity)**2 + (1-specificity)**2)/2)**0.5
+        classes_performance_bac2.append(bac2)
+        class_sens_spes.append((sensiticity, specificity))
+    bac1 = np.array(classes_performance_bac1)*weight
+    bac2 = np.array(classes_performance_bac2)*weight
+    class_sens_spes = np.array(class_sens_spes) * weight
+    return bac1,bac2,class_sens_spes
+def get_bac(df):
+    w = 1 / np.array([21, 10, 29, 21, 29, 21, 21, 10, 20, 20, 29, 21, 29, 29, 21, 21, 10,
+                      20, 21, 29, 20, 20, 29, 29, 21, 20, 29, 29, 20, 21, 21, 29, 10, 10,
+                      29, 21, 21, 29, 29, 29, 21, 21, 29, 10, 20, 29, 29, 20, 20, 20, 29,
+                      21, 20, 29, 29, 20, 21, 29, 29, 20, 21, 29, 20, 21, 21, 29, 20, 10,
+                      10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
+    w = w / np.sum(w)
+
+    bac1 = np.array([]).reshape(0, 13)
+    bac2 = np.array([]).reshape(0, 13)
+    class_sens_spes = []
     df = df.groupby('sceneID').mean()
     for row in df.iterrows():
         sceneid = int(row[0].replace('scene', ''))
         weight = w[sceneid - 1]
-        temp = np.array(row[1].tolist()) * weight
-        #     (80, 52)
-        scale_list = np.append(scale_list, temp.reshape(1, 52), axis=0)
-
-    four_list = scale_list.mean(axis=0)
-    classes_performance = []
-    for i in range(13):
-        start = i * 4
-        TP = four_list[start]
-        TN = four_list[start + 1]
-        FP = four_list[start + 2]
-        FN = four_list[start + 3]
-        sensiticity = TP / (TP + FN)
-        specificity = TN / (TN + FP)
-        bac2 = 1 - (((1 - sensiticity) ** 2 + (1 - specificity) ** 2) / 2) ** 0.5
-        classes_performance.append(bac2)
-    final = sum(classes_performance) / len(classes_performance)
-    return final
+        temp = np.array(row[1].tolist())
+        bac_one,bac_two,sens_spes  = cal_class_acc(temp, weight)
+        bac1 = np.append(bac1, bac_one.reshape(1, 13), axis=0)
+        bac2 = np.append(bac2, bac_two.reshape(1, 13), axis=0)
+    final_bac1 = bac1.sum(axis=0).mean(axis=0)
+    final_bac2 = bac2.sum(axis=0).mean(axis=0)
+    class_sens_spes = np.array(class_sens_spes).sum(axis=0)
+    return final_bac1,final_bac2,class_sens_spes
 
 def get_performence(true_pos,true_neg,false_pos,false_neg, index):
     # TP = np.array(true_pos[index])
@@ -380,20 +394,7 @@ def average_performance(list,dir,epoch_num,folder):
     df = pd.DataFrame(list,columns=header)
     dir += 'folder'+ str(folder) + '_' +str(epoch_num) + '.pkl'
     df.to_pickle(dir)
-    # bac2 performance
-    bac2 = get_bac2(df)
-    return bac2
-    # Below is for bac1
-    # df1 = df.groupby('sceneID').mean()
-    # four_list = df1.mean().tolist()
-    # classes_performance = []
-    # for i in range(13):
-    #     start = i * 4
-    #     TP = four_list[start]
-    #     TN = four_list[start+1]
-    #     FP = four_list[start+2]
-    #     FN = four_list[start+3]
-    #     sensiticity = TP / (TP + FN)
-    #     specificity = TN / (TN + FP)
-    #     classes_performance.append((sensiticity+specificity)/2)
-    # return sum(classes_performance) / len(classes_performance)
+
+    bac1,bac2,class_sens_spes = get_bac(df)
+
+    return bac1, class_sens_spes

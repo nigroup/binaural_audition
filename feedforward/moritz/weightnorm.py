@@ -1,4 +1,6 @@
 # code taken from https://github.com/openai/weightnorm
+# modification: removed argument constraints from functions get_updates and made compatible with current keras
+# could be pull-requested
 
 from keras import backend as K
 from keras.optimizers import SGD,Adam
@@ -6,7 +8,7 @@ import tensorflow as tf
 
 # adapted from keras.optimizers.SGD
 class SGDWithWeightnorm(SGD):
-    def get_updates(self, params, constraints, loss):
+    def get_updates(self, params, loss):
         grads = self.get_gradients(loss, params)
         self.updates = []
 
@@ -49,9 +51,8 @@ class SGDWithWeightnorm(SGD):
                     new_V_param = V + v_v
 
                 # if there are constraints we apply them to V, not W
-                if p in constraints:
-                    c = constraints[p]
-                    new_V_param = c(new_V_param)
+                if getattr(p, 'constraint', None) is not None:
+                    new_V_param = p.constraint(new_V_param)
 
                 # wn param updates --> W updates
                 add_weightnorm_param_updates(self.updates, new_V_param, new_g_param, p, V_scaler)
@@ -66,16 +67,15 @@ class SGDWithWeightnorm(SGD):
                     new_p = p + v
 
                 # apply constraints
-                if p in constraints:
-                    c = constraints[p]
-                    new_p = c(new_p)
+                if getattr(p, 'constraint', None) is not None:
+                    new_p = p.constraint(p)
 
                 self.updates.append(K.update(p, new_p))
         return self.updates
 
 # adapted from keras.optimizers.Adam
 class AdamWithWeightnorm(Adam):
-    def get_updates(self, params, constraints, loss):
+    def get_updates(self, params, loss):
         grads = self.get_gradients(loss, params)
         self.updates = [K.update_add(self.iterations, 1)]
 
@@ -120,10 +120,9 @@ class AdamWithWeightnorm(Adam):
                 self.updates.append(K.update(m, m_t))
                 self.updates.append(K.update(v, v_t))
 
-                # if there are constraints we apply them to V, not W
-                if p in constraints:
-                    c = constraints[p]
-                    new_V_param = c(new_V_param)
+                # # if there are constraints we apply them to V, not W
+                if getattr(p, 'constraint', None) is not None:
+                    new_V_param = p.constraint(new_V_param)
 
                 # wn param updates --> W updates
                 add_weightnorm_param_updates(self.updates, new_V_param, new_g_param, p, V_scaler)
@@ -138,9 +137,8 @@ class AdamWithWeightnorm(Adam):
 
                 new_p = p_t
                 # apply constraints
-                if p in constraints:
-                    c = constraints[p]
-                    new_p = c(new_p)
+                if getattr(p, 'constraint', None) is not None:
+                    new_p = p.constraint(new_p)
                 self.updates.append(K.update(p, new_p))
         return self.updates
 
