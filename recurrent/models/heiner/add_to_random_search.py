@@ -28,7 +28,7 @@ if __name__ == '__main__':
     save_path = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name)
     os.makedirs(save_path, exist_ok=True)
 
-    add_hcombs_from_ids(16, save_path)
+    add_hcombs_from_ids(14, save_path)
 
 
 

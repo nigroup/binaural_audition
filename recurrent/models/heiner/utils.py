@@ -203,7 +203,7 @@ def latest_training_state(model_save_dir):
     all_available_weights = glob.glob(path.join(model_save_dir, 'model_ckp_*.hdf5'))
 
     if len(all_available_weights) == 0:
-        return None, None, None, None, None
+        return None, None, None, None, None, None
 
     all_available_weights.sort()
     latest_weights_path = all_available_weights[-1]
