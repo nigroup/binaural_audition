@@ -235,3 +235,6 @@ def latest_training_state(model_save_dir):
     epochs_without_improvement = epochs_finished - best_epoch
 
     return latest_weights_path, epochs_finished, val_acc, best_epoch, best_val_acc, epochs_without_improvement
+
+def unique_dict(d):
+    return list({v['id']: v for v in d}.values())

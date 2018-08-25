@@ -3,6 +3,8 @@ from copy import deepcopy
 from operator import add
 from os import path
 
+from heiner.utils import unique_dict
+
 import numpy as np
 import portalocker
 
@@ -474,7 +476,8 @@ class RandomSearch:
             self.RANGE_REGULARIZATION_COMBINATION[self.SAMPLING_RANGE_REGULARIZATION_COMBINATION(range(len(self.RANGE_REGULARIZATION_COMBINATION)))]
         ) for _ in range(number_of_hcombs)]
 
-        return list(set([self._sample_hcomb(*architecture_params) for architecture_params in architecture_params_list[:number_of_hcombs]]))
+        hcombs = [self._sample_hcomb(*architecture_params) for architecture_params in architecture_params_list[:number_of_hcombs]]
+        return unique_dict(hcombs)
 
     def save_hcombs_to_run(self, save_path, number_of_hcombs):
         # name has to be same as in HCombManager
@@ -492,7 +495,9 @@ class RandomSearch:
                 hcombs_old = pickle.load(handle)
             hcombs_old += self._get_hcombs_to_run(number_of_hcombs)
             if len(hcombs_old) > 1:
-                hcombs_new = list(set(hcombs_old))
+                hcombs_new = unique_dict(hcombs_old)
+            else:
+                hcombs_new = hcombs_old
             with open(filepath, 'wb') as handle:
                 pickle.dump(hcombs_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -519,6 +524,6 @@ class RandomSearch:
                 hcombs_old = pickle.load(handle)
             hcombs_new = hs_to_run + hcombs_old
             if len(hcombs_new) > 1:
-                hcombs_new = list(set(hcombs_new))
+                hcombs_new = unique_dict(hcombs_new)
             with open(filepath_to_run, 'wb') as handle:
                 pickle.dump(hcombs_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
