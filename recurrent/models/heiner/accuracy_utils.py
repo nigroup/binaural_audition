@@ -1,5 +1,5 @@
 import numpy as np
-
+import numba
 
 def get_scene_number_from_scene_instance_id(scene_instance_id):
     return int(scene_instance_id // 1e6)
@@ -56,17 +56,16 @@ def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('f
     return r_v[0] if len(r_v) == 1 else tuple(r_v)
 
 
-# i think this can not be hugely improved performance wise -> would need an array with the size of all instance ids
-# and some mapping from id to index in that array
-def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
-                                                                   y_pred_probs, y_true, output_threshold, mask_val):
-
+@numba.jit
+def calc_batch_metrics(y_pred_probs, y_true, output_threshold, mask_val):
     y_pred = (y_pred_probs >= output_threshold).astype(np.float32)
 
-    all_scene_instance_ids = np.unique(y_true[:, :, 0, 1])
+    all_scene_instance_ids = np.unique(y_true[:, :, 0, 1][y_true[:, :, 0, 1] != mask_val])
+    batch_metrics = np.zeros((len(all_scene_instance_ids), 13, 4))
+
+    i = 0
     for scene_instance_id in all_scene_instance_ids:
-        if scene_instance_id == mask_val:
-            continue
+
         extracted_indices = y_true[:, :, 0, 1] == scene_instance_id
 
         y_pred_extracted = y_pred[extracted_indices, :]
@@ -83,12 +82,21 @@ def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instanc
         false_negatives = positives - true_positives
         false_positives = negatives - true_negatives
 
-        new_metrics = np.vstack((true_positives, false_negatives, true_negatives, false_positives))
+        batch_metrics[i, :, :] = np.stack((true_positives, false_negatives, true_negatives, false_positives), axis=1)
+        i += 1
 
-        if int(scene_instance_id) in scene_instance_id_metrics_dict:
-            scene_instance_id_metrics_dict[int(scene_instance_id)] += new_metrics
+    return all_scene_instance_ids.astype(np.int), batch_metrics
+
+
+def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
+                                                                   y_pred_probs, y_true, output_threshold, mask_val):
+
+    all_scene_instance_ids, batch_metrics = calc_batch_metrics(y_pred_probs, y_true, output_threshold, mask_val)
+    for i, scene_instance_id in enumerate(all_scene_instance_ids):
+        if scene_instance_id in scene_instance_id_metrics_dict:
+            scene_instance_id_metrics_dict[scene_instance_id] += batch_metrics[i, :, :]
         else:
-            scene_instance_id_metrics_dict[int(scene_instance_id)] = new_metrics
+            scene_instance_id_metrics_dict[scene_instance_id] = batch_metrics[i, :, :]
 
 
 def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict, mode, metric='BAC'):
@@ -105,9 +113,9 @@ def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict,
     else:   # mode == 'test'
         n_scenes = 168
 
-    n_metrics, n_classes = scene_instance_ids_metrics_dict[list(scene_instance_ids_metrics_dict.keys())[0]].shape
+    n_classes, n_metrics = scene_instance_ids_metrics_dict[list(scene_instance_ids_metrics_dict.keys())[0]].shape
 
-    scene_number_class_accuracies_metrics = np.zeros((n_scenes, n_metrics, n_classes))
+    scene_number_class_accuracies_metrics = np.zeros((n_scenes, n_classes, n_metrics))
     scene_number_class_accuracies = np.zeros((n_scenes, n_classes))
     scene_number_count = np.zeros(n_scenes)
 
@@ -118,8 +126,8 @@ def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict,
         scene_number = get_scene_number_from_scene_instance_id(scene_instance_id)
         scene_number -= 1
 
-        metrics_decorrelated = metrics / np.sum(metrics, axis=0)
-        scene_number_class_accuracies_metrics[scene_number] += metrics_decorrelated
+        metrics /= np.sum(metrics, axis=1, keepdims=True)
+        scene_number_class_accuracies_metrics[scene_number] += metrics
 
         scene_number_count[scene_number] += 1
 
@@ -128,10 +136,10 @@ def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict,
     vs = scene_number_count != 0    # valid scenes
 
     scene_number_class_accuracies_metrics[vs] /= scene_number_count[vs, np.newaxis, np.newaxis]
-    sensitivity[vs] = scene_number_class_accuracies_metrics[vs, 0, :] / \
-                  (scene_number_class_accuracies_metrics[vs, 0, :]+scene_number_class_accuracies_metrics[vs, 1, :])
-    specificity[vs] = scene_number_class_accuracies_metrics[vs, 2, :] / \
-                  (scene_number_class_accuracies_metrics[vs, 2, :]+scene_number_class_accuracies_metrics[vs, 3, :])
+    sensitivity[vs] = scene_number_class_accuracies_metrics[vs, :, 0] / \
+                  (scene_number_class_accuracies_metrics[vs, :, 0]+scene_number_class_accuracies_metrics[vs, :, 1])
+    specificity[vs] = scene_number_class_accuracies_metrics[vs, :, 2] / \
+                  (scene_number_class_accuracies_metrics[vs, :, 2]+scene_number_class_accuracies_metrics[vs, :, 3])
 
     return_list = []
 
@@ -163,7 +171,7 @@ def get_scene_weights(mode):
                                 10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
         weights = weights / np.sum(weights)
         # TODO deactivate again
-        # weights = np.ones(80) / 2
+        weights = np.ones(80) / 2
     else:
         weights = 1 / np.array([3, 3, 3, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50,
                                 55, 60, 50, 55, 60, 50, 55, 60, 60, 50, 55, 60, 50, 55, 60, 50, 55,
@@ -262,7 +270,7 @@ def test_val_accuracy(with_wrong_predictions=False):
     # print(batches[batches[:, :, :, 0, 1] == 80000008][:, :, 0])
     return val_accuracy(scene_instance_id_metrics_dict)
 
-def test_val_accuracy_real_data(with_wrong_predictions=True):
+def test_val_accuracy_real_data(with_wrong_predictions=False):
     import heiner.train_utils as tr_utils
     epochs = 1
     output_threshold = 0.5
@@ -302,7 +310,7 @@ def test_val_accuracy_real_data(with_wrong_predictions=True):
 
                 p_y = np.where(b_y[:, :, :, 1] // 1e6 == 11, np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape)), p_y)
                 p_y = np.where(b_y[:, :, :, 1] // 1e6 == 12, np.abs(p_y - np.random.choice([0, 1], p_y.shape)), p_y)
-
+                #
                 p_y[pad] = mask_val
             else:
                 p_y = np.copy(b_y[:, :, :, 0])
@@ -318,4 +326,4 @@ def test_val_accuracy_real_data(with_wrong_predictions=True):
 if __name__ == '__main__':
     # print(test_val_accuracy(with_wrong_predictions=True))
     print()
-    print(test_val_accuracy_real_data())
+    print(test_val_accuracy_real_data(with_wrong_predictions=True))
