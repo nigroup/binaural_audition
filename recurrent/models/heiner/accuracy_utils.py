@@ -4,7 +4,7 @@ import numba
 def get_scene_number_from_scene_instance_id(scene_instance_id):
     return int(scene_instance_id // 1e6)
 
-
+@numba.jit
 def mask_from(y_true, mask_val):
     # mask has to be calculated per class -> same mask for every class
     mask = (y_true != mask_val).astype(np.float32)
@@ -282,6 +282,8 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
     dloader = val_loader
     gen = tr_utils.create_generator(dloader)
 
+    import time
+    start = time.time()
     scene_instance_id_metrics_dict = dict()
 
     for _ in range(epochs):
@@ -319,6 +321,7 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
                                                                            mask_val)
 
     r = val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'))
+    elapsed = time.time() - start
     scenes_i = np.array(scenes) - 1
     # print(np.mean(sens_spec_per_class_and_scene[scenes_i, :, :]))
     return None
