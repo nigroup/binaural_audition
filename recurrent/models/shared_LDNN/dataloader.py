@@ -56,7 +56,8 @@ def read_trainset(path_set, batchsize,mean,std):
  Because we have to evaluate each scene instance, thus here use batc padding. 
  Padding value = 0
  ON            = 1
- OFF           = 2
+ OFF           = 0->2
+ UNCLEAR = -1
  NAN: validation use training data set, NaN is already transformed to 1
 '''
 def _read_py_function1(filename,mean,std):
@@ -335,10 +336,11 @@ def get_bac(df):
         bac_one,bac_two,sens_spes  = cal_class_acc(temp, weight)
         bac1 = np.append(bac1, bac_one.reshape(1, 13), axis=0)
         bac2 = np.append(bac2, bac_two.reshape(1, 13), axis=0)
+        class_sens_spes.append(sens_spes)
     final_bac1 = bac1.sum(axis=0).mean(axis=0)
     final_bac2 = bac2.sum(axis=0).mean(axis=0)
     class_sens_spes = np.array(class_sens_spes).sum(axis=0)
-    return final_bac1,final_bac2,class_sens_spes
+    return final_bac1,final_bac2,class_sens_spes.tolist()
 
 def get_performence(true_pos,true_neg,false_pos,false_neg, index):
     # TP = np.array(true_pos[index])
@@ -397,4 +399,4 @@ def average_performance(list,dir,epoch_num,folder):
 
     bac1,bac2,class_sens_spes = get_bac(df)
 
-    return bac1, class_sens_spes
+    return bac1, bac2,class_sens_spes
