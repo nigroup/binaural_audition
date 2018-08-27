@@ -6,10 +6,12 @@ from myutils import calculate_metrics, plotresults, save_h5, load_h5, printerror
 class MetricsCallback(Callback):
     def __init__(self, params):
         self.myparams = params # self.params is reserved by parent class
+        # TODO: finally ensure self.params is not used in this class!
 
         # lists that will be increased in each epoch (batch) and merged into results dict
         self.runtime = []
         self.loss_train_per_batch = []
+        self.loss_valid_per_batch = []
 
         # TODO: adapt to last updates from heiner     added sens_spec_class and sens_spec_class_scene
         self.metrics_train = {'wbac': [],
@@ -62,7 +64,7 @@ class MetricsCallback(Callback):
         # measure the batch time
         runtime_batch = time() - self.starttime_batch
 
-        # get loss
+        # get losses
         self.loss_train_per_batch[-1].append(logs.get('loss'))
 
         # extract and compute gradient norm statistics
@@ -85,6 +87,9 @@ class MetricsCallback(Callback):
             for metric, value in self.metrics_valid.items():
                 self.metrics_valid[metric].append(value)
 
+            # fetch validation loss per batches
+            self.loss_valid_per_batch.append(self.model.val_loss_batch)
+
             # save validation wbac in order to use it as monitor in original earlystopping and modelcheckpoint callbacks
             logs['val_wbac'] = metrics_validation['wbac']
 
@@ -96,7 +101,7 @@ class MetricsCallback(Callback):
                                                                     self.gradient_norm_avg[-1])
 
         if self.myparams['validfold'] != -1:
-            print('epoch {} ended with training wbac {:.2f}'.format(metrics_training['wbac']))
+            print('epoch {} ended with training wbac {:.2f}'.format(epoch+1, metrics_training['wbac']))
         else:
             print('epoch {} ended with validation wbac {:.2f} (training wbac {:.2f})'.
                   format(epoch + 1, metrics_validation['wbac'], metrics_training['wbac'])
@@ -112,10 +117,11 @@ class MetricsCallback(Callback):
         # collect validation metrics
         if self.myparams['validfold'] != -1:
             self.results['val_loss'] = logs['val_loss']  # epoch-based loss (created outside)
+            self.results['val_loss_batch'] = np.array(self.loss_valid_per_batch)
             for metric, value in self.metrics_valid.items():
-                self.results['val_'+metric] = np.array(self.metrics_validation[metric])
+                self.results['val_'+metric] = np.array(metrics_validation[metric])
         # runtime
-        self.result['runtime'] = np.array(self.runtime)
+        self.results['runtime'] = np.array(self.runtime)
         # gradient norm statistics
         if self.myparams['calcgradientnorm']:
             self.results['gradientnorm_max_per_batch'] = self.gradient_norm_max_per_batch
@@ -124,10 +130,10 @@ class MetricsCallback(Callback):
             self.results['gradientnorm_avg'] = self.gradient_norm_avg
 
         # save results
-        save_h5(self.results, self.params['name'] + '_results.h5')
+        save_h5(self.results, self.myparams['name'] + '_results.h5')
 
         # plot results
-        plotresults(self.results, self.params)
+        plotresults(self.results, self.myparams)
 
 
 # time measurements (merged into MetricsCallback)

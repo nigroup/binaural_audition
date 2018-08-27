@@ -17,6 +17,23 @@ from hyperparams import obtain_nextlarger_residuallayers_refining_historysize
 from training_callback import MetricsCallback
 from myutils import save_h5, load_h5, printerror, plotresults, printresults
 
+
+override_params = {}
+# override_params will be fed into params directly before training (i.e. overrides command line arguments)
+
+print('\n!!!!!!!!!!!!!!!!!!!!! ONLY DEBUGGING, REMOVE ME ASAP !!!!!!!!!!!!!!!\n\n') # remove also following lines
+time.sleep(0.5)
+#override_params['scenes_trainvalid'] = [1]
+#override_params['trainfolds'] = [1]
+override_params['historylength'] = 50
+#override_params['noinputstandardization'] = True
+override_params['sceneinstancebufsize'] = 300
+
+# TODO: experiment with optimal batchbufsize for best efficient
+
+
+
+
 totaltime_start = time.time()
 
 # COMMAND LINE ARGUMENTS
@@ -48,9 +65,9 @@ parser.add_argument('--outputthreshold', type=float, default=0.5,
 
 parser.add_argument('--weightnorm', action='store_true', default=False,
                         help='disables the weight norm version of the Adam optimizer, i.e., falls back to regular Adam')
-parser.add_argument('--learningrate', type=float, default=0.001,
+parser.add_argument('--learningrate', type=float, default=0.005, #0.001,
                         help='initial learning rate of the Adam optimizer')
-parser.add_argument('--batchsize', type=int, default=128, #256,
+parser.add_argument('--batchsize', type=int, default=256, #128 # note that batchsize should be proportionally increased to learning rate
                         help='number of time series per batch (should be power of two for efficiency)')
 parser.add_argument('--batchlength', type=int, default=2500, # 2500 batchlength corresponds to 75% of all scene instances to fit into two batches (with a hist size up to 1200 determining the necessary overlap)
                         help='length of the time series per batch (should be significantly larger than history size '+
@@ -180,6 +197,9 @@ if params['firstsceneonly']:
     params['scenes_trainvalid'] = [1] # corresponds to nSrc=2, with the master at 112,5 degree and the (weaker, SNR=4) distractor at -112.5
 else:
     params['scenes_trainvalid'] = list(range(1, NUMBER_SCENES_TRAINING_VALIDATION+1))
+
+
+params.update(override_params)
 
 # weighting with inverse label frequency, ignoring cost of predictions of true labels value MASK_VALUE via masking the loss of such labels
 loss_weights = heiner_utils.get_loss_weights(fold_nbs=trainfolds, scene_nbs=params['scenes_trainvalid'],
