@@ -2,7 +2,7 @@ from keras.models import Model
 from keras.layers import Dense, Input, CuDNNLSTM
 import keras.backend as K
 from heiner.dataloader import DataLoader
-from heiner import utils
+from heiner import tensorflow_utils
 from heiner import accuracy_utils
 from keras.callbacks import Callback
 
@@ -51,7 +51,7 @@ model = Model(x, y)
 model.summary()
 print(5*'\n')
 
-my_loss = utils.my_loss_builder(MASK_VAL, utils.get_loss_weights(TRAIN_FOLDS, TRAIN_SCENES, LABEL_MODE))
+my_loss = tensorflow_utils.my_loss_builder(MASK_VAL, tensorflow_utils.get_loss_weights(TRAIN_FOLDS, TRAIN_SCENES, LABEL_MODE))
 
 metrics = ['TP', 'TN', 'P', 'N'][0:1]
 metrics_functions = []
@@ -79,8 +79,8 @@ print('Number of batches per epoch (validation): ' + str(val_loader_len))
 val_steps_per_epoch = min(val_loader_len)
 print('Therefore using %d steps per epoch' % val_steps_per_epoch)
 
-train_gen = utils.create_generator(train_loader)
-val_gen = utils.create_generator(val_loader)
+train_gen = tensorflow_utils.create_generator(train_loader)
+val_gen = tensorflow_utils.create_generator(val_loader)
 
 
 class MyHistory(Callback):

@@ -171,7 +171,7 @@ def get_scene_weights(mode):
                                 10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
         weights = weights / np.sum(weights)
         # TODO deactivate again
-        weights = np.ones(80) / 2
+        # weights = np.ones(80) / 2
     else:
         weights = 1 / np.array([3, 3, 3, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50,
                                 55, 60, 50, 55, 60, 50, 55, 60, 60, 50, 55, 60, 50, 55, 60, 50, 55,

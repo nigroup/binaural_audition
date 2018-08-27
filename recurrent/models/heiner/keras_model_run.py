@@ -16,6 +16,7 @@ from heiner import hyperparameters as hp
 from heiner import plotting as plot
 from heiner import train_utils as tr_utils
 from heiner import use_tmux as use_tmux
+from heiner import tensorflow_utils
 from heiner import utils
 from heiner.my_tmuxprocess import TmuxProcess
 
@@ -95,13 +96,13 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
             model.summary()
             print(5 * '\n')
 
-            my_loss = utils.my_loss_builder(h.MASK_VAL, utils.get_loss_weights(TRAIN_FOLDS, h.TRAIN_SCENES, h.LABEL_MODE))
+            my_loss = tensorflow_utils.my_loss_builder(h.MASK_VAL, tensorflow_utils.get_loss_weights(TRAIN_FOLDS, h.TRAIN_SCENES, h.LABEL_MODE))
 
             ################################################# LOAD CHECKPOINTED MODEL
 
             model_is_resumed = False
             latest_weights_path, epochs_finished, val_acc, best_epoch_, best_val_acc_, epochs_without_improvement_ \
-                = utils.latest_training_state(model_save_dir)
+                = tensorflow_utils.latest_training_state(model_save_dir)
             if latest_weights_path is not None:
                 model.load_weights(latest_weights_path)
 
@@ -259,9 +260,9 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                 best_val_accs_over_folds_bac2 = np.array(best_val_acc_over_folds_bac2)
 
                 metrics_over_folds = utils.create_metrics_over_folds_dict(best_val_class_accs_over_folds,
-                                                                          best_val_accs_over_folds,
-                                                                          best_val_class_accs_over_folds_bac2,
-                                                                          best_val_accs_over_folds_bac2)
+                                                                                     best_val_accs_over_folds,
+                                                                                     best_val_class_accs_over_folds_bac2,
+                                                                                     best_val_accs_over_folds_bac2)
 
                 if h.STAGE > 1:
                     metrics_over_folds_old = utils.load_metrics(model_dir)
@@ -273,9 +274,9 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                     best_val_accs_over_folds_bac2 += metrics_over_folds_old['best_val_acc_over_folds_bac2']
 
                     metrics_over_folds = utils.create_metrics_over_folds_dict(best_val_class_accs_over_folds,
-                                                                              best_val_accs_over_folds,
-                                                                              best_val_class_accs_over_folds_bac2,
-                                                                              best_val_accs_over_folds_bac2)
+                                                                                         best_val_accs_over_folds,
+                                                                                         best_val_class_accs_over_folds_bac2,
+                                                                                         best_val_accs_over_folds_bac2)
 
                 utils.pickle_metrics(metrics_over_folds, model_dir)
 

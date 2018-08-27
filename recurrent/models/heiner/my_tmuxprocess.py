@@ -38,8 +38,7 @@ class TmuxProcess(Process):
             # before the creation of the last process.
             # -d: don't make the new window current (so that when the user
             #     attaches the first process is shown)
-            os.system("tmux new-window -d -n {} '{}'".format(self.name, cmd))
-        self.tmux_sess = TmuxProcess.tmux_sess
+            os.system("tmux new-window -d -t {} -n {} '{}'".format(TmuxProcess.tmux_sess, self.name, cmd))
 
         # buffering=1 gives line buffering
         self.out_fifo = open(out_fname, 'w', buffering=1)

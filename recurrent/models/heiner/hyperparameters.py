@@ -1,6 +1,5 @@
 import pickle
 from copy import deepcopy
-from operator import add
 from os import path
 
 from heiner.utils import unique_dict
