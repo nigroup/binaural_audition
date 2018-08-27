@@ -3,10 +3,12 @@ import sys
 import argparse
 import socket
 import time
-from keras.optimizers import Adam
-from keras.callbacks import EarlyStopping, ModelCheckpoint, TerminateOnNaN
+
+
+# note we have some more seeds below for proper keras/tensorflow seeding
 
 import heiner.utils as heiner_utils
+import heiner.tensorflow_utils as heiner_tfutils
 
 from weightnorm import AdamWithWeightnorm
 from generator_extension import fit_and_predict_generator_with_sceneinst_metrics
@@ -23,10 +25,10 @@ override_params = {}
 
 print('\n!!!!!!!!!!!!!!!!!!!!! ONLY DEBUGGING, REMOVE ME ASAP !!!!!!!!!!!!!!!\n\n') # remove also following lines
 time.sleep(0.5)
-#override_params['scenes_trainvalid'] = [1]
-#override_params['trainfolds'] = [1]
+override_params['scenes_trainvalid'] = [1]
+override_params['trainfolds'] = [1]
 override_params['historylength'] = 50
-#override_params['noinputstandardization'] = True
+override_params['noinputstandardization'] = True
 override_params['sceneinstancebufsize'] = 300
 
 # TODO: experiment with optimal batchbufsize for best efficient
@@ -87,6 +89,8 @@ parser.add_argument('--calcgradientnorm', action='store_true', default=False,
 
 parser.add_argument('--firstsceneonly', action='store_true', default=False,
                         help='if chosen: only the first scene is used for training/validation, otherwise all (80)')
+parser.add_argument('--seed', type=int, default=1,
+                        help='if -1: no fixed seed is used, otherwise the value is the seed (multiplied by epochs)')
 parser.add_argument('--instantlabels', action='store_true', default=False,
                         help='if chosen: instant labels; otherwise: block-interprete labels')
 parser.add_argument('--sceneinstancebufsize', type=int, default=3000,
@@ -103,6 +107,8 @@ args = parser.parse_args()
 # (HYPER)PARAMS
 
 params = vars(args)
+
+params.update(override_params)
 
 params['server'] = socket.gethostname()
 
@@ -154,6 +160,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = str(params['gpuid']) # cf. nvidia-smi ids
 
 print('nvidia-smi: ')
 os.system('nvidia-smi')
+print()
 
 print(initial_output)
 
@@ -172,17 +179,6 @@ print('name: '+params['name'])
 print()
 print('BUILDING DATA LOADER')
 
-# MODEL BUILDING
-
-print()
-print('BUILDING MODEL')
-
-model = temporal_convolutional_network(params)
-
-if params['weightnorm']:
-    optimizer = AdamWithWeightnorm
-else:
-    optimizer = Adam
 
 trainfolds = [1, 2, 3, 4, 5, 6]
 if params['validfold'] != -1:
@@ -193,37 +189,19 @@ if params['validfold'] != -1:
 
 params['trainfolds'] = trainfolds
 
+
 if params['firstsceneonly']:
     params['scenes_trainvalid'] = [1] # corresponds to nSrc=2, with the master at 112,5 degree and the (weaker, SNR=4) distractor at -112.5
 else:
     params['scenes_trainvalid'] = list(range(1, NUMBER_SCENES_TRAINING_VALIDATION+1))
 
-
 params.update(override_params)
-
-# weighting with inverse label frequency, ignoring cost of predictions of true labels value MASK_VALUE via masking the loss of such labels
-loss_weights = heiner_utils.get_loss_weights(fold_nbs=trainfolds, scene_nbs=params['scenes_trainvalid'],
-                                             label_mode='instant' if params['instantlabels'] else 'blockbased')
-masked_weighted_crossentropy_loss = heiner_utils.my_loss_builder(MASK_VALUE, loss_weights)
-# TODO: potential performance optimization: in label mode reduce to weighted crossentropy loss, i.e., without masked
-print('constructed loss (masking labels with value {}) using loss weights {}'.format(MASK_VALUE, loss_weights))
-
-model.summary()
-model.compile(optimizer(lr=params['learningrate'], clipnorm=params['gradientclip']),
-              loss=masked_weighted_crossentropy_loss, metrics=None)
-
-# params saved here already because if a late epoch's process is killed we have at least all results and params up to the epoch before
-save_h5(params, params['name'] + '_params.h5')
-
-
-print()
-print('STARTING TRAINING')
 
 print('trainfolds: {}, validfold: {}'.format(params['trainfolds'], params['validfold']))
 
 batchloader_training = BatchLoader(params=params, mode='train', fold_nbs=params['trainfolds'],
                                    scene_nbs=params['scenes_trainvalid'], batchsize=params['batchsize'],
-                                   seed=1) # seed for testing
+                                   seed=params['seed'] if params['seed']!=-1 else None) # seed for testing
 
 if params['validfold'] == -1:
     batchloader_validation = None
@@ -231,10 +209,57 @@ else:
     batchloader_validation = BatchLoader(params=params, mode='val', fold_nbs=[params['validfold']],
                                          scene_nbs=params['scenes_trainvalid'], batchsize=params['batchsize'])  # seed for testing
 
-params['batches_per_epoch'] = batchloader_training.batches_per_epoch
+params['train_batches_per_epoch'] = batchloader_training.batches_per_epoch
+params['valid_batches_per_epoch'] = batchloader_validation.batches_per_epoch
+
+# MODEL BUILDING
+
+
+
+print()
+print('BUILDING MODEL')
+
+# seeding
+if params['seed'] != -1:
+    # import random
+    # random.seed(params['seed']) # for the initialization np and tf are enoguh, batchloader has internal seed setting
+
+    import numpy as np
+    np.random.seed(params['seed'])
+
+    import tensorflow
+    tensorflow.set_random_seed(params['seed'])
+
+from keras.optimizers import Adam
+from keras.callbacks import EarlyStopping, ModelCheckpoint, TerminateOnNaN
+
+model = temporal_convolutional_network(params)
+
+if params['weightnorm']:
+    optimizer = AdamWithWeightnorm
+else:
+    optimizer = Adam
+# weighting with inverse label frequency, ignoring cost of predictions of true labels value MASK_VALUE via masking the loss of such labels
+loss_weights = heiner_tfutils.get_loss_weights(fold_nbs=trainfolds, scene_nbs=params['scenes_trainvalid'],
+                                             label_mode='instant' if params['instantlabels'] else 'blockbased')
+masked_weighted_crossentropy_loss = heiner_tfutils.my_loss_builder(MASK_VALUE, loss_weights)
+# TODO: potential performance optimization: in label mode reduce to weighted crossentropy loss, i.e., without masked
+print('constructed loss (masking labels with value {}) using loss weights {}'.format(MASK_VALUE, loss_weights))
+
+
+model.summary()
+model.compile(optimizer(lr=params['learningrate'], clipnorm=params['gradientclip']),
+              loss=masked_weighted_crossentropy_loss, metrics=None)
+
+# params saved here already because if a late epoch's process is killed we have at least all results and params up to the epoch before
+save_h5(params, os.path.join(params['path'], params['name']+'_params.h5'))
+
+
+print()
+print('STARTING TRAINING')
 
 print('starting training for at most {} epochs ({} batches per epoch)'.format(params['maxepochs'],
-                                                                              params['batches_per_epoch']))
+                                                                              params['train_batches_per_epoch']))
 
 # collect train and validation metrics after each epoch (loss, wbac, wbac_per_class, bac_per_class_scene, wbac2,
 # wbac2_per_class, sensitivies, specificities, gradient statistics, runtime) and after each batch (loss, gradient statistics)
@@ -242,11 +267,12 @@ metricscallback = MetricsCallback(params)
 
 # keras callbacks for earlystopping, model saving and nantermination
 # remark: val_wbac is not a metric in the keras sense but is provided via the metricscallback
-earlystopping = EarlyStopping(monitor='val_wbac', mode='max')
-modelcheckpoint = ModelCheckpoint(params['name']+'_model.h5', monitor='val_wbac', mode='max', save_best_only=True)
-terminateonnan = TerminateOnNaN()
-
-callbacks = [terminateonnan, metricscallback, earlystopping, modelcheckpoint]
+# TODO: enable again the next three ones (piece by pice)
+#earlystopping = EarlyStopping(monitor='val_wbac', mode='max')
+#modelcheckpoint = ModelCheckpoint(params['name']+'_model.h5', monitor='val_wbac', mode='max', save_best_only=True)
+# terminateonnan = TerminateOnNaN()
+# callbacks = [terminateonnan, metricscallback, earlystopping, modelcheckpoint]
+callbacks = [metricscallback]
 
 
 # start training, after each epoch evaluate loss and metrics on validation set (and training set)
@@ -254,13 +280,13 @@ fit_and_predict_generator_with_sceneinst_metrics(model,
                                                  generator=batchloader_training,
                                                  params=params,
                                                  epochs=params['maxepochs'],
-                                                 steps_per_epoch=params['batches_per_epoch'],
+                                                 steps_per_epoch=params['train_batches_per_epoch'],
                                                  callbacks=callbacks,
                                                  max_queue_size=params['batchbufsize'],
                                                  workers=1,
                                                  use_multiprocessing=False, #True,
                                                  validation_data=batchloader_validation,
-                                                 validation_steps=params['batches_per_epoch'])
+                                                 validation_steps=params['valid_batches_per_epoch'])
 
 # collecting and saving results
 results = metricscallback.results
@@ -275,9 +301,9 @@ if earlystopping.stopped_epoch == 0:
     printerror('early stopping could not be applied with patience {}, maxepochs {} was seemingly too small'.format(params['earlystop'], params['maxepochs']))
 else:
     results['epoch_best'] = earlystopping.stopped_epoch - params['earlystop']
-    print('the best epoch was epoch {} (as of nonimproving for {} epochs)'.format(params['epoch_best']+1, params['maxepochs']))
+    print('the best epoch was epoch {} (as of nonimproving for {} epochs)'.format(results['epoch_best']+1, params['maxepochs']))
 
-save_h5(results, params['name'] + '_results.h5')
+save_h5(results, os.path.join(params['path'], params['name']+'_results.h5'))
 
 
 # TODO: final plotting and printing

@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from time import time
 from keras.callbacks import Callback
 from myutils import calculate_metrics, plotresults, save_h5, load_h5, printerror
@@ -10,6 +11,8 @@ class MetricsCallback(Callback):
 
         # lists that will be increased in each epoch (batch) and merged into results dict
         self.runtime = []
+        self.loss_train = []
+        self.loss_valid = []
         self.loss_train_per_batch = []
         self.loss_valid_per_batch = []
 
@@ -76,16 +79,22 @@ class MetricsCallback(Callback):
         # measure the epoch time
         self.runtime.append(time() - self.starttime_epoch)
 
+        # get losses
+        self.loss_train.append(logs['loss'])
+        self.loss_valid.append(logs['val_loss'])
+
         # calculate and extract training metrics
         metrics_training = calculate_metrics(self.model.scene_instance_id_metrics_dict_train)
-        for metric, value in self.metrics_train.items():
-            self.metrics_train[metric].append(value)
+        for metric, value in metrics_training.items():
+            if metric in self.metrics_train:
+                self.metrics_train[metric].append(value)
 
         if self.myparams['validfold'] != -1:
             # calculate and extract validation metrics
             metrics_validation = calculate_metrics(self.model.scene_instance_id_metrics_dict_eval)
-            for metric, value in self.metrics_valid.items():
-                self.metrics_valid[metric].append(value)
+            for metric, value in metrics_validation.items():
+                if metric in self.metrics_valid:
+                    self.metrics_valid[metric].append(value)
 
             # fetch validation loss per batches
             self.loss_valid_per_batch.append(self.model.val_loss_batch)
@@ -109,17 +118,17 @@ class MetricsCallback(Callback):
 
         # collect results
         self.results = {}
-        self.results['train_loss'] = logs['loss'] # epoch-based loss (created outside)
+        self.results['train_loss'] = np.array(self.loss_train) # epoch-based loss (created outside)
         self.results['train_loss_batch'] = np.array(self.loss_train_per_batch) # batch-based loss
         # collect training metrics
         for metric, value in self.metrics_train.items():
             self.results['train_'+metric] = np.array(self.metrics_train[metric])
         # collect validation metrics
         if self.myparams['validfold'] != -1:
-            self.results['val_loss'] = logs['val_loss']  # epoch-based loss (created outside)
+            self.results['val_loss'] = np.array(self.loss_valid)  # epoch-based loss (created outside)
             self.results['val_loss_batch'] = np.array(self.loss_valid_per_batch)
             for metric, value in self.metrics_valid.items():
-                self.results['val_'+metric] = np.array(metrics_validation[metric])
+                self.results['val_'+metric] = np.array(self.metrics_valid[metric])
         # runtime
         self.results['runtime'] = np.array(self.runtime)
         # gradient norm statistics
@@ -130,7 +139,7 @@ class MetricsCallback(Callback):
             self.results['gradientnorm_avg'] = self.gradient_norm_avg
 
         # save results
-        save_h5(self.results, self.myparams['name'] + '_results.h5')
+        save_h5(self.results, os.path.join(self.myparams['path'], self.myparams['name']+'_results.h5'))
 
         # plot results
         plotresults(self.results, self.myparams)

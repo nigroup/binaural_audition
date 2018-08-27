@@ -5,9 +5,8 @@ from constants import *
 
 def calculate_metrics(scene_instance_id_metrics_dict):
 
-    (wbac, wbac2), (wbac_per_class, wbac2_per_class), (bac_per_scene, bac2_per_scene), \
-                       (bac_per_class_scene, wbac2_per_class_scene), \
-                       (sens_spec_per_class_scene, sens_spec_per_class) = \
+    wbac, wbac2, wbac_per_class, wbac2_per_class, bac_per_scene, bac2_per_scene, \
+    bac_per_class_scene, wbac2_per_class_scene, sens_spec_per_class_scene, sens_spec_per_class = \
             heiner_val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'),
                         ret=('final', 'per_class', 'per_scene', 'per_class_scene'))
 
@@ -35,6 +34,7 @@ def load_h5(filename):
 def save_h5(dict_flat, filename):
     with h5py.File(filename, 'w') as h5:
         for key, val in dict_flat.items():
+            #print('creating data set {} => {}'.format(key, val))
             h5.create_dataset(key, data=val)
 
 # prints text to stderr
