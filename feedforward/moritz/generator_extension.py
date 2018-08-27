@@ -379,7 +379,7 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
             progbar = Progbar(target=steps)
 
         model.scene_instance_id_metrics_dict_eval = {}
-        losses = []
+        model.val_loss_batch = []
         while steps_done < steps:
             generator_output = next(output_generator)
             if not hasattr(generator_output, '__len__'):
@@ -399,9 +399,9 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
                                  str(generator_output))
 
             # remark on label shape: last (fourth) dimension contains in 0 the true labels, in 1 the corresponding sceneinstid (millioncode)
-            batch_loss, y_pred_probs = heiner_test_and_predict_on_batch.test_and_predict_on_batch(model, x, y[:, :, :, 0])
+            batch_loss, y_pred_probs = heiner_test_and_predict_on_batch(model, x, y[:, :, :, 0])
 
-            losses.append(batch_loss)
+            model.val_loss_batch.append(batch_loss)
 
             heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch(
                 model.scene_instance_id_metrics_dict_eval,
@@ -432,4 +432,4 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
         if enqueuer is not None:
             enqueuer.stop()
 
-    return np.average(losses) # for test phase: simply use the model.scene_instance_id_metrics_dict_test after execution
+    return np.average(np.array(model.val_loss_batch)) # for test phase: simply use the model.scene_instance_id_metrics_dict_test after execution

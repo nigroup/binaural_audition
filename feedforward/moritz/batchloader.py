@@ -96,6 +96,7 @@ class SceneInstanceBuffer:
             # set mask values (overlapping frames should not be counted twice for loss and accuracy metrics)
             if overlap > 0: # except first overlap (would though be respected by following slicing as well)
                 y_block[position:position+overlap, :] = MASK_VALUE
+                assert (y_block != MASK_VALUE).any() # TODO: remove me (costly)
 
             # adding scene instance id as second label id
             # remark: for compatibility with Heiner's accuracy utils we need to provide the scene instance id for each
@@ -146,7 +147,7 @@ class BatchLoader(HeinerDataloader):
         # get number of batches per epoch
         self._calculate_batchnumber()
 
-        print('created {} batchloader ({} batches of size {} [per epoch] and length {} / historylength {}) using {} labels'.
+        print('batchloader {} created ({} batches of size {} [per epoch] and length {} / historylength {}) using {} labels'.
               format(mode, self.batches_per_epoch, params['batchsize'], params['batchlength'], self.params['historylength'], label_mode))
 
 
@@ -285,12 +286,13 @@ class BatchLoader(HeinerDataloader):
 
         t_start_allfill = time()
 
-        if (len(self.scene_instance_buffers) == 0):
-            complete_fill = True
-            t_start_buffer_filling = time() # keep (only) this time measurement after profiling
-            print('filling empty buffer with {} scene instances...'.format(self.params['sceneinstancebufsize']))
-        else:
-            complete_fill = False
+        # if (len(self.scene_instance_buffers) == 0):
+        #     complete_fill = True
+        #     t_start_buffer_filling = time() # keep (only) this time measurement after profiling
+        #     print('batchloader {} (epoch {}): filling empty buffer with {} scene instances...'.format(self.mode, self.epoch+1,
+        #                                                                                   self.params['sceneinstancebufsize']))
+        # else:
+        #     complete_fill = False
 
         runtime_filename = 0.
         runtime_instantiation = 0.
@@ -322,13 +324,14 @@ class BatchLoader(HeinerDataloader):
             self.blocks_allbuffers += len(scene_instance_buf)
             runtime_lengthcalc += time()-t_start
 
-        if complete_fill:
-            print('...filled buffer in {:.2f} sec'.format(time()-t_start_buffer_filling))
+        # if complete_fill:
+        #     print('batchloader {} (epoch {}): ...filled buffer in {:.2f} sec'.format(self.mode, self.epoch+1,
+        #                                                                   time()-t_start_buffer_filling))
 
-        runtime_fillbuffer = time()-t_start_allfill
+        # runtime_fillbuffer = time()-t_start_allfill
 
-        print('batchloader: fill scene instance buffers took {:.2f} => filename {:.2f}, instantiation {:.2f}, appending {:.2f}, lengthcalc {:.2f}'
-              .format(runtime_fillbuffer, runtime_filename, runtime_instantiation, runtime_appending, runtime_lengthcalc))
+        # print('batchloader: fill scene instance buffers took {:.2f} => filename {:.2f}, instantiation {:.2f}, appending {:.2f}, lengthcalc {:.2f}'
+        #       .format(runtime_fillbuffer, runtime_filename, runtime_instantiation, runtime_appending, runtime_lengthcalc))
 
     def init_epoch(self, first=False):
 
@@ -364,7 +367,7 @@ class BatchLoader(HeinerDataloader):
         # the scene instance buffers should be empty, otherwise we should not init an epoch
         assert len(self.scene_instance_buffers) == 0
 
-        print('batchloader (mode {}) is prepared for epoch {}'.format(self.mode, self.epoch+1))
+        # print('batchloader (mode {}) is prepared for epoch {}'.format(self.mode, self.epoch+1))
 
     def __iter__(self):
         return self
@@ -483,8 +486,8 @@ class BatchLoader(HeinerDataloader):
         runtime_finish = time()-t_start
 
         runtime_nextbatch_total = time()-t_start_nextbatch
-        print('batchloader: total time to get the batch was {:.2f} => start {:.2f}, sample {:.2f}, next block {:.2f}, postproc block {:.2f} (assignment {:.2f}, listops {:.2f}), remove block {:.2f}, finish {:.2f}'
-              .format(runtime_nextbatch_total, runtime_start, runtime_sample_index, runtime_next_block, runtime_postproc_block, runtime_postproc_block_assignment, runtime_postproc_block_listops, runtime_remove_block, runtime_finish))
+        # print('batchloader: total time to get the batch was {:.2f} => start {:.2f}, sample {:.2f}, next block {:.2f}, postproc block {:.2f} (assignment {:.2f}, listops {:.2f}), remove block {:.2f}, finish {:.2f}'
+        #       .format(runtime_nextbatch_total, runtime_start, runtime_sample_index, runtime_next_block, runtime_postproc_block, runtime_postproc_block_assignment, runtime_postproc_block_listops, runtime_remove_block, runtime_finish))
 
         return self._input_standardization_if_wanted(effective_batch_x), effective_batch_y
 
