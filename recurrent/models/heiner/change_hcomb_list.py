@@ -6,7 +6,6 @@ import heiner.utils as utils
 
 
 def load_hcomb_list(path_):
-    # TODO lock for hcomb list
     with open(path_, 'rb') as handle:
         return pickle.load(handle)
 
@@ -43,6 +42,8 @@ def add_missing_metrics(id, hcomb_list, metrics, metrics_over_folds):
     metrics_over_folds_is_none = metrics_over_folds is None
 
     d = hcomb_list[id]
+    d['val_acc'] = [0, 0, metrics['val_accs'][-1], 0, 0, 0] \
+        if not metrics_is_none else[0] * 6
     d['best_val_acc'] = [0, 0, np.max(metrics['val_accs']), 0, 0, 0] \
         if not metrics_is_none else [0] * 6
     d['best_val_acc_bac2'] = [0, 0, metrics['val_accs_bac2'][np.argmax(metrics['val_accs'])], 0, 0, 0] \
@@ -123,14 +124,15 @@ def renew_old_hcombs(path_):
                        '/hcomb_{}/val_fold3/metrics.pickle'.format(id)
 
         metrics = load_pickled(metrics_path)
-        correct_val_accs_per_scene(metrics)
+        # correct_val_accs_per_scene(metrics)
 
         metrics_over_folds_path = '/mnt/antares_raid/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1' \
                                   '/hcomb_{}/metrics.pickle'.format(id)
         hyperparameters_path = '/mnt/antares_raid/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1' \
                                '/hcomb_{}/hyperparameters.pickle'.format(id)
 
-        metrics_over_folds = rebuild_metrics_over_folds(metrics)
+        # metrics_over_folds = rebuild_metrics_over_folds(metrics)
+        metrics_over_folds = load_pickled(metrics_over_folds_path)
 
         add_missing_metrics(id, hcomb_list, metrics, metrics_over_folds)
 
@@ -157,16 +159,9 @@ path_ = '/mnt/antares_raid/home/spiess/twoears_proj/models/heiner/model_director
 
 hcomb_list, metrics_path_dict, metrics_over_folds_path_dict, hyperparameters_path_dict = renew_old_hcombs(path_)
 #
-# pickle_dump(hcomb_list, path_)
+pickle_dump(hcomb_list, path_)
 # pickle_dicts(metrics_path_dict)
 # pickle_dicts(metrics_over_folds_path_dict)
 # pickle_dicts(hyperparameters_path_dict)
 
 hcomb_list = load_pickled(path_)
-
-# TODO
-
-# TODO create hcombs from hcomb list
-
-# TODO missing in metrics (not in fold)
-# best val acc mean and std
