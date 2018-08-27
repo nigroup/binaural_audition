@@ -14,12 +14,12 @@ def mask_from(y_true, mask_val):
 
 def train_accuracy(scene_instance_id_metrics_dict, metric='BAC'):
     mode = 'train'
-    scene_number_class_accuracies, sens_class, spec_class = \
+    scene_number_class_accuracies, sens_class_scene, spec_class_scene = \
         calculate_class_accuracies_per_scene_number(scene_instance_id_metrics_dict, mode, metric=metric)
     del scene_instance_id_metrics_dict
     class_accuracies = calculate_class_accuracies_weighted_average(scene_number_class_accuracies, mode)
     del scene_number_class_accuracies
-    return calculate_accuracy_final(class_accuracies), np.stack((sens_class, spec_class), axis=2)
+    return calculate_accuracy_final(class_accuracies), np.stack((sens_class_scene, spec_class_scene), axis=2)
 
 
 def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_scene')):
@@ -195,8 +195,7 @@ def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, m
         scene_number_class_accuracies = (scene_number_class_accuracies,)
     class_accuracies = []
     for scene_number_class_accuracies_i in scene_number_class_accuracies:
-        scene_number_class_accuracies_i *= weights
-        class_accuracies.append(np.sum(scene_number_class_accuracies_i, axis=0))
+        class_accuracies.append(np.sum(scene_number_class_accuracies_i * weights, axis=0))
     if len(class_accuracies) == 1:
         return class_accuracies[0]
     else:
@@ -272,10 +271,10 @@ def test_val_accuracy(with_wrong_predictions=False):
 
 def test_val_accuracy_real_data(with_wrong_predictions=False):
     import heiner.train_utils as tr_utils
-    epochs = 1
+    epochs = 2
     output_threshold = 0.5
     mask_val = -1
-    scenes = list(range(11, 13))
+    scenes = list(range(1, 3))
     train_loader, val_loader = tr_utils.create_dataloaders('blockbased', [1, 2, 4, 5, 6], scenes, 100,
                                                            1000, epochs, 160, 13,
                                                            [3], True, BUFFER=50)
@@ -286,8 +285,8 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
     start = time.time()
     scene_instance_id_metrics_dict = dict()
 
-    for _ in range(epochs):
-        for it in range(1, dloader.len() + 1):
+    for e in range(epochs):
+        for it in range(1, dloader.len()[e] + 1):
             ret = next(gen)
             if len(ret) == 2:
                 b_x, b_y = ret
@@ -301,7 +300,7 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
 
                 # test final -> passes
 
-                # p_y = np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape))  # [0, 1] should be roughly 50% -> [0, 1, 1] shoudl be roughly 33%
+                p_y = np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape))  # [0, 1] should be roughly 50% -> [0, 1, 1] shoudl be roughly 33%
 
                 # test per class -> passes
 
@@ -310,8 +309,8 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
 
                 # test per scene -> passes
 
-                p_y = np.where(b_y[:, :, :, 1] // 1e6 == 11, np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape)), p_y)
-                p_y = np.where(b_y[:, :, :, 1] // 1e6 == 12, np.abs(p_y - np.random.choice([0, 1], p_y.shape)), p_y)
+                # p_y = np.where(b_y[:, :, :, 1] // 1e6 == 11, np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape)), p_y)
+                # p_y = np.where(b_y[:, :, :, 1] // 1e6 == 12, np.abs(p_y - np.random.choice([0, 1], p_y.shape)), p_y)
                 #
                 p_y[pad] = mask_val
             else:
@@ -320,7 +319,7 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
                                                                            p_y, b_y, output_threshold,
                                                                            mask_val)
 
-    r = val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'))
+    r = val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_scene', 'per_class_scene'))
     elapsed = time.time() - start
     scenes_i = np.array(scenes) - 1
     # print(np.mean(sens_spec_per_class_and_scene[scenes_i, :, :]))
