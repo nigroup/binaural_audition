@@ -13,10 +13,23 @@ from heiner.dataloader import DataLoader as HeinerDataloader
 from myutils import printerror
 from constants import *
 
-# TODO: check efficiency of batchloader via multiprocessing queue:
-# => efficiency optimization one lock per scene instance and one global batchloader lock (for lists and length) these
+# TODO: check runtime of running at 70 batches (noinputstd)
 
-# efficiency remarks (evaluated on sabik with batch size 128, sceneinstancebufsize 2000):
+# conclusion from profiling below:
+# - inplace standardization: vanishes the 0.8s per batch that the original version consumed!
+# - threading (workers=1, multiprocessing=False) superior: 3.6s (2.7s without input standardization)
+# - singleproc (workers=0) a bit slower: 4.4s
+# - multiprocessing (workers=1, multiprocessing=True) inadequate because of slow serialization through
+#                                                     queue across processes: 12.8s
+# experiment2:
+# inplace standardization vs original
+# - original after 70 batches: 2.0s generator, 0.82s train_predict, 0.92s metrics
+# - inplace after 70 batches: 1.18s generator, 0.52s train_predict, 0.96s metrics <--- first try
+# - inplace after 70 batches: 0.9s generator, 0.59 train_predict, 0.86 metrics <-- second try
+# - no input std after 70 batches: 0.5s generator, 0.54 train_predict, 0.95 metrics
+#
+# experiment 1:
+# runtime profiling exploration (evaluated on sabik with batch size 128, sceneinstancebufsize 2000):
 # - direct runtimes (via running this file):
 #   - total time: ~2-3 sec
 #   - instantiating scene instance buffers (i.e., loading file): 1...1.6 sec
@@ -35,10 +48,10 @@ from constants import *
 #       - train_predict: 1.25s
 #       - metrics: 0.95s
 #   - multithreading (1 worker) / multiprocessing False (same condition as others) [without standardization]
-#       - total: ~???  (after ~??? batches)
-#       - generator: ???s
-#       - train_predict: ???s
-#       - metrics: ???s
+#       - total: ~2.7s  (after ~1000 batches)
+#       - generator: 0.8s
+#       - train_predict: 0.6s
+#       - metrics: 0.9s
 #   - multiprocessing (1 worker) / multiprocessing True (note that the cpu was not freely available to me but similar to above/singleproc experiment)
 #       - total: ~ 12.8s (here/below: avg after 60 batches)
 #       - generator: ~10.0s [higher than singleproc!]
@@ -520,7 +533,7 @@ if __name__ == '__main__':
     # scenes = [1, 2]
     inputstd = True
     # inputstd = False
-    params = {'sceneinstancebufsize': 2000,
+    params = {'sceneinstancebufsize': 200, #2000,
               'historylength': 1017,
               'batchsize': 128,
               'batchlength': 2500,
@@ -534,7 +547,6 @@ if __name__ == '__main__':
     batchloader_training = BatchLoader(params=params, mode=mode, fold_nbs=folds,
                                        scene_nbs=scenes, batchsize=params['batchsize'],
                                        seed=1)  # seed for testing
-
 
     # for checking input standardization
     no_batches = batchloader_training.batches_per_epoch * params['maxepochs']
