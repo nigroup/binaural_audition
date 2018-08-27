@@ -185,7 +185,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                     val_phase.class_scene_accs_bac2 = old_metrics['val_class_scene_accs_bac2'].tolist()
                     val_phase.scene_accs = old_metrics['val_scene_accs'].tolist()
                     val_phase.scene_accs_bac2 = old_metrics['val_scene_accs_bac2'].tolist()
-                    train_phase.sens_spec_class_scene = old_metrics['train_class_sens_spec'].tolist()
+                    train_phase.sens_spec_class_scene = old_metrics['train_sens_spec_class_scene'].tolist()
                     val_phase.sens_spec_class_scene = old_metrics['val_sens_spec_class_scene'].tolist()
                     val_phase.sens_spec_class = old_metrics['val_sens_spec_class'].tolist()
 
@@ -216,7 +216,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                     'val_class_scene_accs_bac2': np.array(val_phase.class_scene_accs_bac2),
                     'val_scene_accs': np.array(val_phase.scene_accs),
                     'val_scene_accs_bac2': np.array(val_phase.scene_accs_bac2),
-                    'train_class_sens_spec': np.array(train_phase.sens_spec_class_scene),
+                    'train_sens_spec_class_scene': np.array(train_phase.sens_spec_class_scene),
                     'val_sens_spec_class_scene': np.array(val_phase.sens_spec_class_scene),
                     'val_sens_spec_class': np.array(val_phase.sens_spec_class)
                 }
@@ -294,8 +294,8 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                 metrics_over_folds = utils.load_metrics(model_dir)
 
             # STAGE thresholds
-            # TODO they have to be determined
-            stage_thresholds = {1: 0.80, 2: 0.86, 3: np.inf}     # 3 is the last stage
+            # TODO they have to be determined -> now: just stage 1
+            stage_thresholds = {1: np.inf, 2: np.inf, 3: np.inf}     # 3 is the last stage
 
             if metrics_over_folds['best_val_acc_mean_over_folds'] >= stage_thresholds[h.STAGE]:
                 go_to_next_stage = True
