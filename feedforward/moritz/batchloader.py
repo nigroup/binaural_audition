@@ -13,10 +13,8 @@ from heiner.dataloader import DataLoader as HeinerDataloader
 from myutils import printerror
 from constants import *
 
-# TODO: check runtime of running at 70 batches (noinputstd)
-
 # conclusion from profiling below:
-# - inplace standardization: vanishes the 0.8s per batch that the original version consumed!
+# - inplace standardization: reduces the 0.8s per batch that the original version consumed!
 # - threading (workers=1, multiprocessing=False) superior: 3.6s (2.7s without input standardization)
 # - singleproc (workers=0) a bit slower: 4.4s
 # - multiprocessing (workers=1, multiprocessing=True) inadequate because of slow serialization through
@@ -106,11 +104,6 @@ class SceneInstanceBuffer:
             x_block = self.x[0, position:position+self.params['batchlength'], :] # ignore dummy batch dim
             y_block = self.y[0, position:position+self.params['batchlength'], :] # ignore dummy batch dim
 
-            # set mask values (overlapping frames should not be counted twice for loss and accuracy metrics)
-            if overlap > 0: # except first overlap (would though be respected by following slicing as well)
-                y_block[position:position+overlap, :] = MASK_VALUE
-                assert (y_block != MASK_VALUE).any() # TODO: remove me (costly)
-
             # adding scene instance id as second label id
             # remark: for compatibility with Heiner's accuracy utils we need to provide the scene instance id for each
             # frame although in our case all frames have the same scene instance id
@@ -118,6 +111,12 @@ class SceneInstanceBuffer:
             y_concat_sid_block = np.zeros((*y_block.shape, 2), dtype=DTYPE_DATA)
             y_concat_sid_block[:, :, 0] = y_block
             y_concat_sid_block[ :, :, 1] = sid_block
+
+
+            # set mask values (overlapping frames should not be counted twice for loss and accuracy metrics)
+            # remark: both the labels and the scene id need to be masked according to heiner's accuracy utils
+            if overlap > 0: # except first overlap (would though be respected by following slicing as well)
+                y_concat_sid_block[:overlap, :, :] = MASK_VALUE
 
             yield x_block, y_concat_sid_block
 
@@ -502,7 +501,8 @@ class BatchLoader(HeinerDataloader):
         # print('batchloader: total time to get the batch was {:.2f} => start {:.2f}, sample {:.2f}, next block {:.2f}, postproc block {:.2f} (assignment {:.2f}, listops {:.2f}), remove block {:.2f}, finish {:.2f}'
         #       .format(runtime_nextbatch_total, runtime_start, runtime_sample_index, runtime_next_block, runtime_postproc_block, runtime_postproc_block_assignment, runtime_postproc_block_listops, runtime_remove_block, runtime_finish))
 
-        return self._input_standardization_if_wanted(effective_batch_x), effective_batch_y
+        # we need to return a copied version of the batch in order not to overwrite it when creating the next batch
+        return np.copy(self._input_standardization_if_wanted(effective_batch_x)), np.copy(effective_batch_y)
 
     # calculate probabilities that weight each scene instance buffer with its sequence lengt and also decrease weights of
     # scene instances that were sampled in the previous batch, i.e., decrease ensure that the last batches do not consist
