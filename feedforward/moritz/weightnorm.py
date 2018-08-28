@@ -1,7 +1,10 @@
 # code taken from https://github.com/openai/weightnorm
-# modification: removed argument constraints from functions get_updates and made compatible with current keras
+# some modification required including:
+# - removed argument constraints from functions get_updates and made compatible with current keras
+# - t -> np.float32(t)
 # could be pull-requested
 
+import numpy as np
 from keras import backend as K
 from keras.optimizers import SGD,Adam
 import tensorflow as tf
@@ -81,14 +84,14 @@ class AdamWithWeightnorm(Adam):
 
         lr = self.lr
         if self.initial_decay > 0:
-            lr *= (1. / (1. + self.decay * self.iterations))
+            lr = lr * (1. / (1. + self.decay * K.cast(self.iterations,
+                                                      K.dtype(self.decay))))
 
-        t = self.iterations + 1
+        t = K.cast(self.iterations, K.floatx()) + 1
         lr_t = lr * K.sqrt(1. - K.pow(self.beta_2, t)) / (1. - K.pow(self.beta_1, t))
 
-        shapes = [K.get_variable_shape(p) for p in params]
-        ms = [K.zeros(shape) for shape in shapes]
-        vs = [K.zeros(shape) for shape in shapes]
+        ms = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
+        vs = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
         self.weights = [self.iterations] + ms + vs
 
         for p, g, m, v in zip(params, grads, ms, vs):
