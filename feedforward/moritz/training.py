@@ -3,7 +3,8 @@ import sys
 import argparse
 import socket
 import time
-
+import matplotlib
+matplotlib.use('Agg')
 
 # note we have some more seeds below for proper keras/tensorflow seeding
 
@@ -23,18 +24,18 @@ from myutils import save_h5, load_h5, printerror, plotresults, printresults
 override_params = {}
 # override_params will be fed into params directly before training (i.e. overrides command line arguments)
 
-print('\n!!!!!!!!!!!!!!!!!!!!! ONLY DEBUGGING, REMOVE ME ASAP !!!!!!!!!!!!!!!\n\n') # remove also following lines
-time.sleep(0.5)
-override_params['featuremaps'] = 10
-override_params['scenes_trainvalid'] = [1]
-override_params['trainfolds'] = [1]
-override_params['historylength'] = 50
-override_params['noinputstandardization'] = True
-override_params['sceneinstancebufsize'] = 300
-override_params['maxepochs'] = 40
-override_params['earlystop'] = -1
-override_params['weightnorm'] = False
-override_params['calcgradientnorm'] = True
+# print('\n!!!!!!!!!!!!!!!!!!!!! ONLY DEBUGGING, REMOVE ME ASAP !!!!!!!!!!!!!!!\n\n') # remove also following lines
+# time.sleep(0.5)
+# override_params['featuremaps'] = 10
+# override_params['scenes_trainvalid'] = [1]
+# override_params['trainfolds'] = [1]
+# override_params['historylength'] = 50
+# override_params['noinputstandardization'] = True
+# override_params['sceneinstancebufsize'] = 300
+# override_params['maxepochs'] = 30
+# override_params['earlystop'] = -1
+# override_params['weightnorm'] = False
+
 # the following for allow groth => as long as we develop
 os.environ["CUDA_VISIBLE_DEVICES"] = '0' # cf. nvidia-smi ids
 import tensorflow as tf
@@ -66,7 +67,7 @@ parser.add_argument('--featuremaps', type=int, default=50,
                         help='number of feature maps per layer')
 parser.add_argument('--dropoutrate', type=float, default=0.0,
                         help='rate of the two spatial dropout layers within each residual block')
-parser.add_argument('--kernelsize', type=int, default=5,
+parser.add_argument('--kernelsize', type=int, default=3,
                         help='size of the temporal kernels')
 parser.add_argument('--historylength', type=int, default=1000,
                         help='effective receptive field of the model; historylength is increased to next multiple of '+
@@ -95,7 +96,7 @@ parser.add_argument('--validfold', type=int, default=3,
                         help='number of validation fold (1, ..., 6); -1 => use all 6 for training [latter incompatible with earlystopping]')
 parser.add_argument('--gradientclip', type=float, default=1.0,
                         help='maximal number of epochs (typically stopped early before reaching this value)')
-parser.add_argument('--calcgradientnorm', action='store_true', default=False,
+parser.add_argument('--nocalcgradientnorm', action='store_true', default=False,
                         help='enables calculation of the gradient norm that is saved per batch and per epoch')
 
 parser.add_argument('--firstsceneonly', action='store_true', default=False,

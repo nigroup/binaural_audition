@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import os
 from time import time
 from keras.callbacks import Callback
@@ -37,7 +39,7 @@ class MetricsCallback(Callback):
                                   'wbac2_per_class': []}
 
         # gradient norm statistics lists
-        if self.myparams['calcgradientnorm']:
+        if not self.myparams['nocalcgradientnorm']:
             self.gradient_norm = []
             self.gradient_norm_per_batch = []
 
@@ -52,7 +54,7 @@ class MetricsCallback(Callback):
         self.loss_train_per_batch.append([])
 
         # initialize saving for gradient norm statistics
-        if self.myparams['calcgradientnorm']:
+        if not self.myparams['nocalcgradientnorm']:
             self.gradient_norm_per_batch.append([])
 
     def on_batch_begin(self, batch, logs=None):
@@ -68,7 +70,7 @@ class MetricsCallback(Callback):
         self.loss_train_per_batch[-1].append(logs.get('loss'))
 
         # extract and compute gradient norm statistics
-        if self.myparams['calcgradientnorm']:
+        if not self.myparams['nocalcgradientnorm']:
             self.gradient_norm_per_batch[-1].append(self.model.gradient_norm)
 
     def on_epoch_end(self, epoch, logs={}):
@@ -99,7 +101,7 @@ class MetricsCallback(Callback):
             logs['val_wbac'] = metrics_validation['wbac']
 
         # get gradient norm statistics per epoch
-        if self.myparams['calcgradientnorm']:
+        if not self.myparams['nocalcgradientnorm']:
             self.gradient_norm.append(np.array(self.gradient_norm_per_batch[-1]).mean())
             gradstring = ', gradient norm avg {}'.format(self.gradient_norm[-1])
 
@@ -126,7 +128,7 @@ class MetricsCallback(Callback):
         # runtime
         self.results['runtime'] = np.array(self.runtime)
         # gradient norm statistics
-        if self.myparams['calcgradientnorm']:
+        if not self.myparams['nocalcgradientnorm']:
             self.results['gradientnorm_batch'] = np.array(self.gradient_norm_per_batch)
             self.results['gradientnorm'] = np.array(self.gradient_norm)
 

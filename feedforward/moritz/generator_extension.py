@@ -238,7 +238,7 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                 t_start = time()
                 # run forward and backward pass and do the gradient descent step
                 batch_loss, y_pred_logits, gradient_norm = heiner_train_and_predict_on_batch(model, x, y[:, :, :, 0],
-                                                         calc_global_gradient_norm=params['calcgradientnorm'])
+                                                         calc_global_gradient_norm=not params['nocalcgradientnorm'])
                 runtime_train_and_predict_on_batch = time()-t_start
                 if batch_index >= skip:
                     runtime_train_and_predict_on_batch_cumulated += runtime_train_and_predict_on_batch
