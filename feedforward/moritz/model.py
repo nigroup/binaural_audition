@@ -28,9 +28,10 @@ def temporal_convolutional_network(params, return_param_str=False, output_slice_
 
     # dense sigmoidal output layer
     x = Dense(params['dim_labels'], name='output_dense')(x)
-    # note there might be an issue with the weight normalization if the activation is used directly within layer
-    # instantiation (https://github.com/openai/weightnorm/issues/3), i.e., better leave it separately as follows
-    x = Activation('sigmoid', name='output_sigmoid')(x)
+    # since we use as core tensorflow cost function weighted_cross_entropy_with_logits we
+    # have to omit the sigmoidal activation and rather output logits
+    # => prediction probabilities are obtained by feeding them manually through elementwise logistic sigmoid function
+    # x = Activation('sigmoid', name='output_sigmoid')(x)
     output_layer = x
 
     model = Model(input_layer, output_layer)
