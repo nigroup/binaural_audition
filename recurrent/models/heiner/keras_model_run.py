@@ -86,7 +86,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                 if units != h.N_CLASSES:
                     y = Dense(units, activation='relu')(y)
                 else:
-                    y = Dense(units, activation='sigmoid')(y)
+                    y = Dense(units, activation='linear')(y)
 
                 # MLP Output dropout but not last layer
                 if units != h.N_CLASSES:

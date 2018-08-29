@@ -4,6 +4,7 @@ from heiner.dataloader import DataLoader
 from keras.layers import CuDNNLSTM
 from keras import backend as K
 from keras.utils.data_utils import GeneratorEnqueuer
+from scipy.special import expit as sigmoid
 
 
 import numpy as np
@@ -206,8 +207,11 @@ class Phase:
                 elapsed_time_tf_graph_apply_dropout = time.time() - iteration_start_time_tf_graph_apply_dropout
 
                 iteration_start_time_tf_graph_call = time.time()
-                loss, out, gradient_norm = m_ext.train_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0],
+                loss, out_logits, gradient_norm = m_ext.train_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0],
                                                                             calc_global_gradient_norm=self.calc_global_gradient_norm)
+                y_pred = sigmoid(out_logits, out=out_logits)
+                y_pred = np.greater_equal(y_pred, self.OUTPUT_THRESHOLD, out=y_pred)
+
                 elapsed_time_tf_graph_call = time.time() - iteration_start_time_tf_graph_call
 
                 if self.calc_global_gradient_norm:
@@ -227,14 +231,16 @@ class Phase:
                         time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph_dropout_load_original))
                 )
             else:
-                loss, out = m_ext.test_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
+                loss, out_logits = m_ext.test_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
+                y_pred = sigmoid(out_logits, out=out_logits)
+                y_pred = np.greater_equal(y_pred, self.OUTPUT_THRESHOLD, out=y_pred)
+
             self.losses.append(loss)
             elapsed_time_tf_graph = time.time() - iteration_start_time_tf_graph
 
             iteration_start_time_accuracy_metrics = time.time()
             acc_u.calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
-                                                                                 out, b_y,
-                                                                                 self.OUTPUT_THRESHOLD, self.MASK_VAL)
+                                                                                 y_pred, b_y, self.MASK_VAL)
             elapsed_time_accuracy_metrics = time.time() - iteration_start_time_accuracy_metrics
             elapsed_time = time.time() - iteration_start_time
             time_spent_str = 'time spent: {} (data loading: {}, tf graph: {}{}, accuracy metrics: {})'.format(

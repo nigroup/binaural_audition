@@ -1,6 +1,7 @@
 import numpy as np
 import numba
 
+
 def get_scene_number_from_scene_instance_id(scene_instance_id):
     return int(scene_instance_id // 1e6)
 
@@ -57,9 +58,7 @@ def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('f
 
 
 @numba.jit
-def calc_batch_metrics(y_pred_probs, y_true, output_threshold, mask_val):
-    y_pred = (y_pred_probs >= output_threshold).astype(np.float32)
-
+def calc_batch_metrics(y_pred, y_true, mask_val):
     all_scene_instance_ids = np.unique(y_true[:, :, 0, 1][y_true[:, :, 0, 1] != mask_val])
     batch_metrics = np.zeros((len(all_scene_instance_ids), 13, 4))
 
@@ -89,9 +88,9 @@ def calc_batch_metrics(y_pred_probs, y_true, output_threshold, mask_val):
 
 
 def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
-                                                                   y_pred_probs, y_true, output_threshold, mask_val):
+                                                                   y_pred, y_true, mask_val):
 
-    all_scene_instance_ids, batch_metrics = calc_batch_metrics(y_pred_probs, y_true, output_threshold, mask_val)
+    all_scene_instance_ids, batch_metrics = calc_batch_metrics(y_pred, y_true, mask_val)
     for i, scene_instance_id in enumerate(all_scene_instance_ids):
         if scene_instance_id in scene_instance_id_metrics_dict:
             scene_instance_id_metrics_dict[scene_instance_id] += batch_metrics[i, :, :]
@@ -240,18 +239,17 @@ def test_val_accuracy(with_wrong_predictions=False):
     n_batches = 10
 
     shape = (20, 100, 13)
-    output_threshold = 0.5
     mask_val = -1
 
     scene_instance_id_metrics_dict = dict()
     batches = []
     for _ in range(n_batches):
-        y_pred_logits = np.random.choice([0, 1], shape).astype(np.float32)
+        y_true = np.random.choice([0, 1], shape).astype(np.float32)
         pad = np.random.choice([True, False], (shape[0], shape[1], 1))
         pad = np.tile(pad, shape[2])
-        y_true = np.copy(y_pred_logits)
+        y_pred = np.copy(y_true)
         if with_wrong_predictions:
-            y_true = np.abs(y_true - np.random.choice([0, 1], shape).astype(np.float32))
+            y_pred = np.abs(y_true - np.random.choice([0, 1], shape).astype(np.float32))
         y_true[pad] = mask_val
         scene_ids = np.random.choice(range(1, n_scenes+1), (shape[0], shape[1], 1)).astype(np.float32)
         scene_ids = np.tile(scene_ids, shape[2])
@@ -263,7 +261,7 @@ def test_val_accuracy(with_wrong_predictions=False):
         y_true_ids[y_true == mask_val] = mask_val
         y_true = np.stack([y_true, y_true_ids], axis=3)
         batches.append(y_true)
-        calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict, y_pred_logits, y_true, output_threshold, mask_val)
+        calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict, y_pred, y_true, mask_val)
 
     batches = np.array(batches)
     # print(batches[batches[:, :, :, 0, 1] == 80000008][:, :, 0])
@@ -272,7 +270,6 @@ def test_val_accuracy(with_wrong_predictions=False):
 def test_val_accuracy_real_data(with_wrong_predictions=False):
     import heiner.train_utils as tr_utils
     epochs = 2
-    output_threshold = 0.5
     mask_val = -1
     scenes = list(range(1, 3))
     train_loader, val_loader = tr_utils.create_dataloaders('blockbased', [1, 2, 4, 5, 6], scenes, 100,
@@ -316,8 +313,7 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
             else:
                 p_y = np.copy(b_y[:, :, :, 0])
             calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
-                                                                           p_y, b_y, output_threshold,
-                                                                           mask_val)
+                                                                           p_y, b_y, mask_val)
 
     r = val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_scene', 'per_class_scene'))
     elapsed = time.time() - start
