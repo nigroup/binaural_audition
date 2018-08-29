@@ -265,17 +265,17 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                 runtime_callbacks_on_batch_end = time()-t_start
 
                 runtime_batch = time()-t_start_batch
-                print((' ----> batch {} in epoch {} took in total {:.2f} sec => generator {:.2f} ' +
-                       'train_and_predict {:.2f}, metrics {:.2f}')
-                      .format(batch_index + 1, epoch + 1, runtime_batch, runtime_generator_next,
-                              runtime_train_and_predict_on_batch,
-                              runtime_class_accuracies))
+                # print((' ----> batch {} in epoch {} took in total {:.2f} sec => generator {:.2f} ' +
+                #        'train_and_predict {:.2f}, metrics {:.2f}')
+                #       .format(batch_index + 1, epoch + 1, runtime_batch, runtime_generator_next,
+                #               runtime_train_and_predict_on_batch,
+                #               runtime_class_accuracies))
 
                 batch_index += 1
                 steps_done += 1
 
 
-                if steps_done > skip:
+                if steps_done > skip and steps_done == steps_per_epoch-2:
                     print('===> after batch {} we have average runtimes: generator {:.2f}, train_predict {:.2f}, metrics {:.2f}'.
                         format(batch_index, runtime_generator_cumulated/(steps_done-skip), runtime_train_and_predict_on_batch_cumulated/(steps_done-skip), runtime_class_accuracies_cumulated/(steps_done-skip)))
 
