@@ -51,7 +51,11 @@ def unique_dict(ds):
     ds_unique = []
     ds_string_unique = []
     for d in ds:
-        ds_string = json.dumps(d, sort_keys=True)
+        d_without_numpy = d.copy()
+        for key, value in d_without_numpy.items():
+            if type(value) is np.ndarray:
+                d_without_numpy[key] = value.tolist()
+        ds_string = json.dumps(d_without_numpy, sort_keys=True)
         if ds_string not in ds_string_unique:
             ds_string_unique.append(ds_string)
             ds_unique.append(d)
