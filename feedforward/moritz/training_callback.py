@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import os
 from time import time
 from keras.callbacks import Callback
@@ -37,11 +39,9 @@ class MetricsCallback(Callback):
                                   'wbac2_per_class': []}
 
         # gradient norm statistics lists
-        if self.myparams['calcgradientnorm']:
-            self.gradient_norm_max = []
-            self.gradient_norm_avg = []
-            self.gradient_norm_max_per_batch = []
-            self.gradient_norm_avg_per_batch = []
+        if not self.myparams['nocalcgradientnorm']:
+            self.gradient_norm = []
+            self.gradient_norm_per_batch = []
 
     def on_epoch_begin(self, epoch, logs={}):
         # start epoch time measurement
@@ -54,9 +54,8 @@ class MetricsCallback(Callback):
         self.loss_train_per_batch.append([])
 
         # initialize saving for gradient norm statistics
-        if self.myparams['calcgradientnorm']:
-            self.gradient_norm_max_per_batch.append([])
-            self.gradient_norm_avg_per_batch.append([])
+        if not self.myparams['nocalcgradientnorm']:
+            self.gradient_norm_per_batch.append([])
 
     def on_batch_begin(self, batch, logs=None):
         # start batch time measurement
@@ -71,9 +70,8 @@ class MetricsCallback(Callback):
         self.loss_train_per_batch[-1].append(logs.get('loss'))
 
         # extract and compute gradient norm statistics
-        if self.myparams['calcgradientnorm']:
-            self.gradient_norm_per_batch_max[-1].append(np.max(self.model.gradient_norm_per_batch))
-            self.gradient_norm_per_batch_avg[-1].append(np.mean(self.model.gradient_norm_per_batch))
+        if not self.myparams['nocalcgradientnorm']:
+            self.gradient_norm_per_batch[-1].append(self.model.gradient_norm)
 
     def on_epoch_end(self, epoch, logs={}):
         # measure the epoch time
@@ -103,11 +101,9 @@ class MetricsCallback(Callback):
             logs['val_wbac'] = metrics_validation['wbac']
 
         # get gradient norm statistics per epoch
-        if self.myparams['calcgradientnorm']:
-            self.gradient_norm_max.append(np.array(self.gradient_norm_max_per_batch).max())
-            self.gradient_norm_avg.append(np.array(self.gradient_norm_avg_per_batch).mean())
-            gradstring = ', gradient norm max {} (avg {})'.format(self.gradient_norm_max[-1],
-                                                                    self.gradient_norm_avg[-1])
+        if not self.myparams['nocalcgradientnorm']:
+            self.gradient_norm.append(np.array(self.gradient_norm_per_batch[-1]).mean())
+            gradstring = ', gradient norm avg {}'.format(self.gradient_norm[-1])
 
         if self.myparams['validfold'] != -1:
             print('epoch {} ended with training wbac {:.2f}'.format(epoch+1, metrics_training['wbac']))
@@ -132,14 +128,12 @@ class MetricsCallback(Callback):
         # runtime
         self.results['runtime'] = np.array(self.runtime)
         # gradient norm statistics
-        if self.myparams['calcgradientnorm']:
-            self.results['gradientnorm_max_per_batch'] = self.gradient_norm_max_per_batch
-            self.results['gradientnorm_max'] = self.gradient_norm_max
-            self.results['gradientnorm_avg_per_batch'] = self.gradient_norm_avg_per_batch
-            self.results['gradientnorm_avg'] = self.gradient_norm_avg
+        if not self.myparams['nocalcgradientnorm']:
+            self.results['gradientnorm_batch'] = np.array(self.gradient_norm_per_batch)
+            self.results['gradientnorm'] = np.array(self.gradient_norm)
 
         # save results
-        save_h5(self.results, os.path.join(self.myparams['path'], self.myparams['name']+'_results.h5'))
+        save_h5(self.results, os.path.join(self.myparams['path'], self.myparams['name'], 'results.h5'))
 
         # plot results
         plotresults(self.results, self.myparams)

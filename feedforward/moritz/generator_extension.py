@@ -11,6 +11,7 @@ from __future__ import print_function
 
 import warnings
 import numpy as np
+from scipy.special import expit as sigmoid
 from time import time
 
 from keras import backend as K
@@ -235,8 +236,9 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
 
                 # remark on label shape: last (fourth) dimension contains in 0 the true labels, in 1 the corresponding sceneinstid (millioncode)
                 t_start = time()
-                batch_loss, y_pred_probs, gradient_norm = heiner_train_and_predict_on_batch(model, x, y[:, :, :, 0],
-                                                         calc_global_gradient_norm=params['calcgradientnorm'])
+                # run forward and backward pass and do the gradient descent step
+                batch_loss, y_pred_logits, gradient_norm = heiner_train_and_predict_on_batch(model, x, y[:, :, :, 0],
+                                                         calc_global_gradient_norm=not params['nocalcgradientnorm'])
                 runtime_train_and_predict_on_batch = time()-t_start
                 if batch_index >= skip:
                     runtime_train_and_predict_on_batch_cumulated += runtime_train_and_predict_on_batch
@@ -246,8 +248,13 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                 model.gradient_norm = gradient_norm
 
                 t_start = time()
+                # from logits to predicted class probabilities
+                y_pred_probs = sigmoid(y_pred_logits, out=y_pred_logits) # last arg: inplace
+                # from probabilities to hard class decisions
+                y_pred = np.greater_equal(y_pred_probs, params['outputthreshold'], out=y_pred_probs) # last arg: inplace
+                # increment metrics for scene instances in batch
                 heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch(model.scene_instance_id_metrics_dict_train,
-                                                              y_pred_probs, y, params['outputthreshold'], params['mask_value'])
+                                                              y_pred, y, params['mask_value'])
                 runtime_class_accuracies = time()-t_start
                 if batch_index >= skip:
                     runtime_class_accuracies_cumulated += runtime_class_accuracies
@@ -258,17 +265,17 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                 runtime_callbacks_on_batch_end = time()-t_start
 
                 runtime_batch = time()-t_start_batch
-                print((' ----> batch {} in epoch {} took in total {:.2f} sec => generator {:.2f} ' +
-                       'train_and_predict {:.2f}, metrics {:.2f}')
-                      .format(batch_index + 1, epoch + 1, runtime_batch, runtime_generator_next,
-                              runtime_train_and_predict_on_batch,
-                              runtime_class_accuracies))
+                # print((' ----> batch {} in epoch {} took in total {:.2f} sec => generator {:.2f} ' +
+                #        'train_and_predict {:.2f}, metrics {:.2f}')
+                #       .format(batch_index + 1, epoch + 1, runtime_batch, runtime_generator_next,
+                #               runtime_train_and_predict_on_batch,
+                #               runtime_class_accuracies))
 
                 batch_index += 1
                 steps_done += 1
 
 
-                if steps_done > skip:
+                if steps_done > skip and steps_done == steps_per_epoch-2:
                     print('===> after batch {} we have average runtimes: generator {:.2f}, train_predict {:.2f}, metrics {:.2f}'.
                         format(batch_index, runtime_generator_cumulated/(steps_done-skip), runtime_train_and_predict_on_batch_cumulated/(steps_done-skip), runtime_class_accuracies_cumulated/(steps_done-skip)))
 
@@ -276,9 +283,9 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                 if steps_done >= steps_per_epoch and do_validation:
                     if val_gen:
                         val_outs = evaluate_and_predict_generator_with_sceneinst_metrics(
-                            model, 
+                            model,
                             val_enqueuer_gen,
-                            params, 
+                            params,
                             validation_steps,
                             workers=0)
                     else:
@@ -314,8 +321,8 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
     return model.history
 
 
-def evaluate_and_predict_generator_with_sceneinst_metrics(model, 
-                       generator, 
+def evaluate_and_predict_generator_with_sceneinst_metrics(model,
+                       generator,
                        params,
                        steps=None,
                        max_queue_size=10,
@@ -398,14 +405,20 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
                                  'or (x, y). Found: ' +
                                  str(generator_output))
 
+            # run forward pass
             # remark on label shape: last (fourth) dimension contains in 0 the true labels, in 1 the corresponding sceneinstid (millioncode)
-            batch_loss, y_pred_probs = heiner_test_and_predict_on_batch(model, x, y[:, :, :, 0])
+            batch_loss, y_pred_logits = heiner_test_and_predict_on_batch(model, x, y[:, :, :, 0])
 
             model.val_loss_batch.append(batch_loss)
 
+            # from logits to predicted class probabilities
+            y_pred_probs = sigmoid(y_pred_logits, out=y_pred_logits)  # last arg: inplace
+            # from probabilities to hard class decisions
+            y_pred = np.greater_equal(y_pred_probs, params['outputthreshold'], out=y_pred_probs)  # last arg: inplace
+            # increment metrics for scene instances in batch
             heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch(
                 model.scene_instance_id_metrics_dict_eval,
-                y_pred_probs, y, params['outputthreshold'], params['mask_value'])
+                y_pred, y, params['mask_value'])
 
 
 

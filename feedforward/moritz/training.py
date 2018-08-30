@@ -3,7 +3,8 @@ import sys
 import argparse
 import socket
 import time
-
+import matplotlib
+matplotlib.use('Agg')
 
 # note we have some more seeds below for proper keras/tensorflow seeding
 
@@ -23,17 +24,28 @@ from myutils import save_h5, load_h5, printerror, plotresults, printresults
 override_params = {}
 # override_params will be fed into params directly before training (i.e. overrides command line arguments)
 
-print('\n!!!!!!!!!!!!!!!!!!!!! ONLY DEBUGGING, REMOVE ME ASAP !!!!!!!!!!!!!!!\n\n') # remove also following lines
-time.sleep(0.5)
-override_params['scenes_trainvalid'] = [1]
-override_params['trainfolds'] = [1]
-override_params['historylength'] = 50
-override_params['noinputstandardization'] = True
-override_params['sceneinstancebufsize'] = 300
+# print('\n!!!!!!!!!!!!!!!!!!!!! ONLY DEBUGGING, REMOVE ME ASAP !!!!!!!!!!!!!!!\n\n') # remove also following lines
+# time.sleep(0.5)
+# override_params['featuremaps'] = 10
+# override_params['scenes_trainvalid'] = [1]
+# override_params['trainfolds'] = [1]
+# override_params['historylength'] = 50
+# override_params['noinputstandardization'] = True
+# override_params['sceneinstancebufsize'] = 300
+# override_params['maxepochs'] = 30
+# override_params['earlystop'] = -1
+# override_params['weightnorm'] = False
+
+# the following for allow groth => as long as we develop
+os.environ["CUDA_VISIBLE_DEVICES"] = '0' # cf. nvidia-smi ids
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+session = tf.Session(config=config)
 
 # TODO: experiment with optimal batchbufsize for best efficient
 
-
+# TODO make gradient norm as default
 
 
 totaltime_start = time.time()
@@ -67,7 +79,7 @@ parser.add_argument('--outputthreshold', type=float, default=0.5,
 
 parser.add_argument('--weightnorm', action='store_true', default=False,
                         help='disables the weight norm version of the Adam optimizer, i.e., falls back to regular Adam')
-parser.add_argument('--learningrate', type=float, default=0.005, #0.001,
+parser.add_argument('--learningrate', type=float, default=0.002,
                         help='initial learning rate of the Adam optimizer')
 parser.add_argument('--batchsize', type=int, default=256, #128 # note that batchsize should be proportionally increased to learning rate
                         help='number of time series per batch (should be power of two for efficiency)')
@@ -78,13 +90,13 @@ parser.add_argument('--maxepochs', type=int, default=30,
                         help='maximal number of epochs (typically stopped early before reaching this value)')
 parser.add_argument('--noinputstandardization', action='store_true', default=False,
                         help='disables input standardization')
-parser.add_argument('--earlystop', type=int, default=4,
+parser.add_argument('--earlystop', type=int, default=5,
                         help='early stop patience, i.e., number of number of non-improving epochs; -1 => no early stopping')
 parser.add_argument('--validfold', type=int, default=3,
                         help='number of validation fold (1, ..., 6); -1 => use all 6 for training [latter incompatible with earlystopping]')
-parser.add_argument('--gradientclip', type=float, default=1.0,
+parser.add_argument('--gradientclip', type=float, default=1.5,
                         help='maximal number of epochs (typically stopped early before reaching this value)')
-parser.add_argument('--calcgradientnorm', action='store_true', default=False,
+parser.add_argument('--nocalcgradientnorm', action='store_true', default=False,
                         help='enables calculation of the gradient norm that is saved per batch and per epoch')
 
 parser.add_argument('--firstsceneonly', action='store_true', default=False,
@@ -125,9 +137,8 @@ initial_output = obtain_nextlarger_residuallayers_refining_historysize(params)
 
 name_short = 'n{}_dr{}_ks{}_hl{}_lr{}'.format(params['featuremaps'], params['dropoutrate'], params['kernelsize'],
                                               params['historylength'], params['learningrate'])
-name_long = name_short + '_wn{}_bs{}_bl{}_me{}_es{}_gc{}_sb{}_bbs{}'.format(params['weightnorm'],
-            params['batchsize'], params['batchlength'], params['maxepochs'], params['earlystop'], params['gradientclip'],
-            params['sceneinstancebufsize'], params['batchbufsize'])
+name_long = name_short + '_wn{}_bs{}_bl{}_me{}_es{}'.format(params['weightnorm'],
+            params['batchsize'], params['batchlength'], params['maxepochs'], params['earlystop'])
 name_short += '_vf{}'.format(args.validfold)
 name_long += '_vf{}'.format(args.validfold)
 
@@ -145,8 +156,9 @@ else:
     params['name'] = name_long
 
 # redirecting stdout and stderr
-outfile = os.path.join(params['path'], params['name']+'_output')
-errfile = os.path.join(params['path'], params['name']+'_errors')
+os.makedirs(os.path.join(params['path'], params['name']), exist_ok=True)
+outfile = os.path.join(params['path'], params['name'], 'logfile')
+errfile = os.path.join(params['path'], params['name'], 'errors')
 sys.stdout = heiner_utils.UnbufferedLogAndPrint(outfile, sys.stdout)
 sys.stderr = heiner_utils.UnbufferedLogAndPrint(errfile, sys.stderr)
 
@@ -252,7 +264,7 @@ model.compile(optimizer(lr=params['learningrate'], clipnorm=params['gradientclip
               loss=masked_weighted_crossentropy_loss, metrics=None)
 
 # params saved here already because if a late epoch's process is killed we have at least all results and params up to the epoch before
-save_h5(params, os.path.join(params['path'], params['name']+'_params.h5'))
+save_h5(params, os.path.join(params['path'], params['name'], 'params.h5'))
 
 
 print()
@@ -261,18 +273,25 @@ print('STARTING TRAINING')
 print('starting training for at most {} epochs ({} batches per epoch)'.format(params['maxepochs'],
                                                                               params['train_batches_per_epoch']))
 
+
+# keras callbacks for earlystopping, model saving and nantermination as well as our own callback
+# remark: val_wbac is not a metric in the keras sense but is provided via the metricscallback
+callbacks = []
+
+terminateonnan = TerminateOnNaN()
+callbacks.append(terminateonnan)
+
 # collect train and validation metrics after each epoch (loss, wbac, wbac_per_class, bac_per_class_scene, wbac2,
 # wbac2_per_class, sensitivies, specificities, gradient statistics, runtime) and after each batch (loss, gradient statistics)
 metricscallback = MetricsCallback(params)
+callbacks.append(metricscallback)
 
-# keras callbacks for earlystopping, model saving and nantermination
-# remark: val_wbac is not a metric in the keras sense but is provided via the metricscallback
-# TODO: enable again the next three ones (piece by pice)
-#earlystopping = EarlyStopping(monitor='val_wbac', mode='max')
-#modelcheckpoint = ModelCheckpoint(params['name']+'_model.h5', monitor='val_wbac', mode='max', save_best_only=True)
-# terminateonnan = TerminateOnNaN()
-# callbacks = [terminateonnan, metricscallback, earlystopping, modelcheckpoint]
-callbacks = [metricscallback]
+if params['earlystop'] != -1:
+    earlystopping = EarlyStopping(monitor='val_wbac', mode='max')
+    callbacks.append(earlystopping)
+
+modelcheckpoint = ModelCheckpoint(params['name']+'_model.h5', monitor='val_wbac', mode='max', save_best_only=True)
+callbacks.append(modelcheckpoint)
 
 
 # start training, after each epoch evaluate loss and metrics on validation set (and training set)
@@ -296,14 +315,15 @@ runtime_total = time.time() - totaltime_start
 results['runtime_total'] = runtime_total
 
 # early stopping
-if earlystopping.stopped_epoch == 0:
-    results['epoch_best'] = -1
-    printerror('early stopping could not be applied with patience {}, maxepochs {} was seemingly too small'.format(params['earlystop'], params['maxepochs']))
-else:
-    results['epoch_best'] = earlystopping.stopped_epoch - params['earlystop']
-    print('the best epoch was epoch {} (as of nonimproving for {} epochs)'.format(results['epoch_best']+1, params['maxepochs']))
+if params['earlystop'] != -1:
+    if earlystopping.stopped_epoch == 0:
+        results['epoch_best'] = -1
+        printerror('early stopping could not be applied with patience {}, maxepochs {} was seemingly too small'.format(params['earlystop'], params['maxepochs']))
+    else:
+        results['epoch_best'] = earlystopping.stopped_epoch - params['earlystop']
+        print('the best epoch was epoch {} (as of nonimproving for {} epochs)'.format(results['epoch_best']+1, params['maxepochs']))
 
-save_h5(results, os.path.join(params['path'], params['name']+'_results.h5'))
+save_h5(results, os.path.join(params['path'], params['name'], 'results.h5'))
 
 
 # TODO: final plotting and printing

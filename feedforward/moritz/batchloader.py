@@ -116,7 +116,7 @@ class SceneInstanceBuffer:
             # set mask values (overlapping frames should not be counted twice for loss and accuracy metrics)
             # remark: both the labels and the scene id need to be masked according to heiner's accuracy utils
             if overlap > 0: # except first overlap (would though be respected by following slicing as well)
-                y_concat_sid_block[:overlap, :, :] = MASK_VALUE
+                y_concat_sid_block[:overlap, :, :] = self.params['mask_value']
 
             yield x_block, y_concat_sid_block
 
@@ -139,7 +139,7 @@ class BatchLoader(HeinerDataloader):
         super().__init__(mode=mode, label_mode=label_mode,
                        fold_nbs=fold_nbs, scene_nbs=scene_nbs, batchsize=batchsize, timesteps=params['batchlength'], epochs=params['maxepochs'],
                        buffer=10, features=DIM_FEATURES, classes=DIM_LABELS, path_pattern=DATA_ROOT+'/',
-                       seed=seed, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=MASK_VALUE,
+                       seed=seed, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=params['mask_value'],
                        val_stateful=False, k_scenes_to_subsample=-1,
                        input_standardization=not params['noinputstandardization'])
 
