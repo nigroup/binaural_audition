@@ -208,7 +208,7 @@ class HCombManager:
             h['HOSTNAME'] = hostname
             h['BATCH_SIZE'] = batch_size
 
-            self.replace_at_id(hcomb_list, id_, h)
+            self._replace_at_id(hcomb_list, id_, h)
 
             self._write_hcomb_list(hcomb_list, handle)
 
@@ -249,7 +249,7 @@ class HCombManager:
             # if h['STAGE'] == 2:
             #     self._merge_with_stage_1(h)
 
-            self.replace_at_id(hcomb_list, id_, h)
+            self._replace_at_id(hcomb_list, id_, h)
 
             self._write_hcomb_list(hcomb_list, handle)
 
@@ -261,7 +261,7 @@ class HCombManager:
 
             h['STAGE'] += 1
 
-            self.replace_at_id(hcomb_list, id_, h)
+            self._replace_at_id(hcomb_list, id_, h)
             self._write_hcomb_list(hcomb_list, handle)
 
     def finish_hcomb(self, id_, h):
@@ -273,7 +273,7 @@ class HCombManager:
             # finished all
             h['finished'] = True
 
-            self.replace_at_id(hcomb_list, id_, h)
+            self._replace_at_id(hcomb_list, id_, h)
 
             self._write_hcomb_list(hcomb_list, handle)
 
@@ -289,7 +289,7 @@ class HCombManager:
             h['elapsed_time_minutes'] = elapsed_time_minutes
             self._update_val_metrics(h, val_acc, best_val_acc, val_acc_bac2, best_val_acc_bac2, fold_ind)
 
-            self.replace_at_id(hcomb_list, id_, h)
+            self._replace_at_id(hcomb_list, id_, h)
 
             self._write_hcomb_list(hcomb_list, handle)
 
@@ -306,11 +306,19 @@ class HCombManager:
         h['best_val_acc_mean_bac2'] = best_val_acc_mean_bac2
         h['best_val_acc_std_bac2'] = best_val_acc_std_bac2
 
-    def replace_at_id(self, hcomb_list, id_, h):
+    def _replace_at_id(self, hcomb_list, id_, h):
         if type(h) is not dict:
             h = h.__dict__
 
         hcomb_list[id_] = h
+
+    def replace_at_id(self, id_, h):
+        with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
+            hcomb_list = self._read_hcomb_list(handle)
+
+            self._replace_at_id(hcomb_list, id_, h)
+
+            self._write_hcomb_list(hcomb_list, handle)
 
     # IMPORTANT: happens if hcomb finished
     # def _merge_with_stage_1(self, h):

@@ -101,6 +101,8 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
             ################################################# LOAD CHECKPOINTED MODEL
 
             model_is_resumed = False
+            epochs_finished_old = None
+
             latest_weights_path, epochs_finished, val_acc, best_epoch_, best_val_acc_, epochs_without_improvement_ \
                 = tensorflow_utils.latest_training_state(model_save_dir)
             if latest_weights_path is not None:
@@ -109,6 +111,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                 model_is_resumed = True
 
                 if h.epochs_finished[val_fold - 1] != epochs_finished:
+                    epochs_finished_old = h.epochs_finished[val_fold - 1]
                     print('MISMATCH: Latest state in hyperparameter combination list is different to checkpointed state.')
                     h.epochs_finished[val_fold - 1] = epochs_finished
                     h.val_acc[val_fold - 1] = val_acc
@@ -160,28 +163,31 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                 # merge metrics
                 h.METRIC = old_metrics['metric']
                 train_phase.metric = h.METRIC
-                val_phase = h.METRIC
+                val_phase.metric = h.METRIC
 
-                train_iterations_done = 0
-                val_iterations_done = 0
-                for i in range(h.epochs_finished[val_fold - 1]):
-                    train_iterations_done += train_phase.dloader_len[i]
-                    val_iterations_done += val_phase.dloader_len[i]
+                train_iterations_done = old_metrics['train_losses'].shape[0]
+                val_iterations_done = old_metrics['val_losses'].shape[0]
+                epochs_done = old_metrics['val_accs'].shape[0]
+                if epochs_finished_old is not None:
+                    epochs_done_old = epochs_done
+                    epochs_done = epochs_done if epochs_finished > epochs_done else epochs_finished
+                    train_iterations_done = int(train_iterations_done / epochs_done_old) * epochs_done
+                    val_iterations_done = int(val_iterations_done / epochs_done_old) * epochs_done
 
                 train_phase.losses = old_metrics['train_losses'].tolist()[:train_iterations_done]
-                train_phase.accs = old_metrics['train_accs'].tolist()[:train_iterations_done]
+                train_phase.accs = old_metrics['train_accs'].tolist()[:epochs_done]
                 val_phase.losses = old_metrics['val_losses'].tolist()[:val_iterations_done]
-                val_phase.accs = old_metrics['val_accs'].tolist()[:val_iterations_done]
-                val_phase.accs_bac2 = old_metrics['val_accs_bac2'].tolist()[:val_iterations_done]
-                val_phase.class_accs = old_metrics['val_class_accs'].tolist()[:val_iterations_done]
-                val_phase.class_accs_bac2 = old_metrics['val_class_accs_bac2'].tolist()[:val_iterations_done]
-                val_phase.class_scene_accs = old_metrics['val_class_scene_accs'].tolist()[:val_iterations_done]
-                val_phase.class_scene_accs_bac2 = old_metrics['val_class_scene_accs_bac2'].tolist()[:val_iterations_done]
-                val_phase.scene_accs = old_metrics['val_scene_accs'].tolist()[:val_iterations_done]
-                val_phase.scene_accs_bac2 = old_metrics['val_scene_accs_bac2'].tolist()[:val_iterations_done]
-                train_phase.sens_spec_class_scene = old_metrics['train_sens_spec_class_scene'].tolist()[:train_iterations_done]
-                val_phase.sens_spec_class_scene = old_metrics['val_sens_spec_class_scene'].tolist()[:val_iterations_done]
-                val_phase.sens_spec_class = old_metrics['val_sens_spec_class'].tolist()[:val_iterations_done]
+                val_phase.accs = old_metrics['val_accs'].tolist()[:epochs_done]
+                val_phase.accs_bac2 = old_metrics['val_accs_bac2'].tolist()[:epochs_done]
+                val_phase.class_accs = old_metrics['val_class_accs'].tolist()[:epochs_done]
+                val_phase.class_accs_bac2 = old_metrics['val_class_accs_bac2'].tolist()[:epochs_done]
+                val_phase.class_scene_accs = old_metrics['val_class_scene_accs'].tolist()[:epochs_done]
+                val_phase.class_scene_accs_bac2 = old_metrics['val_class_scene_accs_bac2'].tolist()[:epochs_done]
+                val_phase.scene_accs = old_metrics['val_scene_accs'].tolist()[:epochs_done]
+                val_phase.scene_accs_bac2 = old_metrics['val_scene_accs_bac2'].tolist()[:epochs_done]
+                train_phase.sens_spec_class_scene = old_metrics['train_sens_spec_class_scene'].tolist()[:epochs_done]
+                val_phase.sens_spec_class_scene = old_metrics['val_sens_spec_class_scene'].tolist()[:epochs_done]
+                val_phase.sens_spec_class = old_metrics['val_sens_spec_class'].tolist()[:epochs_done]
 
                 if 'global_gradient_norm' in old_metrics:
                     train_phase.global_gradient_norms = old_metrics['global_gradient_norm'].tolist()[:train_iterations_done]
@@ -310,7 +316,8 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                 K.clear_session()
 
             else:
-                hcm.finish_hcomb(ID, h)
+                if h.STAGE == 3 or stage_thresholds[h.STAGE] != np.inf:
+                    hcm.finish_hcomb(ID, h)
 
 
 def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIENT_NORM_PLOT=True):
