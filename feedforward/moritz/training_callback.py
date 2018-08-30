@@ -4,32 +4,25 @@ matplotlib.use('Agg')
 import os
 from time import time
 from keras.callbacks import Callback
-from myutils import calculate_metrics, plotresults, save_h5, load_h5, printerror
+from myutils import calculate_metrics, save_h5
+from visualization import plotresults
 
 class MetricsCallback(Callback):
-    def __init__(self, params):
+    def __init__(self, params, oldresults=None):
         self.myparams = params # self.params is reserved by parent class
         # TODO: finally ensure self.params is not used in this class!
 
-        # lists that will be increased in each epoch (batch) and merged into results dict
-        self.runtime = []
-        self.loss_train = []
-        self.loss_valid = []
-        self.loss_train_per_batch = []
-        self.loss_valid_per_batch = []
+        if oldresults is None:
 
-        # TODO: adapt to last updates from heiner     added sens_spec_class and sens_spec_class_scene
-        self.metrics_train = {'wbac': [],
-                              'wbac_per_class': [],
-                              'bac_per_scene': [],
-                              'bac_per_class_scene': [],
-                              'sens_spec_per_class': [],
-                              'sens_spec_per_class_scene': [],
-                              'wbac2': [],
-                              'wbac2_per_class': []}
+            # lists that will be increased in each epoch (batch) and merged into results dict
+            self.runtime = []
+            self.loss_train = []
+            self.loss_valid = []
+            self.loss_train_per_batch = []
+            self.loss_valid_per_batch = []
 
-        if self.myparams['validfold'] != -1:
-            self.metrics_valid = {'wbac': [],
+            # TODO: adapt to last updates from heiner     added sens_spec_class and sens_spec_class_scene
+            self.metrics_train = {'wbac': [],
                                   'wbac_per_class': [],
                                   'bac_per_scene': [],
                                   'bac_per_class_scene': [],
@@ -38,10 +31,55 @@ class MetricsCallback(Callback):
                                   'wbac2': [],
                                   'wbac2_per_class': []}
 
-        # gradient norm statistics lists
-        if not self.myparams['nocalcgradientnorm']:
-            self.gradient_norm = []
-            self.gradient_norm_per_batch = []
+            if self.myparams['validfold'] != -1:
+                self.metrics_valid = {'wbac': [],
+                                      'wbac_per_class': [],
+                                      'bac_per_scene': [],
+                                      'bac_per_class_scene': [],
+                                      'sens_spec_per_class': [],
+                                      'sens_spec_per_class_scene': [],
+                                      'wbac2': [],
+                                      'wbac2_per_class': []}
+
+            # gradient norm statistics lists
+            if not self.myparams['nocalcgradientnorm']:
+                self.gradient_norm = []
+                self.gradient_norm_per_batch = []
+
+        else:
+
+            # lists that will be increased in each epoch (batch) and merged into results dict
+            self.runtime = list(oldresults['runtime'])
+            self.loss_train = list(oldresults['train_loss'])
+            self.loss_valid = list(oldresults['val_loss'])
+            no_epochs = len(self.loss_train)
+            self.loss_train_per_batch = [oldresults['train_loss_batch'][k, :] for k in range(no_epochs)]
+            self.loss_valid_per_batch = [oldresults['val_loss_batch'][k, :] for k in range(no_epochs)]
+
+            # TODO: adapt to last updates from heiner     added sens_spec_class and sens_spec_class_scene
+            self.metrics_train = {'wbac': list(oldresults['train_wbac']),
+                                  'wbac_per_class': list(oldresults['train_wbac_per_class'][k, :] for k in range(no_epochs)),
+                                  'bac_per_scene': list(oldresults['train_bac_per_scene'][k, :] for k in range(no_epochs)),
+                                  'bac_per_class_scene': list(oldresults['train_bac_per_class_scene'][k, :, :] for k in range(no_epochs)),
+                                  'sens_spec_per_class': list(oldresults['train_sens_spec_per_class'][k, :, :] for k in range(no_epochs)),
+                                  'sens_spec_per_class_scene': list(oldresults['train_sens_spec_per_class_scene'][k, :, :, :] for k in range(no_epochs)),
+                                  'wbac2': list(oldresults['train_wbac2']),
+                                  'wbac2_per_class': list(oldresults['train_wbac2_per_class'][k, :] for k in range(no_epochs))}
+
+            if self.myparams['validfold'] != -1:
+                self.metrics_valid = {'wbac': list(oldresults['val_wbac']),
+                                      'wbac_per_class': list(oldresults['val_wbac_per_class'][k, :] for k in range(no_epochs)),
+                                      'bac_per_scene': list(oldresults['val_bac_per_scene'][k, :] for k in range(no_epochs)),
+                                      'bac_per_class_scene': list(oldresults['val_bac_per_class_scene'][k, :, :] for k in range(no_epochs)),
+                                      'sens_spec_per_class': list(oldresults['val_sens_spec_per_class'][k, :, :] for k in range(no_epochs)),
+                                      'sens_spec_per_class_scene': list(oldresults['val_sens_spec_per_class_scene'][k, :, :, :] for k in range(no_epochs)),
+                                      'wbac2': list(oldresults['val_wbac2']),
+                                      'wbac2_per_class': list(oldresults['val_wbac2_per_class'][k, :] for k in range(no_epochs))}
+
+            # gradient norm statistics lists
+            if not self.myparams['nocalcgradientnorm']:
+                self.gradient_norm = list(oldresults['gradientnorm'])
+                self.gradient_norm_per_batch = list(oldresults['gradientnorm_batch'][k, :] for k in range(no_epochs))
 
     def on_epoch_begin(self, epoch, logs={}):
         # start epoch time measurement
@@ -105,7 +143,7 @@ class MetricsCallback(Callback):
             self.gradient_norm.append(np.array(self.gradient_norm_per_batch[-1]).mean())
             gradstring = ', gradient norm avg {}'.format(self.gradient_norm[-1])
 
-        if self.myparams['validfold'] != -1:
+        if self.myparams['validfold'] == -1:
             print('epoch {} ended with training wbac {:.2f}'.format(epoch+1, metrics_training['wbac']))
         else:
             print('epoch {} ended with validation wbac {:.2f} (training wbac {:.2f})'.

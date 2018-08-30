@@ -6,7 +6,9 @@ import time
 import matplotlib
 matplotlib.use('Agg')
 
-# note we have some more seeds below for proper keras/tensorflow seeding
+import keras
+from keras.optimizers import Adam
+from keras.callbacks import EarlyStopping, ModelCheckpoint, TerminateOnNaN
 
 import heiner.utils as heiner_utils
 import heiner.tensorflow_utils as heiner_tfutils
@@ -18,7 +20,8 @@ from model import temporal_convolutional_network
 from batchloader import BatchLoader
 from hyperparams import obtain_nextlarger_residuallayers_refining_historysize
 from training_callback import MetricsCallback
-from myutils import save_h5, load_h5, printerror, plotresults, printresults
+from myutils import save_h5, load_h5, printerror
+from visualization import plotresults
 
 
 override_params = {}
@@ -30,9 +33,11 @@ override_params = {}
 # override_params['scenes_trainvalid'] = [1]
 # override_params['trainfolds'] = [1]
 # override_params['historylength'] = 50
+# override_params['batchlength'] = 1000
 # override_params['noinputstandardization'] = True
 # override_params['sceneinstancebufsize'] = 300
-# override_params['maxepochs'] = 30
+# override_params['maxepochs'] = 9 #5
+# override_params['resume'] = 'playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es-1_vf3'
 # override_params['earlystop'] = -1
 # override_params['weightnorm'] = False
 
@@ -57,6 +62,8 @@ parser = argparse.ArgumentParser()
 # general
 parser.add_argument('--path', type=str, default='playground',
                         help='folder where to store the files (log, model, hyperparams, results incl. duration)')
+parser.add_argument('--resume', type=str, default='negative',
+                        help='will resume the model from its last epoch')
 parser.add_argument('--gpuid', type=int, default=0, help='ID (cf. nvidia-smi) of the GPU to use')
 parser.add_argument('--hyper', type=str, default='manual',
                         help='random_coarse or random_fine: hyperparam samples (overrides manually specified params!); '+
@@ -137,8 +144,8 @@ initial_output = obtain_nextlarger_residuallayers_refining_historysize(params)
 
 name_short = 'n{}_dr{}_ks{}_hl{}_lr{}'.format(params['featuremaps'], params['dropoutrate'], params['kernelsize'],
                                               params['historylength'], params['learningrate'])
-name_long = name_short + '_wn{}_bs{}_bl{}_me{}_es{}'.format(params['weightnorm'],
-            params['batchsize'], params['batchlength'], params['maxepochs'], params['earlystop'])
+name_long = name_short + '_wn{}_bs{}_bl{}_es{}'.format(params['weightnorm'],
+            params['batchsize'], params['batchlength'], params['earlystop'])
 name_short += '_vf{}'.format(args.validfold)
 name_long += '_vf{}'.format(args.validfold)
 
@@ -232,20 +239,15 @@ print()
 print('BUILDING MODEL')
 
 # seeding
-if params['seed'] != -1:
-    # import random
-    # random.seed(params['seed']) # for the initialization np and tf are enoguh, batchloader has internal seed setting
-
-    import numpy as np
-    np.random.seed(params['seed'])
-
-    import tensorflow
-    tensorflow.set_random_seed(params['seed'])
-
-from keras.optimizers import Adam
-from keras.callbacks import EarlyStopping, ModelCheckpoint, TerminateOnNaN
-
-model = temporal_convolutional_network(params)
+# if params['seed'] != -1:
+#     # import random
+#     # random.seed(params['seed']) # for the initialization np and tf are enoguh, batchloader has internal seed setting
+#
+#     import numpy as np
+#     np.random.seed(params['seed'])
+#
+#     import tensorflow
+#     tensorflow.set_random_seed(params['seed'])
 
 if params['weightnorm']:
     optimizer = AdamWithWeightnorm
@@ -259,12 +261,23 @@ masked_weighted_crossentropy_loss = heiner_tfutils.my_loss_builder(MASK_VALUE, l
 print('constructed loss (masking labels with value {}) using loss weights {}'.format(MASK_VALUE, loss_weights))
 
 
-model.summary()
-model.compile(optimizer(lr=params['learningrate'], clipnorm=params['gradientclip']),
-              loss=masked_weighted_crossentropy_loss, metrics=None)
+if params['resume'] == 'negative':
+    model = temporal_convolutional_network(params)
+    model.compile(optimizer(lr=params['learningrate'], clipnorm=params['gradientclip']),
+                  loss=masked_weighted_crossentropy_loss, metrics=None)
+    init_epoch = 0
 
-# params saved here already because if a late epoch's process is killed we have at least all results and params up to the epoch before
-save_h5(params, os.path.join(params['path'], params['name'], 'params.h5'))
+    # params saved here already because if a late epoch's process is killed we have at least all results and params up to the epoch before
+    save_h5(params, os.path.join(params['path'], params['name'], 'params.h5'))
+else:
+    model = keras.models.load_model(os.path.join(params['path'], params['name'],'model.h5'),
+                                    custom_objects={'AdamWithWeightnorm': AdamWithWeightnorm,
+                                                    'my_loss': masked_weighted_crossentropy_loss})
+    print('resuming model from file')
+
+    oldresults = load_h5(os.path.join(params['path'], params['name'], 'results.h5'))
+    init_epoch = len(oldresults['val_wbac']) # resume directly after the last completed epoch
+model.summary()
 
 
 print()
@@ -278,19 +291,21 @@ print('starting training for at most {} epochs ({} batches per epoch)'.format(pa
 # remark: val_wbac is not a metric in the keras sense but is provided via the metricscallback
 callbacks = []
 
-terminateonnan = TerminateOnNaN()
-callbacks.append(terminateonnan)
+#terminateonnan = TerminateOnNaN()
+#callbacks.append(terminateonnan)
 
 # collect train and validation metrics after each epoch (loss, wbac, wbac_per_class, bac_per_class_scene, wbac2,
 # wbac2_per_class, sensitivies, specificities, gradient statistics, runtime) and after each batch (loss, gradient statistics)
-metricscallback = MetricsCallback(params)
+if params['resume'] == 'negative':
+    oldresults = None
+metricscallback = MetricsCallback(params, oldresults)
 callbacks.append(metricscallback)
 
 if params['earlystop'] != -1:
     earlystopping = EarlyStopping(monitor='val_wbac', mode='max')
     callbacks.append(earlystopping)
 
-modelcheckpoint = ModelCheckpoint(params['name']+'_model.h5', monitor='val_wbac', mode='max', save_best_only=True)
+modelcheckpoint = ModelCheckpoint(os.path.join(params['path'], params['name'], 'model.h5'))
 callbacks.append(modelcheckpoint)
 
 
@@ -305,7 +320,8 @@ fit_and_predict_generator_with_sceneinst_metrics(model,
                                                  workers=1,
                                                  use_multiprocessing=False, #True,
                                                  validation_data=batchloader_validation,
-                                                 validation_steps=params['valid_batches_per_epoch'])
+                                                 validation_steps=params['valid_batches_per_epoch'],
+                                                 initial_epoch=init_epoch)
 
 # collecting and saving results
 results = metricscallback.results
@@ -317,18 +333,16 @@ results['runtime_total'] = runtime_total
 # early stopping
 if params['earlystop'] != -1:
     if earlystopping.stopped_epoch == 0:
-        results['epoch_best'] = -1
         printerror('early stopping could not be applied with patience {}, maxepochs {} was seemingly too small'.format(params['earlystop'], params['maxepochs']))
     else:
-        results['epoch_best'] = earlystopping.stopped_epoch - params['earlystop']
-        print('the best epoch was epoch {} (as of nonimproving for {} epochs)'.format(results['epoch_best']+1, params['maxepochs']))
+        results['earlystop_best_epochidx'] = earlystopping.stopped_epoch - params['earlystop']
+        print('the best epoch was epoch {} (as of nonimproving for {} epochs)'.format(results['epoch_best']+1, params['earlystop']))
 
 save_h5(results, os.path.join(params['path'], params['name'], 'results.h5'))
 
 
 # TODO: final plotting and printing
 plotresults(results, params)
-printresults(results, params)
 
 
 # TODO: experiment before hyper search: time measurements when finally running to see what takes what part (per epoch)
