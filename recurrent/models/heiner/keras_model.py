@@ -17,7 +17,7 @@ logger = logging.getLogger('exceptions_logger')
 def my_handler(type, value, tb):
     logger.exception("Uncaught exception: {0}".format(str(value)))
 
-def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, reset_hcombs, time_steps):
+def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, reset_hcombs, time_steps, model_name='LDNN_v1'):
     use_tmux.set_use_tmux(tmux)
     gpu_str = ''
     if type(available_gpus) is str:
@@ -33,7 +33,6 @@ def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, r
 
     ################################################# MODEL LOG AND CHECKPOINT SETUP DEPENDENT ON HYPERPARAMETERS
 
-    model_name = 'LDNN_v1'
     save_path = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name)
     os.makedirs(save_path, exist_ok=True)
 

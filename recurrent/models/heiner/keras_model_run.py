@@ -8,7 +8,7 @@ from timeit import default_timer as timer
 import keras.backend as K
 import numpy as np
 from keras.callbacks import ModelCheckpoint
-from keras.layers import Dense, Input, CuDNNLSTM, Dropout
+from keras.layers import Dense, Input, Dropout, CuDNNLSTM
 from keras.models import Model
 from keras.optimizers import Adam
 
@@ -326,7 +326,7 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
         if h.finished:
             print('Hyperparameter Combination for this model version already evaluated. ABORT.')
             continue
-        hcm.set_hostname_and_batch_size(ID, h, *utils.get_hostname_batch_size_wrt_time_steps(h.TIME_STEPS))
+        hcm.set_hostname_and_batch_size(ID, h, *utils.get_hostname_batch_size_wrt_time_steps(h.TIME_STEPS, gpu))
 
         model_dir = os.path.join(save_path, 'hcomb_' + str(ID))
 
