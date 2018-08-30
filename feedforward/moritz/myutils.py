@@ -15,14 +15,14 @@ def calculate_metrics(scene_instance_id_metrics_dict):
                         ret=('final', 'per_class', 'per_scene', 'per_class_scene'))
 
     # collect into dict and return
-    metrics = {'wbac': wbac,                                        # balanced accuracy: scalar (weighted scene avg, class avg)
-               'wbac_per_class': wbac_per_class,                    # balanced accuracy: per class (weighted scene avg)
-               'bac_per_scene': bac_per_scene,                      # balanced accuracy: per scene (class avg)
-               'bac_per_class_scene': bac_per_class_scene,          # balanced accuracy: per scene, per class
-               'sens_spec_per_class': sens_spec_per_class,          # sensitivity/specificity: per scene (class avg)
-               'sens_spec_per_class_scene': sens_spec_per_class,    # sensitivity/specificity: per scene, per class
-               'wbac2': wbac2,                                      # balanced accuracy v2: scalar (weighted scene avg, class avg)
-               'wbac2_per_class': wbac2_per_class}                  # balanced accuracy v2: per class (weighted scene avg)
+    metrics = {'wbac': wbac,                                            # balanced accuracy: scalar (weighted scene avg, class avg)
+               'wbac_per_class': wbac_per_class,                        # balanced accuracy: per class (weighted scene avg)
+               'bac_per_scene': bac_per_scene,                          # balanced accuracy: per scene (class avg)
+               'bac_per_class_scene': bac_per_class_scene,              # balanced accuracy: per scene, per class
+               'sens_spec_per_class': sens_spec_per_class,              # sensitivity/specificity: per scene (class avg)
+               'sens_spec_per_class_scene': sens_spec_per_class_scene,  # sensitivity/specificity: per scene, per class
+               'wbac2': wbac2,                                          # balanced accuracy v2: scalar (weighted scene avg, class avg)
+               'wbac2_per_class': wbac2_per_class}                      # balanced accuracy v2: per class (weighted scene avg)
 
     return metrics
 
