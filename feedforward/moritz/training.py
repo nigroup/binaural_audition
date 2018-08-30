@@ -162,8 +162,10 @@ elif 'final' in params['path']:
 else:
     params['name'] = name_long
 
-# redirecting stdout and stderr
+# create directory for experiment
 os.makedirs(os.path.join(params['path'], params['name']), exist_ok=True)
+
+# redirecting stdout and stderr
 outfile = os.path.join(params['path'], params['name'], 'logfile')
 errfile = os.path.join(params['path'], params['name'], 'errors')
 sys.stdout = heiner_utils.UnbufferedLogAndPrint(outfile, sys.stdout)
@@ -302,7 +304,7 @@ metricscallback = MetricsCallback(params, oldresults)
 callbacks.append(metricscallback)
 
 if params['earlystop'] != -1:
-    earlystopping = EarlyStopping(monitor='val_wbac', mode='max')
+    earlystopping = EarlyStopping(monitor='val_wbac', mode='max', patience=params['earlystop'])
     callbacks.append(earlystopping)
 
 modelcheckpoint = ModelCheckpoint(os.path.join(params['path'], params['name'], 'model.h5'))

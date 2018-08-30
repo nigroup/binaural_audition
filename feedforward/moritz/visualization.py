@@ -9,6 +9,9 @@ from constants import *
 
 def plotresults(results, params):
 
+    # TODO: include in each axis respectively plotting best epoch so-far [max. wBAC]
+    # TODO: put name in title and current total runtime
+
     if params['validfold'] != -1:
        pass # plot only when exists
 
@@ -29,10 +32,6 @@ def plotresults(results, params):
     colors_class = [cmap(val) for val in colors_class]
     smallfontsize = 6
     mediumfontsize = 8
-
-    # TODO: include in each axis respectively plotting best epoch so-far [max. wBAC]
-    # TODO: include for best epoch and last epoch for following metrics numbers in the legends texts: train_loss, val_loss, train_wbac, val_wbac, val_wbac2
-    # TODO: put name in title and current total runtime
 
     # ================================================
     # axis: training and validation losses
