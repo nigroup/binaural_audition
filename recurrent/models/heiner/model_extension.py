@@ -1,4 +1,140 @@
+from functools import partial
+
 from keras import backend as K
+from keras.layers import CuDNNLSTM, Layer
+from keras.legacy import interfaces
+
+
+class MyDropout(Layer):
+    """Applies Dropout to the input.
+    Dropout consists in randomly setting
+    a fraction `rate` of input units to 0 at each update during training time,
+    which helps prevent overfitting.
+    # Arguments
+        rate: float between 0 and 1. Fraction of the input units to drop.
+        noise_shape: 1D integer tensor representing the shape of the
+            binary dropout mask that will be multiplied with the input.
+            For instance, if your inputs have shape
+            `(batch_size, timesteps, features)` and
+            you want the dropout mask to be the same for all timesteps,
+            you can use `noise_shape=(batch_size, 1, features)`.
+        seed: A Python integer to use as random seed.
+    # References
+        - [Dropout: A Simple Way to Prevent Neural Networks from Overfitting](http://www.cs.toronto.edu/~rsalakhu/papers/srivastava14a.pdf)
+    """
+    @interfaces.legacy_dropout_support
+    def __init__(self, rate, noise_shape=None, seed=None, **kwargs):
+        super(MyDropout, self).__init__(**kwargs)
+        self.rate = min(1., max(0., rate))
+        self.noise_shape = noise_shape
+        self.seed = seed
+        self.supports_masking = True
+
+    def _get_noise_shape(self, inputs):
+        if self.noise_shape is None:
+            return self.noise_shape
+
+        symbolic_shape = K.shape(inputs)
+        noise_shape = [symbolic_shape[axis] if shape is None else shape
+                       for axis, shape in enumerate(self.noise_shape)]
+        return tuple(noise_shape)
+
+    def call(self, inputs, training=None):
+        if 0. < self.rate < 1.:
+            noise_shape = self._get_noise_shape(inputs)
+
+            def dropped_inputs():
+                return K.dropout(K.print_tensor(inputs, 'MyDropout {}: in_train_phase '.format(self.name)), self.rate, noise_shape,
+                                 seed=self.seed)
+
+            def standard_inputs():
+                return K.print_tensor(inputs, 'MyDropout {}: not_train_phase '.format(self.name))
+
+            return K.in_train_phase(dropped_inputs, standard_inputs,
+                                    training=training)
+        return inputs
+
+    def get_config(self):
+        config = {'rate': self.rate,
+                  'noise_shape': self.noise_shape,
+                  'seed': self.seed}
+        base_config = super(MyDropout, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+class DropConnectCuDNNLSTM(CuDNNLSTM):
+    def __init__(self, units, rate, seed=None, **kwargs):
+        super(DropConnectCuDNNLSTM, self).__init__(units, **kwargs)
+        self.rate = min(1., max(0., rate))
+        self.seed = seed
+
+    def _process_batch(self, inputs, initial_state):
+        import tensorflow as tf
+        inputs = tf.transpose(inputs, (1, 0, 2))
+        input_h = initial_state[0]
+        input_c = initial_state[1]
+        input_h = tf.expand_dims(input_h, axis=0)
+        input_c = tf.expand_dims(input_c, axis=0)
+
+        def dropped_recurrent_kernel(recurrent_kernel_):
+            recurrent_kernel_ = K.print_tensor(recurrent_kernel_, 'DropConnect {}: in_train_phase '.format(self.name))
+            return K.dropout(recurrent_kernel_, self.rate, seed=self.seed)
+
+        def standard_recurrent_kernel(recurrent_kernel_):
+            return K.print_tensor(recurrent_kernel_, 'DropConnect {}: not_train_phase '.format(self.name))
+
+        params = self._canonical_to_params(
+            weights=[
+                self.kernel_i,
+                self.kernel_f,
+                self.kernel_c,
+                self.kernel_o,
+                K.in_train_phase(partial(dropped_recurrent_kernel, self.recurrent_kernel_i),
+                                 partial(standard_recurrent_kernel, self.recurrent_kernel_i)),
+                K.in_train_phase(partial(dropped_recurrent_kernel, self.recurrent_kernel_f),
+                                 partial(standard_recurrent_kernel, self.recurrent_kernel_f)),
+                K.in_train_phase(partial(dropped_recurrent_kernel, self.recurrent_kernel_c),
+                                 partial(standard_recurrent_kernel, self.recurrent_kernel_c)),
+                K.in_train_phase(partial(dropped_recurrent_kernel, self.recurrent_kernel_o),
+                                 partial(standard_recurrent_kernel, self.recurrent_kernel_o)),
+            ],
+            biases=[
+                self.bias_i_i,
+                self.bias_f_i,
+                self.bias_c_i,
+                self.bias_o_i,
+                self.bias_i,
+                self.bias_f,
+                self.bias_c,
+                self.bias_o,
+            ],
+        )
+        outputs, h, c = self._cudnn_lstm(
+            inputs,
+            input_h=input_h,
+            input_c=input_c,
+            params=params,
+            is_training=True)
+
+        if self.stateful or self.return_state:
+            h = h[0]
+            c = c[0]
+        if self.return_sequences:
+            output = tf.transpose(outputs, (1, 0, 2))
+        else:
+            output = outputs[-1]
+        return output, [h, c]
+
+    def get_config(self):
+        config = {
+            'rate': self.rate,
+            'seed': self.seed
+        }
+        base_config = super(DropConnectCuDNNLSTM, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 def _make_train_and_predict_function(model, calc_global_gradient_norm):
@@ -8,8 +144,10 @@ def _make_train_and_predict_function(model, calc_global_gradient_norm):
         model.train_and_predict_function = None
     model._check_trainable_weights_consistency()
     if model.train_and_predict_function is None:
-        inputs = model._feed_inputs + model._feed_targets + model._feed_sample_weights
-        if model.uses_learning_phase and not isinstance(K.learning_phase(), int):
+        inputs = (model._feed_inputs +
+                  model._feed_targets +
+                  model._feed_sample_weights)
+        if model._uses_dynamic_learning_phase():
             inputs += [K.learning_phase()]
 
         with K.name_scope('training'):
@@ -17,14 +155,15 @@ def _make_train_and_predict_function(model, calc_global_gradient_norm):
                 training_updates = model.optimizer.get_updates(
                     params=model._collected_trainable_weights,
                     loss=model.total_loss)
-            updates = model.updates + training_updates + model.metrics_updates
+            updates = (model.updates +
+                       training_updates)
             # Gets loss and metrics. Updates weights at each call.
             if not calc_global_gradient_norm:
                 model.train_and_predict_function = K.function(inputs,
                                                               # added model.outputs
                                                               [model.total_loss] + model.metrics_tensors + model.outputs + [K.constant(-1)],
                                                               updates=updates,
-                                                              name='train_function',
+                                                              name='train_function_and_predict_function',
                                                               **model._function_kwargs)
             else:
                 grads = K.gradients(model.total_loss, model.trainable_weights)
@@ -79,16 +218,15 @@ def train_and_predict_on_batch(model, x, y,
         AND the gradient norm if calc_gradient_norm == True
     """
 
-    K.set_learning_phase(1)
-
     x, y, sample_weights = model._standardize_user_data(
         x, y,
         sample_weight=sample_weight,
         class_weight=class_weight)
-    if model.uses_learning_phase and not isinstance(K.learning_phase(), int):
+    if model._uses_dynamic_learning_phase():
         ins = x + y + sample_weights + [1.]
     else:
         ins = x + y + sample_weights
+
     _make_train_and_predict_function(model, calc_global_gradient_norm)
     outputs = model.train_and_predict_function(ins)
     if len(outputs) == 1:
@@ -102,8 +240,10 @@ def _make_test_and_predict_function(model):
     if not hasattr(model, 'test_and_predict_function'):
         model.test_and_predict_function = None
     if model.test_and_predict_function is None:
-        inputs = model._feed_inputs + model._feed_targets + model._feed_sample_weights
-        if model.uses_learning_phase and not isinstance(K.learning_phase(), int):
+        inputs = (model._feed_inputs +
+                 model._feed_targets +
+                 model._feed_sample_weights)
+        if model._uses_dynamic_learning_phase():
             inputs += [K.learning_phase()]
         # Return loss and metrics, no gradient updates.
         # Does update the network states.
@@ -144,15 +284,14 @@ def test_and_predict_on_batch(model, x, y, sample_weight=None):
         the display labels for the scalar outputs.
     """
 
-    K.set_learning_phase(0)
-
     x, y, sample_weights = model._standardize_user_data(
         x, y,
         sample_weight=sample_weight)
-    if model.uses_learning_phase and not isinstance(K.learning_phase(), int):
+    if model._uses_dynamic_learning_phase():
         ins = x + y + sample_weights + [0.]
     else:
         ins = x + y + sample_weights
+
     _make_test_and_predict_function(model)
     outputs = model.test_and_predict_function(ins)
     if len(outputs) == 1:
