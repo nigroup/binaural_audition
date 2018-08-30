@@ -142,10 +142,17 @@ class Phase:
         def _drop_in_recurrent_kernel(rk):
             # print('Zeros in weight matrix before dropout: {}'.format(np.sum(rk == 0)))
 
+            # rk_s = rk.shape
+            # mask = np.random.binomial(1., 1-self.recurrent_dropout, (rk_s[0], 1))
+            # mask = np.tile(mask, rk_s[0]*4)
+            # rk = rk * mask * (1./(1-self.recurrent_dropout))
+
+            ########################## NEW (like in https://arxiv.org/pdf/1708.02182.pdf)
+
             rk_s = rk.shape
-            mask = np.random.binomial(1, 1-self.recurrent_dropout, (rk_s[0], 1))
-            mask = np.tile(mask, rk_s[0]*4)
-            rk = rk * mask * (1/(1-self.recurrent_dropout))
+            mask = np.random.binomial(1., 1 - self.recurrent_dropout, rk_s)
+            rk *= mask
+            rk *= (1. / (1 - self.recurrent_dropout))
 
             # print('Zeros in weight matrix after dropout: {}'.format(np.sum(rk == 0)))
             # print('Weight matrix norm after dropout: {}'.format(np.linalg.norm(rk)))
@@ -159,7 +166,7 @@ class Phase:
                 rk = K.get_value(layer.weights[1])
                 rk_old = np.copy(rk)
                 rk, mask = _drop_in_recurrent_kernel(rk)
-                original_weights_and_masks.append((rk_old, np.copy(mask)))
+                original_weights_and_masks.append((rk_old, mask))
                 K.set_value(layer.weights[1], rk)
 
         return original_weights_and_masks
@@ -170,7 +177,7 @@ class Phase:
             if type(layer) is CuDNNLSTM:
                 rk = K.get_value(layer.weights[1])
                 mask = original_weights_and_masks[i][1]
-                original_weights_updated = original_weights_and_masks[i][0] + (rk * (1-self.recurrent_dropout) - original_weights_and_masks[i][0]) \
+                original_weights_updated = original_weights_and_masks[i][0] + (rk - (1/(1-self.recurrent_dropout)) * original_weights_and_masks[i][0]) \
                                            * mask
                 K.set_value(layer.weights[1], original_weights_updated)
                 i += 1
