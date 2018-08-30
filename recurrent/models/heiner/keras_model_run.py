@@ -154,7 +154,40 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
             best_epoch = 0 if not model_is_resumed else best_epoch_
             epochs_without_improvement = 0 if not model_is_resumed else epochs_without_improvement_
 
-            metrics_were_merged = False
+            if model_is_resumed:
+                old_metrics = utils.load_metrics(model_save_dir)
+
+                # merge metrics
+                h.METRIC = old_metrics['metric']
+                train_phase.metric = h.METRIC
+                val_phase = h.METRIC
+
+                train_iterations_done = 0
+                val_iterations_done = 0
+                for i in range(h.epochs_finished[val_fold - 1]):
+                    train_iterations_done += train_phase.dloader_len[i]
+                    val_iterations_done += val_phase.dloader_len[i]
+
+                train_phase.losses = old_metrics['train_losses'].tolist()[:train_iterations_done]
+                train_phase.accs = old_metrics['train_accs'].tolist()[:train_iterations_done]
+                val_phase.losses = old_metrics['val_losses'].tolist()[:val_iterations_done]
+                val_phase.accs = old_metrics['val_accs'].tolist()[:val_iterations_done]
+                val_phase.accs_bac2 = old_metrics['val_accs_bac2'].tolist()[:val_iterations_done]
+                val_phase.class_accs = old_metrics['val_class_accs'].tolist()[:val_iterations_done]
+                val_phase.class_accs_bac2 = old_metrics['val_class_accs_bac2'].tolist()[:val_iterations_done]
+                val_phase.class_scene_accs = old_metrics['val_class_scene_accs'].tolist()[:val_iterations_done]
+                val_phase.class_scene_accs_bac2 = old_metrics['val_class_scene_accs_bac2'].tolist()[:val_iterations_done]
+                val_phase.scene_accs = old_metrics['val_scene_accs'].tolist()[:val_iterations_done]
+                val_phase.scene_accs_bac2 = old_metrics['val_scene_accs_bac2'].tolist()[:val_iterations_done]
+                train_phase.sens_spec_class_scene = old_metrics['train_sens_spec_class_scene'].tolist()[:train_iterations_done]
+                val_phase.sens_spec_class_scene = old_metrics['val_sens_spec_class_scene'].tolist()[:val_iterations_done]
+                val_phase.sens_spec_class = old_metrics['val_sens_spec_class'].tolist()[:val_iterations_done]
+
+                if 'global_gradient_norm' in old_metrics:
+                    train_phase.global_gradient_norms = old_metrics['global_gradient_norm'].tolist()[:train_iterations_done]
+
+                best_val_acc = np.max(val_phase.accs)
+                best_val_acc_bac2 = old_metrics['val_accs_bac2'][np.argmax(val_phase.accs)]
 
             stage_was_finished = True
 
@@ -165,37 +198,6 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                     break
                 else:
                     stage_was_finished = False
-
-                if model_is_resumed and not metrics_were_merged:
-                    old_metrics = utils.load_metrics(model_save_dir)
-
-                    # merge metrics
-                    h.METRIC = old_metrics['metric']
-                    train_phase.metric = h.METRIC
-                    val_phase = h.METRIC
-
-                    train_phase.losses = old_metrics['train_losses'].tolist()
-                    train_phase.accs = old_metrics['train_accs'].tolist()
-                    val_phase.losses = old_metrics['val_losses'].tolist()
-                    val_phase.accs = old_metrics['val_accs'].tolist()
-                    val_phase.accs_bac2 = old_metrics['val_accs_bac2'].tolist()
-                    val_phase.class_accs = old_metrics['val_class_accs'].tolist()
-                    val_phase.class_accs_bac2 = old_metrics['val_class_accs_bac2'].tolist()
-                    val_phase.class_scene_accs = old_metrics['val_class_scene_accs'].tolist()
-                    val_phase.class_scene_accs_bac2 = old_metrics['val_class_scene_accs_bac2'].tolist()
-                    val_phase.scene_accs = old_metrics['val_scene_accs'].tolist()
-                    val_phase.scene_accs_bac2 = old_metrics['val_scene_accs_bac2'].tolist()
-                    train_phase.sens_spec_class_scene = old_metrics['train_sens_spec_class_scene'].tolist()
-                    val_phase.sens_spec_class_scene = old_metrics['val_sens_spec_class_scene'].tolist()
-                    val_phase.sens_spec_class = old_metrics['val_sens_spec_class'].tolist()
-
-                    if 'global_gradient_norm' in old_metrics:
-                        train_phase.global_gradient_norms = old_metrics['global_gradient_norm'].tolist()
-
-                    best_val_acc = np.max(old_metrics['val_accs'])
-                    best_val_acc_bac2 = old_metrics['val_accs_bac2'][np.argmax(old_metrics['val_accs'])]
-
-                    metrics_were_merged = True
 
                 train_phase.run()
                 val_phase.run()
