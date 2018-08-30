@@ -79,7 +79,7 @@ parser.add_argument('--outputthreshold', type=float, default=0.5,
 
 parser.add_argument('--weightnorm', action='store_true', default=False,
                         help='disables the weight norm version of the Adam optimizer, i.e., falls back to regular Adam')
-parser.add_argument('--learningrate', type=float, default=0.002, #0.001,
+parser.add_argument('--learningrate', type=float, default=0.002,
                         help='initial learning rate of the Adam optimizer')
 parser.add_argument('--batchsize', type=int, default=256, #128 # note that batchsize should be proportionally increased to learning rate
                         help='number of time series per batch (should be power of two for efficiency)')
@@ -94,7 +94,7 @@ parser.add_argument('--earlystop', type=int, default=5,
                         help='early stop patience, i.e., number of number of non-improving epochs; -1 => no early stopping')
 parser.add_argument('--validfold', type=int, default=3,
                         help='number of validation fold (1, ..., 6); -1 => use all 6 for training [latter incompatible with earlystopping]')
-parser.add_argument('--gradientclip', type=float, default=1.0,
+parser.add_argument('--gradientclip', type=float, default=1.5,
                         help='maximal number of epochs (typically stopped early before reaching this value)')
 parser.add_argument('--nocalcgradientnorm', action='store_true', default=False,
                         help='enables calculation of the gradient norm that is saved per batch and per epoch')
