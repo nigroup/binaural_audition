@@ -17,9 +17,9 @@ def add_new_hcombs(number_of_hcombs, save_path):
     rs.save_hcombs_to_run(save_path, number_of_hcombs)
 
 
-def add_hcombs_from_ids(ids, save_path):
+def add_hcombs_from_ids(ids, save_path, changes_dict=None):
     rs = RandomSearch()
-    rs.add_hcombs_to_run_via_id(ids, save_path)
+    rs.add_hcombs_to_run_via_id(ids, save_path, changes_dict=changes_dict)
 
 ################################################# MODEL LOG AND CHECKPOINT SETUP DEPENDENT ON HYPERPARAMETERS
 
@@ -28,7 +28,9 @@ if __name__ == '__main__':
     save_path = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name)
     os.makedirs(save_path, exist_ok=True)
 
-    add_hcombs_from_ids(14, save_path)
+    # add_hcombs_from_ids([14, 15, 16, 23, 24, 25, 27, 29, 33, 34, 35, 37, 38, 39, 40, 41], save_path, changes_dict={'finished': False})
+
+    add_hcombs_from_ids(15, save_path, changes_dict={'RECURRENT_DROPOUT': 0.5, 'finished': False})
 
 
 

@@ -154,14 +154,19 @@ def pickle_dicts(d):
     for (path_, obj) in d.items():
         pickle_dump(obj, path_)
 
-path_ = '/mnt/antares_raid/home/spiess/twoears_proj/models/heiner/model_directories/' \
-            'LDNN_v1/hyperparameter_combinations.pickle'
+if __name__ == '__main__':
 
-hcomb_list, metrics_path_dict, metrics_over_folds_path_dict, hyperparameters_path_dict = renew_old_hcombs(path_)
-#
-pickle_dump(hcomb_list, path_)
-# pickle_dicts(metrics_path_dict)
-# pickle_dicts(metrics_over_folds_path_dict)
-# pickle_dicts(hyperparameters_path_dict)
+    path_ = '/mnt/antares_raid/home/spiess/twoears_proj/models/heiner/model_directories/' \
+                'LDNN_v1/hyperparameter_combinations.pickle'
 
-hcomb_list = load_pickled(path_)
+    hcomb_list = load_hcomb_list(path_)
+    print()
+
+    # hcomb_list, metrics_path_dict, metrics_over_folds_path_dict, hyperparameters_path_dict = renew_old_hcombs(path_)
+
+    # pickle_dump(hcomb_list, path_)
+    # pickle_dicts(metrics_path_dict)
+    # pickle_dicts(metrics_over_folds_path_dict)
+    # pickle_dicts(hyperparameters_path_dict)
+
+# hcomb_list = load_pickled(path_)

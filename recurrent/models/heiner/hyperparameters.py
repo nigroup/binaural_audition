@@ -500,7 +500,7 @@ class RandomSearch:
             with open(filepath, 'wb') as handle:
                 pickle.dump(hcombs_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def add_hcombs_to_run_via_id(self, ids, save_path):
+    def add_hcombs_to_run_via_id(self, ids, save_path, changes_dict=None):
         if type(ids) is int:
             ids = [ids]
 
@@ -514,6 +514,11 @@ class RandomSearch:
             hcomb_list = pickle.load(handle)
 
         hs_to_run = [hcomb_list[id_] for id_ in ids]
+
+        if changes_dict is not None:
+            for hs in hs_to_run:
+                for key, value in changes_dict.items():
+                    hs[key] = value
 
         if not path.exists(filepath_to_run):
             with open(filepath_to_run, 'wb') as handle:
