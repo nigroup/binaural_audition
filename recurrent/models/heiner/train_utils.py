@@ -29,8 +29,8 @@ def create_generator_multithreading(dloader):
     return dloader_enqueuer.get()
 
 
-def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
-                       VAL_FOLDS, VAL_STATEFUL, BUFFER, use_multithreading=True):
+def create_train_dataloader(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
+                            BUFFER, use_multithreading=True):
     train_loader = DataLoader('train', LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, batchsize=BATCHSIZE,
                               timesteps=TIMESTEPS, epochs=EPOCHS, features=NFEATURES, classes=NCLASSES,
                               buffer=BUFFER, use_multithreading=use_multithreading)
@@ -39,6 +39,11 @@ def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTE
 
     print('Data efficiency per epoch (training): ' + str(train_loader.data_efficiency()))
 
+    return train_loader
+
+
+def create_val_dataloader(LABEL_MODE, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES, VAL_FOLDS,
+                          VAL_STATEFUL, BUFFER, use_multithreading=True):
     val_loader = DataLoader('val', LABEL_MODE, VAL_FOLDS, TRAIN_SCENES, epochs=EPOCHS, batchsize=BATCHSIZE,
                             timesteps=TIMESTEPS, features=NFEATURES, classes=NCLASSES, val_stateful=VAL_STATEFUL,
                             buffer=BUFFER, use_multithreading=use_multithreading)
@@ -47,6 +52,29 @@ def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTE
     print('Number of batches per epoch (validation): ' + str(val_loader_len))
 
     print('Data efficiency per epoch (validation): ' + str(val_loader.data_efficiency()))
+
+    return val_loader
+
+
+def create_test_dataloader(LABEL_MODE):
+    test_loader = DataLoader('test', LABEL_MODE, [7, 8], -1)
+
+    test_loader_len = test_loader.len()
+    print('Number of batches per epoch (test): ' + str(test_loader_len))
+
+    print('Data efficiency per epoch (test): ' + str(test_loader.data_efficiency()))
+
+    return test_loader
+
+
+def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
+                       VAL_FOLDS, VAL_STATEFUL, BUFFER, use_multithreading=True):
+
+    train_loader = create_train_dataloader(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS,
+                                           NFEATURES, NCLASSES, BUFFER, use_multithreading=use_multithreading)
+
+    val_loader = create_val_dataloader(LABEL_MODE, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
+                                       VAL_FOLDS, VAL_STATEFUL, BUFFER, use_multithreading=use_multithreading)
 
     return train_loader, val_loader
 
@@ -73,6 +101,117 @@ def update_latest_model_ckp(model_ckp_last, model_save_dir, e, acc):
 
     model_ckp_last.on_epoch_end(e, logs={'val_final_acc': acc})
 
+
+class TestPhase:
+
+    def __init__(self, model, dloader, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str, metric='BAC2',
+                 ret=('final', 'per_class', 'per_class_scene', 'per_scene')):
+        self.prefix = 'test'
+
+        self.model = model
+        self.dloader = dloader
+
+        self.OUTPUT_THRESHOLD = OUTPUT_THRESHOLD
+        self.MASK_VAL = MASK_VAL
+        self.EPOCHS = EPOCHS
+
+        self.val_fold_str = val_fold_str
+
+        self.e = 0
+
+        self.metric = metric
+        self.ret = ret
+
+        if dloader.use_multithreading:
+            self.gen = create_generator_multithreading(dloader)
+        else:
+            self.gen = create_generator(dloader)
+        self.dloader_len = dloader.len()
+
+        self.accs = []
+        self.class_accs = []
+        self.accs_bac2 = []
+        self.class_accs_bac2 = []
+
+        self.class_scene_accs = []
+        self.class_scene_accs_bac2 = []
+
+        self.scene_accs = []
+        self.scene_accs_bac2 = []
+
+        self.sens_spec_class_scene = []
+        self.sens_spec_class = []
+
+    @property
+    def epoch_str(self):
+        return 'epoch: {:{prec}} / {:{prec}}'.format(self.e + 1, self.EPOCHS, prec=len(str(self.EPOCHS)))
+
+    def run(self):
+        scene_instance_id_metrics_dict = dict()
+
+        for iteration in range(1, self.dloader_len + 1):
+            self.model.reset_states()
+
+            iteration_start_time = time.time()
+            it_str = '{}_iteration: {:{prec}} / {:{prec}}'.format(self.prefix, iteration, self.dloader_len,
+                                                                  prec=len(str(self.dloader_len)))
+
+
+
+            iteration_start_time_data_loading = time.time()
+
+            b_x, b_y = next(self.gen)
+
+            elapsed_time_data_loading = time.time() - iteration_start_time_data_loading
+
+            iteration_start_time_tf_graph = time.time()
+            tf_graph_verbose = False
+            tf_graph_time_spent_str = ''
+
+            out_logits = self.model.predict_on_batch(b_x)
+            y_pred = sigmoid(out_logits, out=out_logits)
+            y_pred = np.greater_equal(y_pred, self.OUTPUT_THRESHOLD, out=y_pred)
+
+            elapsed_time_tf_graph = time.time() - iteration_start_time_tf_graph
+
+            iteration_start_time_accuracy_metrics = time.time()
+            acc_u.calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
+                                                                                 y_pred, b_y, self.MASK_VAL)
+            elapsed_time_accuracy_metrics = time.time() - iteration_start_time_accuracy_metrics
+            elapsed_time = time.time() - iteration_start_time
+            time_spent_str = 'time spent: {} (data loading: {}, tf graph: {}{}, accuracy metrics: {})'.format(
+                time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),
+                time.strftime("%H:%M:%S", time.gmtime(elapsed_time_data_loading)),
+                time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph)),
+                tf_graph_time_spent_str if tf_graph_verbose else '',
+                time.strftime("%H:%M:%S", time.gmtime(elapsed_time_accuracy_metrics))
+            )
+            loss_log_str = '{:<20}  {:<20}  {:<20}  {}'.format(self.val_fold_str, self.epoch_str, it_str, time_spent_str)
+            print(loss_log_str)
+
+
+        # TODO: can get a mismatch here, as number of returned values may change depending on parameter 'ret'
+        final_acc, final_acc_bac2, class_accuracies, class_accuracies_bac2, \
+        class_scene_accuracies, class_scene_accuracies_bac2, \
+        scene_accuracies, scene_accuracies_bac2, \
+        sens_spec_class_scene, sens_spec_class = \
+            acc_u.val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=self.ret)
+        self.class_accs.append(class_accuracies)
+        self.accs_bac2.append(final_acc_bac2)
+        self.class_accs_bac2.append(class_accuracies_bac2)
+        self.class_scene_accs.append(class_scene_accuracies)
+        self.class_scene_accs_bac2.append(class_scene_accuracies_bac2)
+        self.scene_accs.append(scene_accuracies)
+        self.scene_accs_bac2.append(scene_accuracies_bac2)
+        self.sens_spec_class.append(sens_spec_class)
+        self.accs.append(final_acc)
+        self.sens_spec_class_scene.append(sens_spec_class_scene)
+
+        acc_str = '{}_accuracy: {}'.format(self.prefix, final_acc)
+        acc_log_str = '{:<20}  {:<20}  {:<20}  {:<20}'.format(self.val_fold_str, self.epoch_str, '', acc_str)
+        print(acc_log_str)
+
+        self.e += 1
 
 class Phase:
 

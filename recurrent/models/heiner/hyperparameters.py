@@ -7,6 +7,7 @@ from heiner.utils import unique_dict
 import numpy as np
 import portalocker
 
+import heiner.pickle_dict_to_csv as pickle_dict_to_csv
 
 class H:
     def __init__(self, ID=-1, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=64, MAX_EPOCHS=50,
@@ -368,6 +369,7 @@ class HCombManager:
         handle.seek(0)
         handle.truncate()
         pickle.dump(hcomb_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle_dict_to_csv.write_to_csv_from_data(hcomb_list, self.filepath)
 
 class RandomSearch:
 
@@ -504,7 +506,9 @@ class RandomSearch:
             return
         if not path.exists(filepath):
             with open(filepath, 'wb') as handle:
-                pickle.dump(self._get_hcombs_to_run(number_of_hcombs), handle, protocol=pickle.HIGHEST_PROTOCOL)
+                hs_to_run = self._get_hcombs_to_run(number_of_hcombs)
+                pickle.dump(hs_to_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle_dict_to_csv.write_to_csv_from_data(hs_to_run, filepath)
         else:
             with open(filepath, 'rb') as handle:
                 hcombs_old = pickle.load(handle)
@@ -515,16 +519,20 @@ class RandomSearch:
                 hcombs_new = hcombs_old
             with open(filepath, 'wb') as handle:
                 pickle.dump(hcombs_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle_dict_to_csv.write_to_csv_from_data(hcombs_new, filepath)
 
-    def add_hcombs_to_run_via_id(self, ids, save_path, changes_dict=None):
+    def add_hcombs_to_run_via_id(self, ids, save_path, changes_dict=None, save_path_hcomb_list=None):
         if type(ids) is int:
             ids = [ids]
+
+        if save_path_hcomb_list is None:
+            save_path_hcomb_list = save_path
 
         pickle_name_to_run = 'hyperparameter_combinations_to_run.pickle'
         pickle_name_hcomb_list = 'hyperparameter_combinations.pickle'
 
         filepath_to_run = path.join(save_path, pickle_name_to_run)
-        filepath_hcomb_list = path.join(save_path, pickle_name_hcomb_list)
+        filepath_hcomb_list = path.join(save_path_hcomb_list, pickle_name_hcomb_list)
 
         with open(filepath_hcomb_list, 'rb') as handle:
             hcomb_list = pickle.load(handle)
@@ -539,6 +547,7 @@ class RandomSearch:
         if not path.exists(filepath_to_run):
             with open(filepath_to_run, 'wb') as handle:
                 pickle.dump(hs_to_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle_dict_to_csv.write_to_csv_from_data(hs_to_run, filepath_to_run)
         else:
             with open(filepath_to_run, 'rb') as handle:
                 hcombs_old = pickle.load(handle)
@@ -547,3 +556,4 @@ class RandomSearch:
                 hcombs_new = unique_dict(hcombs_new)
             with open(filepath_to_run, 'wb') as handle:
                 pickle.dump(hcombs_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle_dict_to_csv.write_to_csv_from_data(hcombs_new, filepath_to_run)

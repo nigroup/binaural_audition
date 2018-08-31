@@ -12,12 +12,15 @@ from heiner import use_tmux as use_tmux
 from heiner.my_tmuxprocess import TmuxProcess
 
 logger = logging.getLogger('exceptions_logger')
+
+
 # Configure logger to write to a file...
 
 def my_handler(type, value, tb):
     logger.exception("Uncaught exception: {0}".format(str(value)))
 
-def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, reset_hcombs, time_steps, model_name='LDNN_v1'):
+
+def run_final_experiment(tmux, available_gpus, id_to_test, epochs_to_train, model_name='LDNN_final', model_name_old='LDNN_v1'):
     use_tmux.set_use_tmux(tmux)
     gpu_str = ''
     if type(available_gpus) is str:
@@ -29,28 +32,30 @@ def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, r
 
     ################################################# RANDOM SEARCH SETUP
 
-    rs = hp.RandomSearch(metric_used=metric_used, STAGE=STAGE, time_steps=time_steps)
+    rs = hp.RandomSearch()
 
     ################################################# MODEL LOG AND CHECKPOINT SETUP DEPENDENT ON HYPERPARAMETERS
 
     save_path = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name)
+    save_path_hcomb_list = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name_old)
     os.makedirs(save_path, exist_ok=True)
 
-    rs.save_hcombs_to_run(save_path, number_of_hcombs)
+    rs.add_hcombs_to_run_via_id(id_to_test, save_path, save_path_hcomb_list=save_path_hcomb_list,
+                                changes_dict={'MAX_EPOCHS': epochs_to_train})
+
+    reset_hcombs = True
 
     if use_tmux.use_tmux:
 
         def intro():
-            intro = '''Running {} new hcombs.
+            intro = '''Final experiment for hcomb_{}.
             GPUs: {},
-            Metric used: {},
-            Stage: {},
             Start: {}
-            
+
             Skip a HComb by CTRL + C.
-            
+
             KILL THIS WINDOW ONLY IF YOU WANT TO END THE WHOLE EXPERIMENT!''' \
-                .format(str(number_of_hcombs), str(available_gpus), metric_used, str(STAGE), datetime.datetime.now().isoformat())
+                .format(str(id_to_test), str(available_gpus), datetime.datetime.now().isoformat())
             print(intro)
 
         p_intro = TmuxProcess(session_name=use_tmux.session_name, target=intro, name='dummy')
@@ -59,12 +64,11 @@ def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, r
         print("to interact with each process.")
         p_intro.start()
 
-
-        run_function = partial(run.run_gpu, save_path=save_path, reset_hcombs=reset_hcombs)
+        run_function = partial(run.run_gpu, save_path=save_path, reset_hcombs=reset_hcombs, final_experiment=True)
 
         for gpu in available_gpus:
-
-            p_gpu = TmuxProcess(session_name=use_tmux.session_name, target=run_function, mode='inout', args=(gpu), name='run_gpu_{}'.format(gpu))
+            p_gpu = TmuxProcess(session_name=use_tmux.session_name, target=run_function, mode='inout', args=(gpu),
+                                name='run_gpu_{}'.format(gpu))
             print('Run')
             print("  tmux attach -t {}".format(p_gpu.tmux_sess))
             print("to interact with each process.")
@@ -75,8 +79,9 @@ def run_experiment(tmux, STAGE, metric_used, available_gpus, number_of_hcombs, r
     else:
         if type(available_gpus) is list:
             available_gpus = available_gpus[0]
-        run.run_gpu(available_gpus, save_path, reset_hcombs)
+        run.run_gpu(available_gpus, save_path, reset_hcombs, final_experiment=True)
         sys.exit(0)
+
 
 if __name__ == "__main__":
     # Install exception handler
@@ -90,20 +95,6 @@ if __name__ == "__main__":
                         dest="tmux",
                         metavar="<use tmux>",
                         help="Tmux session will be automatically created for experiment.")
-    parser.add_argument('-s', '--stage',
-                        required=False,
-                        type=int,
-                        default=1,
-                        dest="STAGE",
-                        metavar="<random search stage>",
-                        help="Stage in random search")
-    parser.add_argument('-m', '--metric',
-                        required=False,
-                        type=str,
-                        default='BAC',
-                        dest="metric_used",
-                        metavar="<accuracy metric>",
-                        help="Metric to use in accuracy calculation.")
     parser.add_argument('-g', '--gpus',
                         nargs='+',
                         required=True,
@@ -112,28 +103,21 @@ if __name__ == "__main__":
                         dest="available_gpus",
                         metavar="<available gpus>",
                         help="GPUs for random search.")
-    parser.add_argument('-n', '--n_hcombs',
+    parser.add_argument('-id', '--id_to_test',
                         required=True,
                         type=int,
                         default=0,
-                        dest="number_of_hcombs",
-                        metavar="<number of hcombs>",
-                        help="Number of hcombs which will be added to hcombs_to_run. "
-                             "Experiment will first run the new ones.")
-    parser.add_argument('-r', '--reset_hcombs',
-                        required=False,
-                        type=bool,
-                        default=False,
-                        dest="reset_hcombs",
-                        metavar="<reset hcombs>",
-                        help="resets hcomb if not finished otherwise would resume. default: False (resume)")
-    parser.add_argument('-ts', '--time_steps',
-                        required=False,
+                        dest="id_to_test",
+                        metavar="<id to test>",
+                        help="The ID of the hcomb that will be trained on all train folds.")
+    parser.add_argument('-epochs', '--epochs_to_train',
+                        required=True,
                         type=int,
-                        default=1000,
-                        dest="time_steps",
-                        metavar="<time steps>",
-                        help="number of time steps for sequences.")
-    
+                        default=0,
+                        dest="epochs_to_train",
+                        metavar="<epochs to train>",
+                        help="Epochs to train the hcomb on.")
+
+
     args = parser.parse_args()
-    run_experiment(**vars(args))
+    run_final_experiment(**vars(args))

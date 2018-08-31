@@ -3,18 +3,21 @@
 import csv
 import sys
 import pickle
-from heiner.hyperparameters import H
+import heiner.hyperparameters as hyper
 
 def write_to_csv(file):
     with open(file, 'rb') as handle:
         d = pickle.load(handle)
+    write_to_csv_from_data(d, file)
+
+def write_to_csv_from_data(d, file):
     if not type(d) is list:
         d = [d]
     if not type(d[0]) is dict:
         d = [d_.__dict__ for d_ in d]
     keys = d[0].keys()
     if 'hyperparameter' in file:
-        h = H()
+        h = hyper.H()
         h = h.__dict__
         h_keys = h.keys()
         if set(keys) == set(h_keys):
