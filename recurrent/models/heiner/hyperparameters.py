@@ -77,16 +77,17 @@ class H:
         ################################################################################################################
 
         # Metrics
+        self.init_metrics_and_stats()
+
+    def init_metrics_and_stats(self):
         self.epochs_finished = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
 
         self.best_epochs = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
-
 
         self.val_acc = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
         self.best_val_acc = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
         self.best_val_acc_mean = -1
         self.best_val_acc_std = -1
-
 
         self.val_acc_bac2 = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
         self.best_val_acc_bac2 = [0] * len(self.ALL_FOLDS) if self.ALL_FOLDS != -1 else [0] * 6
@@ -112,10 +113,13 @@ class H:
         filepath = path.join(model_dir, 'hyperparameters.pickle')
         with open(filepath, 'rb') as handle:
             attr_val_dict = pickle.load(handle)
-            for attr, val in attr_val_dict.items():
-                self.__setattr__(attr, val)
+            self.from_dict(attr_val_dict)
         # attr_val_df = pd.DataFrame.from_csv(filepath)
         # attr_val_dict = attr_val_df.to_dict(orient='index')
+
+    def from_dict(self, h_dict):
+        for attr, val in h_dict.items():
+            self.__setattr__(attr, val)
 
     @property
     def VAL_FOLDS(self):
@@ -189,6 +193,10 @@ class HCombManager:
                 already_contained = True
             else:
                 h['ID'] = len(hcomb_list)
+                new_h = H()
+                new_h.from_dict(h)
+                new_h.init_metrics_and_stats()
+                h = new_h.__dict__
                 hcomb_list.append(h)
                 index = hcomb_list.index(h)
                 already_contained = False
