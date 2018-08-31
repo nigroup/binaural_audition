@@ -133,7 +133,7 @@ class SceneInstanceBuffer:
 # => avg host mem required per buffered scene instance: (160+13) * 4,000 * 4 Byte < 2.8 MB
 # => a value of params['sceneinstancebufsize']=1000 implies up to 2.8 GB host mem occupancy
 class BatchLoader(HeinerDataloader):
-    def __init__(self, params, mode, fold_nbs, scene_nbs, batchsize, seed=None):
+    def __init__(self, params, mode, fold_nbs, scene_nbs, batchsize, seed=1):
         label_mode = 'instant' if params['instantlabels'] else 'blockbased'
         # initializing super constructor with values from above or with their defaults (copied from super init)
         super().__init__(mode=mode, label_mode=label_mode,
@@ -364,9 +364,8 @@ class BatchLoader(HeinerDataloader):
 
         # set new seed [only applicable in training mode, valid and test scene instances are always processed in order]
         if self.mode == 'train':
-            # set new seed if wished (for reproducible results)
-            if self.seed is not None:
-                random.seed(self.seed * (self.epoch+1)) # to have new seed per epoch (also for validation set)
+            # set new seed (control self.seed for reproducible results)
+            random.seed(self.seed * (self.epoch+1)) # to have new seed per epoch (also for validation set)
 
             # shuffle filenames (not required for valid/test sets)
             random.shuffle(self.filenames)

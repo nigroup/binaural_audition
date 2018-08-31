@@ -25,7 +25,6 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     best_epochidx = np.argmax(results['val_wbac'])
     best_bac2_epochidx = np.argmax(results['val_wbac2'])
     if 'earlystop_best_epochidx' in results:
-        print('enable following assertion again!!!!!!!') # TODO enable again!
         # ensure that best epoch by earlystopping is the best epoch by simply maximizing validation wbac
         assert best_epochidx == results['earlystop_best_epochidx']
 
@@ -142,7 +141,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
                   * 100.
     plt.ylim(min_acc, max_acc)
     plt.ylabel('accuracy (%)', fontsize=mediumfontsize)
-    plt.legend(fontsize=mediumfontsize, loc='upper left')
+    plt.legend(fontsize=mediumfontsize, loc='best')
     plt.grid()
     plt.xlim(0, epochs[-1])
     plt.xticks(epochs)
@@ -236,7 +235,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     if not datalimits:
         plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
     plt.ylabel('class bac (%)', fontsize=mediumfontsize)
-    plt.legend(fontsize=smallfontsize, ncol=4, loc='upper left')
+    plt.legend(fontsize=smallfontsize, ncol=4, loc='best')
     plt.grid()
     plt.xlim(epochs[0], epochs[-1])
     plt.xticks(epochs)
@@ -258,7 +257,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     if not datalimits:
         plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
     plt.ylabel('class bac2 (%)', fontsize=mediumfontsize)
-    plt.legend(fontsize=smallfontsize, ncol=4, loc='upper left').set_zorder(3)
+    plt.legend(fontsize=smallfontsize, ncol=4, loc='best').set_zorder(3)
     plt.grid()
     plt.xlim(epochs[0], epochs[-1])
     plt.xticks(epochs)
@@ -285,7 +284,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     if not datalimits:
         plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
     plt.ylabel('class sens/spec (%)', fontsize=mediumfontsize)
-    plt.legend(fontsize=smallfontsize, ncol=4, loc='upper left')
+    plt.legend(fontsize=smallfontsize, ncol=4, loc='best')
     plt.grid()
     plt.xlim(epochs[0], epochs[-1])
     plt.xticks(epochs)

@@ -328,7 +328,8 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                 if callback_model.stop_training:
                     break
 
-            trainmetrics_thread.join()
+            if multithreading_metrics:
+                trainmetrics_thread.join()
 
             callbacks.on_epoch_end(epoch, epoch_logs)
             epoch += 1
@@ -343,7 +344,8 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
             if val_enqueuer is not None:
                 val_enqueuer.stop()
 
-        trainmetrics_thread.join() # joined again (harmless)
+        if multithreading_metrics:
+            trainmetrics_thread.join() # joined again (harmless)
 
     callbacks.on_train_end()
     return model.history
@@ -491,6 +493,7 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
         if enqueuer is not None:
             enqueuer.stop()
 
-        validmetrics_thread.join()
+        if multithreading_metrics:
+            validmetrics_thread.join()
 
     return np.average(np.array(model.val_loss_batch)) # for test phase: simply use the model.scene_instance_id_metrics_dict_test after execution

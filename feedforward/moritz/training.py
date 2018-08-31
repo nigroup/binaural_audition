@@ -3,6 +3,7 @@ import sys
 import argparse
 import socket
 import time
+import random
 import matplotlib
 matplotlib.use('Agg')
 
@@ -87,9 +88,9 @@ parser.add_argument('--outputthreshold', type=float, default=0.5,
 
 parser.add_argument('--weightnorm', action='store_true', default=False,
                         help='disables the weight norm version of the Adam optimizer, i.e., falls back to regular Adam')
-parser.add_argument('--learningrate', type=float, default=0.002,
+parser.add_argument('--learningrate', type=float, default=0.001, #0.002
                         help='initial learning rate of the Adam optimizer')
-parser.add_argument('--batchsize', type=int, default=256, #128 # note that batchsize should be proportionally increased to learning rate
+parser.add_argument('--batchsize', type=int, default=128, #128 # note that batchsize should be proportionally increased to learning rate
                         help='number of time series per batch (should be power of two for efficiency)')
 parser.add_argument('--batchlength', type=int, default=2500, # 2500 batchlength corresponds to 75% of all scene instances to fit into two batches (with a hist size up to 1200 determining the necessary overlap)
                         help='length of the time series per batch (should be significantly larger than history size '+
@@ -109,7 +110,7 @@ parser.add_argument('--nocalcgradientnorm', action='store_true', default=False,
 
 parser.add_argument('--firstsceneonly', action='store_true', default=False,
                         help='if chosen: only the first scene is used for training/validation, otherwise all (80)')
-parser.add_argument('--seed', type=int, default=1,
+parser.add_argument('--seed', type=int, default=-1,
                         help='if -1: no fixed seed is used, otherwise the value is the seed (multiplied by epochs)')
 parser.add_argument('--instantlabels', action='store_true', default=False,
                         help='if chosen: instant labels; otherwise: block-interprete labels')
@@ -248,7 +249,7 @@ print('trainfolds: {}, validfold: {}'.format(params['trainfolds'], params['valid
 
 batchloader_training = BatchLoader(params=params, mode='train', fold_nbs=params['trainfolds'],
                                    scene_nbs=params['scenes_trainvalid'], batchsize=params['batchsize'],
-                                   seed=params['seed'] if params['seed']!=-1 else None) # seed for testing
+                                   seed=params['seed'] if params['seed']!=-1 else random.randint(1,1000)) # seed for testing
 
 if params['validfold'] == -1:
     batchloader_validation = None
@@ -379,6 +380,8 @@ plotresults(results, params)
 # TODO: experiment before hyper search: classifier value 0.5 vs optimized (valid set/cv or via simply train set because is training?)
 
 # TODO: go through use cases and check for script's feature completeness (go through cmd line arguments again to add initial experiments)
+
+# TODO: check that class weights are correct since I currently have large sens / spec difference for some classes!
 
 ## USE CASES:
 
