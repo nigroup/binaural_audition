@@ -172,7 +172,7 @@ def get_scene_weights(mode):
                                 10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
         weights = weights / np.sum(weights)
         # TODO deactivate again
-        weights = np.ones(80) / 2
+        # weights = np.ones(80) / 2
     else:
         weights = 1 / np.array([3, 3, 3, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50,
                                 55, 60, 50, 55, 60, 50, 55, 60, 60, 50, 55, 60, 50, 55, 60, 50, 55,
@@ -316,8 +316,8 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
 
                 # test per scene -> passes
 
-                # p_y = np.where(b_y[:, :, :, 1] // 1e6 == 11, np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape)), p_y)
-                # p_y = np.where(b_y[:, :, :, 1] // 1e6 == 12, np.abs(p_y - np.random.choice([0, 1], p_y.shape)), p_y)
+                # p_y = np.where(b_y[:, :, :, 1] // 1e6 == 1, np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape)), p_y)
+                # p_y = np.where(b_y[:, :, :, 1] // 1e6 == 2, np.abs(p_y - np.random.choice([0, 1], p_y.shape)), p_y)
                 #
                 p_y[pad] = mask_val
             else:
