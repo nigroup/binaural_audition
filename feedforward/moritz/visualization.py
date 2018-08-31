@@ -7,10 +7,12 @@ import matplotlib.pyplot as plt
 from myutils import load_h5
 from constants import *
 
-def plotresults(results, params):
+def plotresults(results, params, datalimits=False, firstsceneonly=False):
 
-    # TODO: include in each axis respectively plotting best epoch so-far [max. wBAC]
-    # TODO: put name in title and current total runtime
+    if firstsceneonly:
+        for acc in ['wbac', 'wbac_per_class', 'sens_spec_per_class', 'wbac2', 'wbac2_per_class']:
+            results['val_' + acc] *= 21.
+            results['train_' + acc] *= 21.
 
     if params['validfold'] != -1:
        pass # plot only when exists
@@ -64,7 +66,7 @@ def plotresults(results, params):
             plt.plot([x_epoch_right, x_epoch_right+deltaepoch_train],
                      [results['train_loss_batch'][epidx, -1],
                       results['train_loss_batch'][epidx+1, 0]], color='lightgray', alpha=0.5, zorder=0)
-    plt.plot(epochs, results['train_loss'], color=traingray, marker='o', label='train_loss ({:.2f})'.format(results['train_loss'].min()))
+    plt.plot(epochs, results['train_loss'], color=traingray, marker='o', label='train_loss ({:.3f})'.format(results['train_loss'].min()))
     # std dev across batches
     stddev_train = np.std(results['train_loss_batch'], axis=1)
     plt.plot(epochs, results['train_loss']+stddev_train, color='dimgray', linestyle='dashed', alpha=0.7, label='stddev', zorder=1)
@@ -84,18 +86,17 @@ def plotresults(results, params):
             plt.plot([x_epoch_right, x_epoch_right+deltaepoch_valid],
                      [results['val_loss_batch'][epidx, -1],
                       results['val_loss_batch'][epidx+1, 0]], color='lightblue', alpha=0.4, zorder=0)
-    plt.plot(epochs, results['val_loss'], color='blue', marker='o', label='val_loss ({:.2f})'.format(results['val_loss'].min()))# std dev across batches
+    plt.plot(epochs, results['val_loss'], color='blue', marker='o', label='val_loss ({:.3f})'.format(results['val_loss'].min()))# std dev across batches
     stddev_valid = np.std(results['val_loss_batch'], axis=1)
     plt.plot(epochs, results['val_loss']+stddev_valid, color='blue', linestyle='dashed', alpha=0.7, zorder=1)
     plt.plot(epochs, results['val_loss']-stddev_valid, color='blue', linestyle='dashed', alpha=0.7, zorder=1)
 
-    # # get min/max losses if they are more extrem than above values
-    # min_loss = min(min_loss,
-    #                np.min(results['train_loss_batch']),
-    #                np.min(results['val_loss_batch']))
-    # max_loss = max(max_loss,
-    #                np.max(results['train_loss_batch']),
-    #                np.max(results['val_loss_batch']))
+    if datalimits:
+        # get min/max losses if they are more extrem than above values
+        min_loss = min(np.min(results['train_loss']),
+                       np.min(results['val_loss']))
+        max_loss = max(np.max(results['train_loss']),
+                       np.max(results['val_loss']))
 
     # axis config
     plt.grid()
@@ -103,7 +104,8 @@ def plotresults(results, params):
     plt.ylim(min_loss, max_loss)
     plt.ylabel('loss', fontsize=mediumfontsize)
     plt.xticks(epochs)
-    plt.yticks(np.linspace(min_loss, max_loss, int(round((max_loss-min_loss)/dloss))+1))
+    if not datalimits:
+        plt.yticks(np.linspace(min_loss, max_loss, int(round((max_loss-min_loss)/dloss))+1))
     plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
     plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
     plt.tick_params(axis='y', which='both', labelleft='on', labelright='on')
@@ -117,28 +119,34 @@ def plotresults(results, params):
     dacc = 2.
 
     # wbac training (class-averaged)
-    plt.plot(epochs, results['train_wbac']*100., color=traingray, marker='o', label='train_wbac ({:.1f})'.format(results['train_wbac'].max()*100.))
-    # wbac validation (class-averaged)
-    plt.plot(epochs, results['val_wbac']*100., color='blue', marker='o', label='val_wbac ({:.1f})'.format(results['val_wbac'].max()*100.))
+    plt.plot(epochs, results['train_wbac']*100., color=traingray, marker='o', label='train_wbac ({:.2f}%)'.format(results['train_wbac'].max()*100.))
     # wbac2 validation (class-averaged)
-    plt.plot(epochs, results['val_wbac2']*100., color='brown', marker='o', label='val_wbac2 ({:.1f})'.format(results['val_wbac2'].max()*100.))
+    plt.plot(epochs, results['val_wbac2']*100., color='brown', marker='o', label='val_wbac2 ({:.2f}%)'.format(results['val_wbac2'].max()*100.))
+    # wbac validation (class-averaged)
+    plt.plot(epochs, results['val_wbac']*100., color='blue', marker='o', label='val_wbac ({:.2f}%)'.format(results['val_wbac'].max()*100.))
 
     # axis config
-    # min_acc = min(min_acc,
-    #               np.min(results['train_wbac']),
-    #               np.min(results['val_wbac']),
-    #               np.min(results['val_wbac2']))
-    # max_acc = max(max_acc,
-    #               np.max(results['train_wbac']),
-    #               np.max(results['val_wbac']),
-    #               np.max(results['val_wbac2']))
+    if datalimits:
+        min_acc = min(np.min(results['train_wbac']),
+                      np.min(results['val_wbac']),
+                      np.min(results['val_wbac2']),
+                      np.min(results['train_sens_spec_per_class']),
+                      np.min(results['val_sens_spec_per_class'])) \
+                  * 100.
+        max_acc = max(np.max(results['train_wbac']),
+                      np.max(results['val_wbac']),
+                      np.max(results['val_wbac2']),
+                      np.max(results['train_sens_spec_per_class']),
+                      np.max(results['val_sens_spec_per_class'])) \
+                  * 100.
     plt.ylim(min_acc, max_acc)
-    plt.ylabel('accuracy', fontsize=mediumfontsize)
+    plt.ylabel('accuracy (%)', fontsize=mediumfontsize)
     plt.legend(fontsize=mediumfontsize, loc='upper left')
     plt.grid()
     plt.xlim(0, epochs[-1])
     plt.xticks(epochs)
-    plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
+    if not datalimits:
+        plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
     plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
     plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
     plt.tick_params(axis='y', which='both', labelleft='on', labelright='on')
@@ -157,6 +165,10 @@ def plotresults(results, params):
         gradnorm_min = 0.
         gradnorm_max = 1.6
 
+        if datalimits:
+            gradnorm_min = np.min(results['gradientnorm'])
+            gradnorm_max = np.max(results['gradientnorm'])
+
         # training loss
         no_batches_grad = results['gradientnorm_batch'].shape[1]
         deltaepoch_grad = 1. / no_batches_grad  # taking into account batch transitions
@@ -173,6 +185,9 @@ def plotresults(results, params):
         plt.plot(epochs, results['gradientnorm'], color=traingray, marker='o', label='gradientnorm')
         plt.plot(epochs, np.ones_like(epochs)*params['gradientclip'], color='green', linestyle='dashed',
                  label='clip value')
+        stddev_grad = np.std(results['gradientnorm_batch'], axis=1)
+        plt.plot(epochs, results['gradientnorm']+stddev_grad, color='dimgray', linestyle='dashed', alpha=0.7, zorder=1)
+        plt.plot(epochs, results['gradientnorm']-stddev_grad, color='dimgray', linestyle='dashed', alpha=0.7, zorder=1)
 
         # axis config
         plt.grid()
@@ -191,6 +206,19 @@ def plotresults(results, params):
 
     plt.figure(figsize=figsize)
     min_acc = 40.
+    if datalimits:
+        min_acc = min(np.min(results['train_wbac']),
+                      np.min(results['val_wbac']),
+                      np.min(results['val_wbac2']),
+                      np.min(results['train_sens_spec_per_class']),
+                      np.min(results['val_sens_spec_per_class'])) \
+                  * 100.
+        max_acc = max(np.max(results['train_wbac']),
+                      np.max(results['val_wbac']),
+                      np.max(results['val_wbac2']),
+                      np.max(results['train_sens_spec_per_class']),
+                      np.max(results['val_sens_spec_per_class'])) \
+                  * 100.
     dacc = 3.
     plt.suptitle('per class metrics of '+params['name'], fontsize=mediumfontsize)
 
@@ -204,8 +232,9 @@ def plotresults(results, params):
 
     # axis config
     plt.ylim(min_acc, max_acc)
-    plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
-    plt.ylabel('class bac', fontsize=mediumfontsize)
+    if not datalimits:
+        plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
+    plt.ylabel('class bac (%)', fontsize=mediumfontsize)
     plt.legend(fontsize=smallfontsize, ncol=4, loc='upper left')
     plt.grid()
     plt.xlim(epochs[0], epochs[-1])
@@ -225,8 +254,9 @@ def plotresults(results, params):
 
     # axis config
     plt.ylim(min_acc, max_acc)
-    plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
-    plt.ylabel('class bac2', fontsize=mediumfontsize)
+    if not datalimits:
+        plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
+    plt.ylabel('class bac2 (%)', fontsize=mediumfontsize)
     plt.legend(fontsize=smallfontsize, ncol=4, loc='upper left').set_zorder(3)
     plt.grid()
     plt.xlim(epochs[0], epochs[-1])
@@ -251,8 +281,9 @@ def plotresults(results, params):
 
     # axis config
     plt.ylim(min_acc, max_acc)
-    plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
-    plt.ylabel('class sens/spec', fontsize=mediumfontsize)
+    if not datalimits:
+        plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
+    plt.ylabel('class sens/spec (%)', fontsize=mediumfontsize)
     plt.legend(fontsize=smallfontsize, ncol=4, loc='upper left')
     plt.grid()
     plt.xlim(epochs[0], epochs[-1])
@@ -267,7 +298,7 @@ def plotresults(results, params):
     # bac per class and scene
     # TODO do after runs already started
 
-def plot_train_experiment(folder):
+def plot_train_experiment(folder, datalimits, firstsceneonly):
     params = load_h5(os.path.join(folder, 'params.h5'))
     results = load_h5(os.path.join(folder, 'results.h5'))
 
@@ -279,7 +310,7 @@ def plot_train_experiment(folder):
     #     results['earlystop_best_epochidx'] = results['epoch_best']
 
     # do actual plotting
-    plotresults(results, params)
+    plotresults(results, params, datalimits, firstsceneonly)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -287,7 +318,14 @@ if __name__ == '__main__':
                         help='folder in which the params and results reside and into which we should (over)write the plots')
     parser.add_argument('--folder', type=str,
                         help='folder in which the params and results reside and into which we should (over)write the plots')
+    parser.add_argument('--datalimits', action='store_true', default=False,
+                        help='whether to use limits that are specific to the data of the current results'+
+                             ' (i.e., axes not comparable to other experiments)')
+    parser.add_argument('--firstsceneonly', action='store_true', default=False,
+                        help='whether to scale the accuracies with 21. to undo wrong normalization in this (debug) case')
     args = parser.parse_args()
 
     if args.mode == 'trainplot' and args.folder:
-        plot_train_experiment(args.folder)
+        plot_train_experiment(folder=args.folder,
+                              datalimits=args.datalimits,
+                              firstsceneonly=args.firstsceneonly)

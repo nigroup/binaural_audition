@@ -36,9 +36,9 @@ override_params = {}
 # override_params['batchlength'] = 1000
 # override_params['noinputstandardization'] = True
 # override_params['sceneinstancebufsize'] = 300
-# override_params['maxepochs'] = 9 #5
-# override_params['resume'] = 'playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es-1_vf3'
-# override_params['earlystop'] = -1
+# override_params['maxepochs'] = 25
+# override_params['resume'] = 'playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es3_vf3'
+# override_params['earlystop'] = 3
 # override_params['weightnorm'] = False
 
 # the following for allow groth => as long as we develop
@@ -63,7 +63,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--path', type=str, default='playground',
                         help='folder where to store the files (log, model, hyperparams, results incl. duration)')
 parser.add_argument('--resume', type=str, default='negative',
-                        help='will resume the model from its last epoch')
+                        help='will resume the model from its last epoch, '+
+                             'e.g., --resume=playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es-1_vf3')
 parser.add_argument('--gpuid', type=int, default=0, help='ID (cf. nvidia-smi) of the GPU to use')
 parser.add_argument('--hyper', type=str, default='manual',
                         help='random_coarse or random_fine: hyperparam samples (overrides manually specified params!); '+
@@ -162,6 +163,18 @@ elif 'final' in params['path']:
 else:
     params['name'] = name_long
 
+# loading params from file except for maxepochs
+if params['resume'] != 'negative':
+    resume_path, resume_name = os.path.split(params['resume'])
+    resumed_params = load_h5(os.path.join(resume_path, resume_name, 'params.h5'))
+    print('overriding params incl. name from resumed folder {}'.format(params['resume']))
+    del resumed_params['maxepochs'] # only use maxepochs and gpuid from cmdline or default
+    del resumed_params['gpuid']
+    resume_save = params['resume']
+    params.update(resumed_params)
+    params['resume'] = resume_save
+    params['path'] = resume_path
+    params['name'] = resume_name
 # create directory for experiment
 os.makedirs(os.path.join(params['path'], params['name']), exist_ok=True)
 
@@ -216,7 +229,20 @@ if params['firstsceneonly']:
 else:
     params['scenes_trainvalid'] = list(range(1, NUMBER_SCENES_TRAINING_VALIDATION+1))
 
+
 params.update(override_params)
+
+# resume params addon (since in between some params were added that we need to appropriately overwrite)
+if params['resume'] != 'negative':
+    resume_save = params['resume']
+    params.update(resumed_params)
+    params['resume'] = resume_save
+    params['path'] = resume_path
+    params['name'] = resume_name
+    # transform to expected format
+    params['trainfolds'] = list(params['trainfolds'])
+    params['scenes_trainvalid'] = list(params['scenes_trainvalid'])
+    params['kernelsize'] = list(params['trainfolds'])
 
 print('trainfolds: {}, validfold: {}'.format(params['trainfolds'], params['validfold']))
 
@@ -269,8 +295,6 @@ if params['resume'] == 'negative':
                   loss=masked_weighted_crossentropy_loss, metrics=None)
     init_epoch = 0
 
-    # params saved here already because if a late epoch's process is killed we have at least all results and params up to the epoch before
-    save_h5(params, os.path.join(params['path'], params['name'], 'params.h5'))
 else:
     model = keras.models.load_model(os.path.join(params['path'], params['name'],'model.h5'),
                                     custom_objects={'AdamWithWeightnorm': AdamWithWeightnorm,
@@ -281,6 +305,8 @@ else:
     init_epoch = len(oldresults['val_wbac']) # resume directly after the last completed epoch
 model.summary()
 
+# params saved here already because if a late epoch's process is killed we have at least all results and params up to the epoch before
+save_h5(params, os.path.join(params['path'], params['name'], 'params.h5'))
 
 print()
 print('STARTING TRAINING')
