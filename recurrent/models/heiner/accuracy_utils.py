@@ -18,9 +18,11 @@ def train_accuracy(scene_instance_id_metrics_dict, metric='BAC'):
     scene_number_class_accuracies, sens_class_scene, spec_class_scene = \
         calculate_class_accuracies_per_scene_number(scene_instance_id_metrics_dict, mode, metric=metric)
     del scene_instance_id_metrics_dict
-    class_accuracies = calculate_class_accuracies_weighted_average(scene_number_class_accuracies, mode)
+    sens_spec_class_scene = np.stack((sens_class_scene, spec_class_scene), axis=2)
+    sens_spec_class = calculate_sens_spec_per_class(sens_spec_class_scene, mode)
+    class_accuracies = calculate_class_accuracies_weighted_average(sens_spec_class)
     del scene_number_class_accuracies
-    return calculate_accuracy_final(class_accuracies), np.stack((sens_class_scene, spec_class_scene), axis=2)
+    return calculate_accuracy_final(class_accuracies), sens_spec_class_scene
 
 
 def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_scene')):
@@ -39,9 +41,9 @@ def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('f
     sens_spec_class_scene = np.stack((sens_class_scene, spec_class_scene), axis=2)
     sens_spec_class = calculate_sens_spec_per_class(sens_spec_class_scene, mode)
     ret_dict['per_class_scene'] = scene_number_class_accuracies
-    ret_dict['per_scene'] = calculate_accuracy_per_scene(scene_number_class_accuracies)
+    ret_dict['per_scene'] = calculate_accuracy_per_scene(sens_class_scene, spec_class_scene, metric=metric)
 
-    class_accuracies = calculate_class_accuracies_weighted_average(scene_number_class_accuracies, mode)
+    class_accuracies = calculate_class_accuracies_weighted_average(sens_spec_class, metric=metric)
     ret_dict['per_class'] = class_accuracies
 
     ret_dict['final'] = calculate_accuracy_final(class_accuracies)
@@ -170,7 +172,7 @@ def get_scene_weights(mode):
                                 10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
         weights = weights / np.sum(weights)
         # TODO deactivate again
-        # weights = np.ones(80) / 2
+        weights = np.ones(80) / 2
     else:
         weights = 1 / np.array([3, 3, 3, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50,
                                 55, 60, 50, 55, 60, 50, 55, 60, 60, 50, 55, 60, 50, 55, 60, 50, 55,
@@ -187,14 +189,16 @@ def get_scene_weights(mode):
     return weights
 
 
-def calculate_class_accuracies_weighted_average(scene_number_class_accuracies, mode):
-    weights = get_scene_weights(mode)
-
-    if not type(scene_number_class_accuracies) is tuple:
-        scene_number_class_accuracies = (scene_number_class_accuracies,)
+def calculate_class_accuracies_weighted_average(sens_spec_class, metric='BAC'):
     class_accuracies = []
-    for scene_number_class_accuracies_i in scene_number_class_accuracies:
-        class_accuracies.append(np.sum(scene_number_class_accuracies_i * weights, axis=0))
+
+    if 'BAC' in metric:
+        accuracy_per_class = 0.5 * (sens_spec_class[:, 0] + sens_spec_class[:, 1])
+        class_accuracies.append(accuracy_per_class)
+    if 'BAC2' in metric:
+        accuracy_per_class = 1 - (((1 - sens_spec_class[:, 0])**2 + (1 - sens_spec_class[:, 1])**2) / 2)**0.5
+        class_accuracies.append(accuracy_per_class)
+
     if len(class_accuracies) == 1:
         return class_accuracies[0]
     else:
@@ -208,12 +212,18 @@ def calculate_sens_spec_per_class(sens_spec_class_scene, mode):
     sens_spec_class = np.sum(sens_spec_class, axis=0)
     return sens_spec_class
 
-def calculate_accuracy_per_scene(scene_number_class_accuracies):
-    if not type(scene_number_class_accuracies) is tuple:
-        scene_number_class_accuracies = (scene_number_class_accuracies,)
+def calculate_accuracy_per_scene(sens_class_scene, spec_class_scene, metric='BAC'):
     final_scene_number_accuracies = []
-    for scene_number_class_accuracies_i in scene_number_class_accuracies:
-        final_scene_number_accuracies.append(np.mean(scene_number_class_accuracies_i, axis=1))
+
+    if 'BAC' in metric:
+        accuracy_per_scene = np.mean(0.5 * (sens_class_scene + spec_class_scene),
+                                     axis=1)
+        final_scene_number_accuracies.append(accuracy_per_scene)
+    if 'BAC2' in metric:
+        accuracy_per_scene = np.mean(1 - (((1 - sens_class_scene)**2 + (1 - spec_class_scene)**2) / 2)**0.5,
+                                     axis=1)
+        final_scene_number_accuracies.append(accuracy_per_scene)
+
     if len(final_scene_number_accuracies) == 1:
         return final_scene_number_accuracies[0]
     else:
