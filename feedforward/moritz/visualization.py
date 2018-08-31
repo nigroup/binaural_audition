@@ -10,6 +10,7 @@ from constants import *
 def plotresults(results, params, datalimits=False, firstsceneonly=False):
 
     if firstsceneonly:
+        # for debugging purposes we use the first scene only but the scene-weights of 1/21. need to be undone
         for acc in ['wbac', 'wbac_per_class', 'sens_spec_per_class', 'wbac2', 'wbac2_per_class']:
             results['val_' + acc] *= 21.
             results['train_' + acc] *= 21.
@@ -315,7 +316,7 @@ def plot_train_experiment(folder, datalimits, firstsceneonly):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str, default='trainplot',
-                        help='folder in which the params and results reside and into which we should (over)write the plots')
+                        help='currently only \'trainplot\' is supported')
     parser.add_argument('--folder', type=str,
                         help='folder in which the params and results reside and into which we should (over)write the plots')
     parser.add_argument('--datalimits', action='store_true', default=False,

@@ -32,12 +32,12 @@ override_params = {}
 # override_params['featuremaps'] = 10
 # override_params['scenes_trainvalid'] = [1]
 # override_params['trainfolds'] = [1]
-# override_params['historylength'] = 50
-# override_params['batchlength'] = 1000
+# override_params['historylength'] = 1000
+# override_params['batchlength'] = 2800
 # override_params['noinputstandardization'] = True
-# override_params['sceneinstancebufsize'] = 300
-# override_params['maxepochs'] = 25
-# override_params['resume'] = 'playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es3_vf3'
+# override_params['sceneinstancebufsize'] = 500
+# override_params['maxepochs'] = 5
+# #override_params['resume'] = 'playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es3_vf3'
 # override_params['earlystop'] = 3
 # override_params['weightnorm'] = False
 
