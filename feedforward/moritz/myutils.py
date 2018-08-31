@@ -1,6 +1,18 @@
 import h5py
 import sys
 from heiner.accuracy_utils import val_accuracy as heiner_val_accuracy
+from heiner.accuracy_utils import calculate_class_accuracies_metrics_per_scene_instance_in_batch as heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch
+
+def metrics_per_batch_thread_handler(condition, scene_instance_id_metrics_dict, label_dict, mask_value):
+    # the following two dictionary elements are set outside after *_and_predict_on_batch calls
+    # assumption: the arrays do not change in the meantime
+    y_pred = label_dict['y_pred']
+    y = label_dict['y']
+    with condition:
+        condition.wait() # continue after receiving a notify() call from *_generator function in main thread
+        heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
+                                                                              y_pred, y, mask_value)
+
 
 def calculate_metrics(scene_instance_id_metrics_dict):
 

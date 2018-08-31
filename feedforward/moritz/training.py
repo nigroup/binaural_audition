@@ -341,6 +341,7 @@ callbacks.append(modelcheckpoint)
 fit_and_predict_generator_with_sceneinst_metrics(model,
                                                  generator=batchloader_training,
                                                  params=params,
+                                                 multithreading_metrics=False,
                                                  epochs=params['maxepochs'],
                                                  steps_per_epoch=params['train_batches_per_epoch'],
                                                  callbacks=callbacks,
@@ -364,7 +365,7 @@ if params['earlystop'] != -1:
         printerror('early stopping could not be applied with patience {}, maxepochs {} was seemingly too small'.format(params['earlystop'], params['maxepochs']))
     else:
         results['earlystop_best_epochidx'] = earlystopping.stopped_epoch - params['earlystop']
-        print('the best epoch was epoch {} (as of nonimproving for {} epochs)'.format(results['epoch_best']+1, params['earlystop']))
+        print('the best epoch was epoch {} (as of nonimproving for {} epochs)'.format(results['earlystop_best_epochidx']+1, params['earlystop']))
 
 save_h5(results, os.path.join(params['path'], params['name'], 'results.h5'))
 
