@@ -295,29 +295,23 @@ def get_sub_scenes_weight(path_list):
     neg = [x / total for x in count_neg]
     return [y / x for x, y in zip(pos, neg)]
 
-def cal_class_acc(four_list,weight):
-    # cauculate BAC1 and BAC2 for each class and each scene
-    # four_list is a 52-dimension vector
-    classes_performance_bac1 = []
-    classes_performance_bac2 = []
+def cal_class_sens_spes(four_list,weight):
     class_sens_spes = []
     for i in range(13):
         start = i * 4
         TP = four_list[start]
-        TN = four_list[start+1]
-        FP = four_list[start+2]
-        FN = four_list[start+3]
+        TN = four_list[start + 1]
+        FP = four_list[start + 2]
+        FN = four_list[start + 3]
         sensiticity = TP / (TP + FN)
         specificity = TN / (TN + FP)
-        classes_performance_bac1.append((sensiticity+specificity)/2)
-        bac2 = 1 - (((1-sensiticity)**2 + (1-specificity)**2)/2)**0.5
-        classes_performance_bac2.append(bac2)
         class_sens_spes.append((sensiticity, specificity))
-    bac1 = np.array(classes_performance_bac1)*weight
-    bac2 = np.array(classes_performance_bac2)*weight
-    class_sens_spes = np.array(class_sens_spes) * weight
-    return bac1,bac2,class_sens_spes
+
+    X = np.array(class_sens_spes)
+    Y = np.array(class_sens_spes) * weight
+    return X, Y
 def get_bac(df):
+    ####################### init nsrc weights
     w = 1 / np.array([21, 10, 29, 21, 29, 21, 21, 10, 20, 20, 29, 21, 29, 29, 21, 21, 10,
                       20, 21, 29, 20, 20, 29, 29, 21, 20, 29, 29, 20, 21, 21, 29, 10, 10,
                       29, 21, 21, 29, 29, 29, 21, 21, 29, 10, 20, 29, 29, 20, 20, 20, 29,
@@ -325,22 +319,43 @@ def get_bac(df):
                       10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
     w = w / np.sum(w)
 
-    bac1 = np.array([]).reshape(0, 13)
-    bac2 = np.array([]).reshape(0, 13)
-    class_sens_spes = []
-    df = df.groupby('sceneID').mean()
+    ####################### load dataframe
+    X, Y, Z, Q = [], [], [], []
+    df = df.groupby('sceneID').mean() #average TPs,...,FNs over scene instances -> 80 * 52
+
+    ####################### calculation
     for row in df.iterrows():
         sceneid = int(row[0].replace('scene', ''))
         weight = w[sceneid - 1]
         temp = np.array(row[1].tolist())
-        bac_one,bac_two,sens_spes  = cal_class_acc(temp, weight)
-        bac1 = np.append(bac1, bac_one.reshape(1, 13), axis=0)
-        bac2 = np.append(bac2, bac_two.reshape(1, 13), axis=0)
-        class_sens_spes.append(sens_spes)
-    final_bac1 = bac1.sum(axis=0).mean(axis=0)
-    final_bac2 = bac2.sum(axis=0).mean(axis=0)
-    class_sens_spes = np.array(class_sens_spes).sum(axis=0)
-    return final_bac1,final_bac2,class_sens_spes.tolist()
+        X_t, Y_t = cal_class_sens_spes(temp, weight)
+        X.append(X_t)
+        Y.append(Y_t)
+
+    Y = np.array(Y).sum(axis=0)
+    Z = np.array(X).mean(axis=1)
+    Q = np.array(Y).mean(axis=0)
+
+    W = (np.array(X)[:, :, 0] + np.array(X)[:, :, 1]) / 2
+    BAC1_PER_SCENE = (np.array(Z)[:, 0] + np.array(Z)[:, 1]) / 2
+    V = (np.array(Y)[:, 0] + np.array(Y)[:, 1]) / 2
+    BAC1_CLASS_AVERAGE = V.mean(axis=0)
+
+    bac2_per_class = 1 - (((1 - np.array(Y)[:, 0]) ** 2 + (1 - np.array(Y)[:, 1]) ** 2) / 2) ** 0.5
+    final_bac2 = bac2_per_class.mean(axis=0)
+
+    # print('BAC2 per class ', np.shape(bac2_per_class))
+    # print('BAC2 class-averaged ', final_bac2)
+    # print('----hyperparameter optimization objective----')
+    # print('X: sens/spec per class per scene ', np.shape(X))
+    # print('Y: sens/spec per class [weighted scene-average of X]', np.shape(Y))
+    # print('Z: sens/spec per scene [class-average of X] ', np.shape(Z))
+    # print('Q: sens/spec class-averaged Y ', np.shape(Q))
+    # print('W: BAC1 per class per scene [(sens+spec)/2 of each element in X] ', np.shape(W))
+    # print('BAC1 per scene [(sens+spec)/2 of each element in Z]', np.shape(BAC1_PER_SCENE))
+    # print('V: BAC1 per class [(sens+spec)/2 of each element in  Y (*)]', np.shape(V))
+    # print('BAC1 class-averaged V', BAC1_CLASS_AVERAGE)
+    return BAC1_CLASS_AVERAGE,final_bac2,bac2_per_class
 
 def get_performence(true_pos,true_neg,false_pos,false_neg, index):
     # TP = np.array(true_pos[index])
