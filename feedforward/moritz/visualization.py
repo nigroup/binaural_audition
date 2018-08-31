@@ -20,6 +20,7 @@ def plotresults(results, params):
 
     # best epoch
     best_epochidx = np.argmax(results['val_wbac'])
+    best_bac2_epochidx = np.argmax(results['val_wbac2'])
     if 'earlystop_best_epochidx' in results:
         print('enable following assertion again!!!!!!!') # TODO enable again!
         # ensure that best epoch by earlystopping is the best epoch by simply maximizing validation wbac
@@ -37,7 +38,7 @@ def plotresults(results, params):
     figsize=(8,9)
     plt.figure(figsize=figsize)
     plt.suptitle('summary metrics of '+params['name']+'\n\n'+
-                 'runtime: {:.0f}h total'.format(results['runtime_total']/3600.)+
+                 'runtime: {:.0f}h total'.format(np.sum(results['runtime'])/3600.)+
                  ('' if len(epochs)==1 else ', {:.0f}s per epoch (excluding first)'.format(np.mean(results['runtime'][1:]))),
                  fontsize=mediumfontsize)
     plotno = 2 if params['nocalcgradientnorm'] else 3
@@ -141,10 +142,9 @@ def plotresults(results, params):
     plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
     plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
     plt.tick_params(axis='y', which='both', labelleft='on', labelright='on')
-    #plt.arrow(best_epochidx+1, min_acc+3., 0, -3.)
-    plt.text(best_epochidx+1, min_acc+3, 'best\nepoch', horizontalalignment='center', fontsize=mediumfontsize, color='green')
-    #earlystopstr
-    #plt.annotate('test', xy=(best_epochidx+1, min_acc+3), xytext=(best_epochidx+1, min_acc+4), arrowprops=dict(arrowstyle='->'))
+    plt.text(best_epochidx+1, min_acc+1., 'best\nwBAC', horizontalalignment='center', fontsize=mediumfontsize, color='blue')
+    if best_bac2_epochidx != best_epochidx:
+        plt.text(best_bac2_epochidx+1, min_acc+1, '(best\nwBAC2)', horizontalalignment='center', fontsize=mediumfontsize, color='brown')
 
     if params['nocalcgradientnorm']:
         plt.xlabel('epochs', fontsize=mediumfontsize)
@@ -190,7 +190,8 @@ def plotresults(results, params):
 
 
     plt.figure(figsize=figsize)
-    min_acc = 60.
+    min_acc = 40.
+    dacc = 3.
     plt.suptitle('per class metrics of '+params['name'], fontsize=mediumfontsize)
 
     # ================================================
@@ -212,7 +213,7 @@ def plotresults(results, params):
     plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
     plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
     plt.tick_params(axis='y', which='both', labelleft='on', labelright='on')
-    plt.text(best_epochidx+1, min_acc+3, 'best\nepoch', horizontalalignment='center', fontsize=mediumfontsize, color='green')
+    plt.text(best_epochidx+1, min_acc+1., 'best\nwBAC', horizontalalignment='center', fontsize=mediumfontsize, color='blue')
 
     # ================================================
     # axis: same as axis but bac2 instead of bac
@@ -233,6 +234,7 @@ def plotresults(results, params):
     plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
     plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
     plt.tick_params(axis='y', which='both', labelleft='on', labelright='on')
+    plt.text(best_bac2_epochidx+1, min_acc+1, '(best\nwBAC2)', horizontalalignment='center', fontsize=mediumfontsize, color='brown')
 
 
     # ================================================
@@ -269,8 +271,10 @@ def plot_train_experiment(folder):
     params = load_h5(os.path.join(folder, 'params.h5'))
     results = load_h5(os.path.join(folder, 'results.h5'))
 
-    # backwards compatibility
-    params['name'] = os.path.basename(folder)
+    # backwards compatibility and allowing for moved experiments
+    path, name = os.path.split(folder)
+    params['name'] = name
+    params['path'] = path
     # if 'epoch_best' in results:
     #     results['earlystop_best_epochidx'] = results['epoch_best']
 
