@@ -286,13 +286,13 @@ class HCombManager:
             self._write_hcomb_list(hcomb_list, handle)
 
     def finish_epoch(self, id_, h, val_acc, best_val_acc, val_acc_bac2, best_val_acc_bac2,
-                     fold_ind, best_epoch, elapsed_time_minutes):
+                     fold_ind, epochs_finished, best_epoch, elapsed_time_minutes):
         with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)
 
             h = h.__dict__
 
-            h['epochs_finished'][fold_ind] += 1
+            h['epochs_finished'][fold_ind] = epochs_finished
             h['best_epochs'][fold_ind] = best_epoch
             h['elapsed_time_minutes'] = elapsed_time_minutes
             self._update_val_metrics(h, val_acc, best_val_acc, val_acc_bac2, best_val_acc_bac2, fold_ind)

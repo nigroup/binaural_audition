@@ -243,7 +243,7 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
                     epochs_without_improvement += 1
 
                 hcm.finish_epoch(ID, h, val_phase.accs[-1], best_val_acc, val_phase.accs_bac2[-1], best_val_acc_bac2,
-                                 val_fold - 1, best_epoch, (timer() - start)/60)
+                                 val_fold - 1, e+1, best_epoch, (timer() - start)/60)
 
                 if INTERMEDIATE_PLOTS:
                     plot.plot_metrics(metrics, model_save_dir)
