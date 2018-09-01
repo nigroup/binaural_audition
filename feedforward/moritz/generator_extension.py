@@ -14,6 +14,7 @@ import numpy as np
 from scipy.special import expit as sigmoid
 from time import time
 import threading
+import queue
 
 from keras import backend as K
 from keras.utils.data_utils import Sequence
@@ -185,14 +186,16 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
             # setup scene instance dictionary
             model.scene_instance_id_metrics_dict_train = {}
 
-            # create thread for asynchronous batch metrics calculation
+            # create thread for asynchronous batch metrics calculation (one thread per epoch, joined before final metrics calculation)
             if multithreading_metrics:
-                condition = threading.Condition()
-                label_dict = {'y_pred': None,
-                              'y': None}
+                label_queue = queue.Queue() # threadsafe queue into which we will push (y_pred, y) tuples
                 trainmetrics_thread = threading.Thread(target=metrics_per_batch_thread_handler,
-                                                       args=(condition, model.scene_instance_id_metrics_dict_train,
-                                                             label_dict, params['mask_value']))
+                                                       args=(label_queue,
+                                                             model.scene_instance_id_metrics_dict_train,
+                                                             params['mask_value'],
+                                                             steps_per_epoch))
+
+                trainmetrics_thread.start()
 
             for m in model.stateful_metric_functions:
                 m.reset_states()
@@ -272,9 +275,7 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                     # the following two arrays need to be unchanged in order for being thread-safe
                     # assumption 1: batchloader yields array copies (true for moritz loader)
                     # assumption 2: *_and_predict_on_batch return newly allocated arrays
-                    label_dict['y_pred'] = y_pred
-                    label_dict['y'] = y
-                    condition.notify()
+                    label_queue.put((y_pred, y))
                 else:
                     heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch(model.scene_instance_id_metrics_dict_train,
                                                               y_pred, y, params['mask_value'])
@@ -421,12 +422,13 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
 
         # create thread for asynchronous batch metrics calculation
         if multithreading_metrics:
-            condition = threading.Condition()
-            label_dict = {'y_pred': None,
-                          'y': None}
+            label_queue = queue.Queue()  # threadsafe queue into which we will push (y_pred, y) tuples
             validmetrics_thread = threading.Thread(target=metrics_per_batch_thread_handler,
-                                                   args=(condition, model.scene_instance_id_metrics_dict_eval,
-                                                         label_dict, params['mask_value']))
+                                                   args=(label_queue,
+                                                         model.scene_instance_id_metrics_dict_eval,
+                                                         params['mask_value'],
+                                                         steps))
+            validmetrics_thread.start()
 
         model.val_loss_batch = []
         while steps_done < steps:
@@ -460,11 +462,10 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
 
             # increment metrics for scene instances in batch
             if multithreading_metrics:
+                # the following two arrays need to be unchanged in order for being thread-safe
                 # assumption 1: batchloader yields array copies (true for moritz loader)
                 # assumption 2: *_and_predict_on_batch return newly allocated arrays
-                label_dict['y_pred'] = y_pred
-                label_dict['y'] = y
-                condition.notify()
+                label_queue.put((y_pred, y))
             else:
                 heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch(
                     model.scene_instance_id_metrics_dict_eval, y_pred, y, params['mask_value'])

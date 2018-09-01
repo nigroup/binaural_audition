@@ -28,19 +28,19 @@ from visualization import plotresults
 override_params = {}
 # override_params will be fed into params directly before training (i.e. overrides command line arguments)
 
-# print('\n!!!!!!!!!!!!!!!!!!!!! ONLY DEBUGGING, REMOVE ME ASAP !!!!!!!!!!!!!!!\n\n') # remove also following lines
-# time.sleep(0.5)
-# override_params['featuremaps'] = 10
-# override_params['scenes_trainvalid'] = [1]
-# override_params['trainfolds'] = [1]
-# override_params['historylength'] = 1000
-# override_params['batchlength'] = 2800
-# override_params['noinputstandardization'] = True
-# override_params['sceneinstancebufsize'] = 500
-# override_params['maxepochs'] = 5
-# #override_params['resume'] = 'playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es3_vf3'
-# override_params['earlystop'] = 3
-# override_params['weightnorm'] = False
+print('\n!!!!!!!!!!!!!!!!!!!!! ONLY DEBUGGING, REMOVE ME ASAP !!!!!!!!!!!!!!!\n\n') # remove also following lines
+time.sleep(0.5)
+override_params['featuremaps'] = 10
+override_params['scenes_trainvalid'] = [1]
+override_params['trainfolds'] = [1]
+override_params['historylength'] = 1000
+override_params['batchlength'] = 2800
+override_params['noinputstandardization'] = True
+override_params['sceneinstancebufsize'] = 500
+override_params['maxepochs'] = 5
+#override_params['resume'] = 'playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es3_vf3'
+override_params['earlystop'] = 3
+override_params['weightnorm'] = False
 
 # the following for allow groth => as long as we develop
 os.environ["CUDA_VISIBLE_DEVICES"] = '0' # cf. nvidia-smi ids
@@ -342,7 +342,7 @@ callbacks.append(modelcheckpoint)
 fit_and_predict_generator_with_sceneinst_metrics(model,
                                                  generator=batchloader_training,
                                                  params=params,
-                                                 multithreading_metrics=False,
+                                                 multithreading_metrics=True,
                                                  epochs=params['maxepochs'],
                                                  steps_per_epoch=params['train_batches_per_epoch'],
                                                  callbacks=callbacks,

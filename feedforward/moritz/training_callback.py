@@ -146,8 +146,8 @@ class MetricsCallback(Callback):
         if self.myparams['validfold'] == -1:
             print('epoch {} ended with training wbac {:.2f}'.format(epoch+1, metrics_training['wbac']))
         else:
-            print('epoch {} ended with validation wbac {:.2f} (training wbac {:.2f})'.
-                  format(epoch + 1, metrics_validation['wbac'], metrics_training['wbac'])
+            print('epoch {} took {:.2f} and ended with validation wbac {:.2f} (training wbac {:.2f})'.
+                  format(epoch + 1, self.runtime[-1], metrics_validation['wbac'], metrics_training['wbac'])
                   +gradstring)
 
         # collect results

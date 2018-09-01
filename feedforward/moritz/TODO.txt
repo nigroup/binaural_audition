@@ -1,0 +1,4 @@
+TODOs:
+- metrik-threadparallelisierung profilen wenn sabik verfügbar ist
+- experimente abschließen ergnten see experiments.txt next tab 
+- TODOs wegmachen aus code und preliminary study abschließen

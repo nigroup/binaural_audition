@@ -1,17 +1,27 @@
 import h5py
 import sys
+import time
 from heiner.accuracy_utils import val_accuracy as heiner_val_accuracy
 from heiner.accuracy_utils import calculate_class_accuracies_metrics_per_scene_instance_in_batch as heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch
 
-def metrics_per_batch_thread_handler(condition, scene_instance_id_metrics_dict, label_dict, mask_value):
-    # the following two dictionary elements are set outside after *_and_predict_on_batch calls
-    # assumption: the arrays do not change in the meantime
-    y_pred = label_dict['y_pred']
-    y = label_dict['y']
-    with condition:
-        condition.wait() # continue after receiving a notify() call from *_generator function in main thread
+def metrics_per_batch_thread_handler(label_queue, scene_instance_id_metrics_dict, mask_value, batches_per_epoch):
+    # the arrays y and y_pred within the queue are not allowed to change across batches in order for being thread-safe
+    # assumption 1: batchloader yields array copies (true for moritz loader)
+    # assumption 2: *_and_predict_on_batch return newly allocated arrays
+    for i in range(batches_per_epoch):
+
+        # t_start = time.time()
+        # print('DEBUG: thread waiting for data of batch {}'.format(i+1)+
+        #       ('' if i==0 else '[metrics calculation took {:.2f}]s'.format(t_start-t_intermediate)))
+
+        y_pred, y = label_queue.get()
+
+        # t_intermediate = time.time()
+        # print('DEBUG: thread received data, calculating metrics for batch {} [data waiting took {:.2f}s]'.format(i+1, t_intermediate-t_start))
+
         heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
                                                                               y_pred, y, mask_value)
+
 
 
 def calculate_metrics(scene_instance_id_metrics_dict):
