@@ -360,3 +360,30 @@ if __name__ == '__main__':
             plot_train_experiment(folder=f,
                                   datalimits=args.datalimits,
                                   firstsceneonly=args.firstsceneonly)
+
+    if args.mode == 'hyper' and args.folder:
+        # TODO: rename this file to analysis
+        # remark: hyperparam subset selection by specifying parts of the name, e.g. batchinterprete_2_hyper/n*_dr*_ks3...
+        if '*' not in args.folder:
+            folders = glob.glob(args.folder+'/*')
+        else:
+            folders = glob.glob(args.folder)
+
+        hyperparam_combinations = {}
+        for f in folders:
+            if os.path.isdir(f):
+                print('collecting data from folder {}'.format(f))
+                params = load_h5(os.path.join(f, 'params.h5'))
+                results = load_h5(os.path.join(f, 'results.h5'))
+                name =  os.path.basename(f)
+                featuremaps = params['featuremaps']
+                dropoutrate = params['dropoutrate']
+                val_wbac = results['val_wbac']
+                trainepochs = len(val_wbac) # i.e., until last epoch (5 later than best epoch if earlystopping was active)
+                hyperparam_combinations[(featuremaps, dropoutrate)] = (val_wbac, trainepochs)
+
+        # TODO: write csv file
+
+        # scatter plot with big dots and color = wbac2 value [within 0.8 and 0.9] -- size of the dot kind of inverse to trainepochs
+        for (featuremaps, dropoutrate), (val_wbac, trainepochs) in hyperparam_combinations.items():
+            plt.plot(featuremaps, dropoutrate, marker='o')
