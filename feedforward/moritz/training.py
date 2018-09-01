@@ -200,7 +200,8 @@ print('parameters: ')
 for k,v in params.items():
     print('{} => {}'.format(k, v))
 print()
-# print('name: '+params['name'])
+print('name: '+params['name'])
+print()
 
 
 # DATA LOADING
