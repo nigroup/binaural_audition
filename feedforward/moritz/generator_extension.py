@@ -298,7 +298,7 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                 steps_done += 1
 
 
-                if steps_done > skip_runtime_avg and steps_done == steps_per_epoch-2:
+                if steps_done > skip_runtime_avg and steps_done == steps_per_epoch-1:
                     print('===> after batch {} we have average runtimes: generator {:.2f}, train_predict {:.2f}, metrics {:.2f}'.
                         format(batch_index, runtime_generator_cumulated/(steps_done-skip_runtime_avg), runtime_train_and_predict_on_batch_cumulated/(steps_done-skip_runtime_avg), runtime_class_accuracies_cumulated/(steps_done-skip_runtime_avg)))
 

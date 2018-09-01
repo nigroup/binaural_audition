@@ -141,7 +141,7 @@ class MetricsCallback(Callback):
         # get gradient norm statistics per epoch
         if not self.myparams['nocalcgradientnorm']:
             self.gradient_norm.append(np.array(self.gradient_norm_per_batch[-1]).mean())
-            gradstring = ', gradient norm avg {}'.format(self.gradient_norm[-1])
+            gradstring = ', gradient norm avg {:.1f}'.format(self.gradient_norm[-1])
 
         if self.myparams['validfold'] == -1:
             print('epoch {} ended with training wbac {:.2f}'.format(epoch+1, metrics_training['wbac']))
@@ -175,6 +175,9 @@ class MetricsCallback(Callback):
 
         # plot results
         plotresults(self.results, self.myparams)
+
+        print('epoch {} of {} => results and plots files are written'.
+              format(epoch+1, self.myparams['path']+'/'+self.myparams['name']))
 
 
 # time measurements (merged into MetricsCallback)

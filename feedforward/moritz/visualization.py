@@ -40,8 +40,9 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     figsize=(8,9)
     plt.figure(figsize=figsize)
     plt.suptitle('summary metrics of '+params['name']+'\n\n'+
-                 'runtime: {:.0f}h total'.format(np.sum(results['runtime'])/3600.)+
-                 ('' if len(epochs)==1 else ', {:.0f}s per epoch (excluding first)'.format(np.mean(results['runtime'][1:]))),
+                 'runtime (gpu {} on {}): {:.0f}h total'.format(params['gpuid'], params['server'], np.sum(results['runtime'])/3600.)+
+                 ('' if len(epochs)==1 else ', {:.0f}s per epoch (excluding first)'.format(np.mean(results['runtime'][1:])))+
+                 '\n\nlegend numbers: best val_wbac epoch; stddevs: batches (losses/gradnorm, dashed) or classes (val_wbac, filled)',
                  fontsize=mediumfontsize)
     plotno = 2 if params['nocalcgradientnorm'] else 3
 
@@ -66,10 +67,11 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
             plt.plot([x_epoch_right, x_epoch_right+deltaepoch_train],
                      [results['train_loss_batch'][epidx, -1],
                       results['train_loss_batch'][epidx+1, 0]], color='lightgray', alpha=0.5, zorder=0)
-    plt.plot(epochs, results['train_loss'], color=traingray, marker='o', label='train_loss ({:.3f})'.format(results['train_loss'].min()))
-    # std dev across batches
-    stddev_train = np.std(results['train_loss_batch'], axis=1)
-    plt.plot(epochs, results['train_loss']+stddev_train, color='dimgray', linestyle='dashed', alpha=0.7, label='stddev', zorder=1)
+
+    stddev_train = np.std(results['train_loss_batch'], axis=1) # std dev across batches
+    plt.plot(epochs, results['train_loss'], color=traingray, marker='o', label='train_loss ({:.3f} +- {:.3f})'.
+             format(results['train_loss'][best_epochidx], stddev_train[best_epochidx]))
+    plt.plot(epochs, results['train_loss']+stddev_train, color='dimgray', linestyle='dashed', alpha=0.7, zorder=1)
     plt.plot(epochs, results['train_loss']-stddev_train, color='dimgray', linestyle='dashed', alpha=0.7, zorder=1)
 
 
@@ -86,8 +88,10 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
             plt.plot([x_epoch_right, x_epoch_right+deltaepoch_valid],
                      [results['val_loss_batch'][epidx, -1],
                       results['val_loss_batch'][epidx+1, 0]], color='lightblue', alpha=0.4, zorder=0)
-    plt.plot(epochs, results['val_loss'], color='blue', marker='o', label='val_loss ({:.3f})'.format(results['val_loss'].min()))# std dev across batches
+
     stddev_valid = np.std(results['val_loss_batch'], axis=1)
+    plt.plot(epochs, results['val_loss'], color='blue', marker='o', label='val_loss ({:.3f} +- {:.3f})'.
+             format(results['val_loss'][best_epochidx], stddev_valid[best_epochidx]))# std dev across batches
     plt.plot(epochs, results['val_loss']+stddev_valid, color='blue', linestyle='dashed', alpha=0.7, zorder=1)
     plt.plot(epochs, results['val_loss']-stddev_valid, color='blue', linestyle='dashed', alpha=0.7, zorder=1)
 
@@ -109,7 +113,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
     plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
     plt.tick_params(axis='y', which='both', labelleft='on', labelright='on')
-    plt.legend(fontsize=mediumfontsize, loc='lower left')
+    plt.legend(fontsize=smallfontsize, loc='lower left')
 
     # ================================================
     # axis: weighted balanced accuracy over epochs
@@ -119,11 +123,25 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     dacc = 2.
 
     # wbac training (class-averaged)
-    plt.plot(epochs, results['train_wbac']*100., color=traingray, marker='o', label='train_wbac ({:.2f}%)'.format(results['train_wbac'].max()*100.))
+    train_wbac_std = np.std(results['train_wbac_per_class'] * 100., axis=1)
+    plt.plot(epochs, results['train_wbac']*100., color=traingray, marker='o', label='train_wbac ({:.2f}% +- {:.2f}%)'.
+             format(results['train_wbac'][best_epochidx]*100., train_wbac_std[best_epochidx]))
+
     # wbac2 validation (class-averaged)
-    plt.plot(epochs, results['val_wbac2']*100., color='brown', marker='o', label='val_wbac2 ({:.2f}%)'.format(results['val_wbac2'].max()*100.))
-    # wbac validation (class-averaged)
-    plt.plot(epochs, results['val_wbac']*100., color='blue', marker='o', label='val_wbac ({:.2f}%)'.format(results['val_wbac'].max()*100.))
+    val_wbac2_std = np.std(results['val_wbac2_per_class'] * 100., axis=1)
+    plt.plot(epochs, results['val_wbac2']*100., color='brown', marker='o', label='val_wbac2 ({:.2f}% +- {:.2f}%)'.
+             format(results['val_wbac2'][best_epochidx]*100., val_wbac2_std[best_epochidx]))
+
+    # wbac validation (class-averaged) +- class std dev
+    val_wbac_std = np.std(results['val_wbac_per_class'] * 100., axis=1)
+    plt.plot(epochs, results['val_wbac']*100., color='blue', marker='o', label='val_wbac ({:.2f}% +- {:.2f}%)'.
+             format(results['val_wbac'][best_epochidx]*100., val_wbac_std[best_epochidx]))
+    plt.fill_between (epochs, results['val_wbac']*100. - val_wbac_std,
+                      results['val_wbac']*100. + val_wbac_std,
+                      facecolor='blue', alpha=0.12, zorder=0)
+    # plt.plot(epochs, results['val_wbac']*100. + val_wbac_std, color='blue', linestyle='dashed',
+    #          label='stddev ({})'.format(results['val_wbac'].max()*100.))
+    # plt.plot(epochs, results['val_wbac']*100. - val_wbac_std, color='blue', linestyle='dashed')
 
     # axis config
     if datalimits:
@@ -141,7 +159,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
                   * 100.
     plt.ylim(min_acc, max_acc)
     plt.ylabel('accuracy (%)', fontsize=mediumfontsize)
-    plt.legend(fontsize=mediumfontsize, loc='best')
+    plt.legend(fontsize=smallfontsize, loc='best')
     plt.grid()
     plt.xlim(0, epochs[-1])
     plt.xticks(epochs)
@@ -183,11 +201,10 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
                          [results['gradientnorm_batch'][epidx, -1],
                           results['gradientnorm_batch'][epidx + 1, 0]], color='lightgray')
         plt.plot(epochs, results['gradientnorm'], color=traingray, marker='o', label='gradientnorm')
-        plt.plot(epochs, np.ones_like(epochs)*params['gradientclip'], color='green', linestyle='dashed',
-                 label='clip value')
+        plt.plot(epochs, np.ones_like(epochs)*params['gradientclip'], color='green', label='clip value')
         stddev_grad = np.std(results['gradientnorm_batch'], axis=1)
-        plt.plot(epochs, results['gradientnorm']+stddev_grad, color='dimgray', linestyle='dashed', alpha=0.7, zorder=1)
-        plt.plot(epochs, results['gradientnorm']-stddev_grad, color='dimgray', linestyle='dashed', alpha=0.7, zorder=1)
+        plt.plot(epochs, results['gradientnorm']+stddev_grad, color='black', label='stddev', linestyle='dashed', alpha=0.7, zorder=3)
+        plt.plot(epochs, results['gradientnorm']-stddev_grad, color='black', linestyle='dashed', alpha=0.7, zorder=3)
 
         # axis config
         plt.grid()
@@ -198,7 +215,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
         plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
         plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
         plt.tick_params(axis='y', which='both', labelleft='on', labelright='on')
-        plt.legend(fontsize=mediumfontsize, loc='best')
+        plt.legend(fontsize=smallfontsize, loc='best')
         plt.xlabel('epochs', fontsize=mediumfontsize)
 
     plt.savefig(os.path.join(params['path'], params['name'], 'metrics_summary.png'))
