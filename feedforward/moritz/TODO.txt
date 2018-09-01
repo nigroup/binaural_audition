@@ -3,6 +3,7 @@ TODO
 - finales modell trainieren konzipieren => mit heiner abstimmen
 
 - "TODO:"s wegmachen aus code und preliminary study abschließen
+    accs in log => in prozent 81.1% statt 0.811 o.ä.
 
 - vorläufige experimente abschließen
     => dropout
@@ -20,3 +21,4 @@ TODO
 - finales modell trainieren code machen
 
 - instant labels starten (gleich alle drei level)
+
