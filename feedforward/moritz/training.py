@@ -143,7 +143,7 @@ name_long = name_short + '_wn{}_bs{}_bl{}_es{}'.format(params['weightnorm'],
 name_short += '_vf{}'.format(args.validfold)
 name_long += '_vf{}'.format(args.validfold)
 
-if 'pre' in params['path']:
+if '_pre' in params['path']:
     params['name'] = name_long
 elif 'hyper' in params['path']:
     params['name'] = name_short
