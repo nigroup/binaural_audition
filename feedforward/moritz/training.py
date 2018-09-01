@@ -1,6 +1,8 @@
+print('STARTING TRAINING SCRIPT BASED ON KERAS AND TENSORFLOW')
 import os
 import sys
 import argparse
+import subprocess
 import socket
 import time
 import random
@@ -21,26 +23,26 @@ from model import temporal_convolutional_network
 from batchloader import BatchLoader
 from hyperparams import obtain_nextlarger_residuallayers_refining_historysize
 from training_callback import MetricsCallback
-from myutils import save_h5, load_h5, printerror
+from myutils import get_number_of_weights, save_h5, load_h5, printerror
 from visualization import plotresults
 
 
 override_params = {}
 # override_params will be fed into params directly before training (i.e. overrides command line arguments)
 
-print('\n!!!!!!!!!!!!!!!!!!!!! ONLY DEBUGGING, REMOVE ME ASAP !!!!!!!!!!!!!!!\n\n') # remove also following lines
-time.sleep(0.5)
-override_params['featuremaps'] = 10
-override_params['scenes_trainvalid'] = [1]
-override_params['trainfolds'] = [1]
-override_params['historylength'] = 1000
-override_params['batchlength'] = 2800
-override_params['noinputstandardization'] = True
-override_params['sceneinstancebufsize'] = 500
-override_params['maxepochs'] = 5
-#override_params['resume'] = 'playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es3_vf3'
-override_params['earlystop'] = 3
-override_params['weightnorm'] = False
+# print('\n!!!!!!!!!!!!!!!!!!!!! ONLY DEBUGGING, REMOVE ME ASAP !!!!!!!!!!!!!!!\n\n') # remove also following lines
+# time.sleep(0.5)
+# override_params['featuremaps'] = 10
+# override_params['scenes_trainvalid'] = [1]
+# override_params['trainfolds'] = [1]
+# override_params['historylength'] = 1000
+# override_params['batchlength'] = 2800
+# override_params['noinputstandardization'] = True
+# override_params['sceneinstancebufsize'] = 500
+# override_params['maxepochs'] = 5
+# #override_params['resume'] = 'playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es3_vf3'
+# override_params['earlystop'] = 3
+# override_params['weightnorm'] = False
 
 # the following for allow groth => as long as we develop
 os.environ["CUDA_VISIBLE_DEVICES"] = '0' # cf. nvidia-smi ids
@@ -48,10 +50,6 @@ import tensorflow as tf
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 session = tf.Session(config=config)
-
-# TODO: experiment with optimal batchbufsize for best efficient
-
-# TODO make gradient norm as default
 
 
 totaltime_start = time.time()
@@ -61,15 +59,12 @@ totaltime_start = time.time()
 parser = argparse.ArgumentParser()
 
 # general
-parser.add_argument('--path', type=str, default='playground',
+parser.add_argument('--path', type=str, default='blockinterprete_2_hyper',
                         help='folder where to store the files (log, model, hyperparams, results incl. duration)')
 parser.add_argument('--resume', type=str, default='negative',
                         help='will resume the model from its last epoch, '+
                              'e.g., --resume=playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es-1_vf3')
 parser.add_argument('--gpuid', type=int, default=0, help='ID (cf. nvidia-smi) of the GPU to use')
-parser.add_argument('--hyper', type=str, default='manual',
-                        help='random_coarse or random_fine: hyperparam samples (overrides manually specified params!); '+
-                             'a filename yields loading the params from there (also overrides cmd line args!); manual: via command line')
 
 # architecture
 parser.add_argument('--featuremaps', type=int, default=50,
@@ -88,9 +83,9 @@ parser.add_argument('--outputthreshold', type=float, default=0.5,
 
 parser.add_argument('--weightnorm', action='store_true', default=False,
                         help='disables the weight norm version of the Adam optimizer, i.e., falls back to regular Adam')
-parser.add_argument('--learningrate', type=float, default=0.001, #0.002
+parser.add_argument('--learningrate', type=float, default=0.002,
                         help='initial learning rate of the Adam optimizer')
-parser.add_argument('--batchsize', type=int, default=128, #128 # note that batchsize should be proportionally increased to learning rate
+parser.add_argument('--batchsize', type=int, default=128, # note that batchsize should be proportionally increased to learning rate (some paper)
                         help='number of time series per batch (should be power of two for efficiency)')
 parser.add_argument('--batchlength', type=int, default=2500, # 2500 batchlength corresponds to 75% of all scene instances to fit into two batches (with a hist size up to 1200 determining the necessary overlap)
                         help='length of the time series per batch (should be significantly larger than history size '+
@@ -116,8 +111,6 @@ parser.add_argument('--instantlabels', action='store_true', default=False,
                         help='if chosen: instant labels; otherwise: block-interprete labels')
 parser.add_argument('--sceneinstancebufsize', type=int, default=3000,
                         help='number of buffered scene instances from which to draw the time series of a batch')
-# parser.add_argument('--batchbufmultiproc', action='store_true', default=False,
-#                         help='multiprocessing mode of the batchcreator')
 parser.add_argument('--batchbufsize', type=int, default=10,
                         help='number of buffered batches (only relevant in batch buffer\'s multiprocessing mode)')
 
@@ -137,8 +130,7 @@ params['dim_features'] = DIM_FEATURES
 params['dim_labels'] = DIM_LABELS
 params['mask_value'] = MASK_VALUE
 
-# TODO: hyperparam sampling (will override specified param values)
-# TODO: hyperparam loading from file (will override all specified param values)
+# TODO: for i) second/third validation folds and ii) final model training we need hyperparam loading from file (overriding all specified param values, cf. resume; and specifically taking care of earlystop)
 
 initial_output = obtain_nextlarger_residuallayers_refining_historysize(params)
 
@@ -151,13 +143,9 @@ name_long = name_short + '_wn{}_bs{}_bl{}_es{}'.format(params['weightnorm'],
 name_short += '_vf{}'.format(args.validfold)
 name_long += '_vf{}'.format(args.validfold)
 
-# TODO check that all params from above are contained in the name (many are not anymore)
-
 if 'pre' in params['path']:
     params['name'] = name_long
-elif 'hyper_main' in params['path']:
-    params['name'] = name_short
-elif 'hyper_fine' in params['path']:
+elif 'hyper' in params['path']:
     params['name'] = name_short
 elif 'final' in params['path']:
     params['name'] = name_long
@@ -176,42 +164,46 @@ if params['resume'] != 'negative':
     params['resume'] = resume_save
     params['path'] = resume_path
     params['name'] = resume_name
-# create directory for experiment
-os.makedirs(os.path.join(params['path'], params['name']), exist_ok=True)
+
+experimentfolder = os.path.join(params['path'], params['name'])
+if os.path.exists(experimentfolder) and params['resume']=='negative':
+    printerror('the experiment folder {} does already exist. aborting!'.format(experimentfolder))
+    exit(1)
+else:
+    # create directory for experiment
+    os.makedirs(experimentfolder, exist_ok=True)
+    if params['resume'] != 'negative':
+        print('created experiment folder {}'.format(experimentfolder))
 
 # redirecting stdout and stderr
 outfile = os.path.join(params['path'], params['name'], 'logfile')
 errfile = os.path.join(params['path'], params['name'], 'errors')
 sys.stdout = heiner_utils.UnbufferedLogAndPrint(outfile, sys.stdout)
 sys.stderr = heiner_utils.UnbufferedLogAndPrint(errfile, sys.stderr)
-
-print('STARTING')
+print()
+print('PREPARING')
 
 # specification of a GPU
 print('choosing gpu id {} on {}'.format(params['gpuid'], params['server']))
 os.environ["CUDA_VISIBLE_DEVICES"] = str(params['gpuid']) # cf. nvidia-smi ids
 
-# TODO: add output of nvidia-smi
 
-print('nvidia-smi: ')
-os.system('nvidia-smi')
-print()
+print('output of nvidia-smi program (via subprocess): ')
+#os.system('nvidia-smi') # I though need the output to extract process ids but skipped using it (thus not using os.system)
+smi = subprocess.run(['nvidia-smi'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+print(smi)
 
 print(initial_output)
+print()
 
-# TODO: make gradient clipping optional / use it only in the first passes => https://stackoverflow.com/questions/50033312/how-to-monitor-gradient-vanish-and-explosion-in-keras-with-tensorboard
-
-# TODO ensure that parametrization has not been run (based on name) => skip and write warning to warnings file
-
-
-print('parameters: {}'.format(params))
-print('name: '+params['name'])
+print('parameters: ')
+for k,v in params.items():
+    print('{} => {}'.format(k, v))
+print()
+# print('name: '+params['name'])
 
 
 # DATA LOADING
-
-
-print()
 print('BUILDING DATA LOADER')
 
 
@@ -262,6 +254,7 @@ params['valid_batches_per_epoch'] = batchloader_validation.batches_per_epoch
 
 # MODEL BUILDING
 
+params['finished'] = False
 
 
 print()
@@ -287,24 +280,34 @@ loss_weights = heiner_tfutils.get_loss_weights(fold_nbs=trainfolds, scene_nbs=pa
                                              label_mode='instant' if params['instantlabels'] else 'blockbased')
 masked_weighted_crossentropy_loss = heiner_tfutils.my_loss_builder(MASK_VALUE, loss_weights)
 # TODO: potential performance optimization: in label mode reduce to weighted crossentropy loss, i.e., without masked
-print('constructed loss (masking labels with value {}) using loss weights {}'.format(MASK_VALUE, loss_weights))
-
+print('constructed loss (masking labels with value {}) using following loss weights:'.format(MASK_VALUE))
+for i in range(len(CLASS_NAMES)):
+    print('{}: {:.2f}'.format(CLASS_NAMES[i], loss_weights[i]))
 
 if params['resume'] == 'negative':
     model = temporal_convolutional_network(params)
     model.compile(optimizer(lr=params['learningrate'], clipnorm=params['gradientclip']),
                   loss=masked_weighted_crossentropy_loss, metrics=None)
     init_epoch = 0
+    print('model was constructed!')
 
 else:
-    model = keras.models.load_model(os.path.join(params['path'], params['name'],'model.h5'),
+    resfile = os.path.join(params['path'], params['name'],'model.h5')
+    model = keras.models.load_model(resfile,
                                     custom_objects={'AdamWithWeightnorm': AdamWithWeightnorm,
                                                     'my_loss': masked_weighted_crossentropy_loss})
-    print('resuming model from file')
 
     oldresults = load_h5(os.path.join(params['path'], params['name'], 'results.h5'))
     init_epoch = len(oldresults['val_wbac']) # resume directly after the last completed epoch
+    print('model was resumed from file {}'.format(resfile))
+
+print('the model has the following architecture: ')
 model.summary()
+
+params['no_neural_weights'] = get_number_of_weights(model)
+print('we extracted as no of neural weights {}, i.e., {:.3f} MB (32 bit floats)'.format(params['no_neural_weights'],
+                                                                        params['no_neural_weights']*4./1000000.))
+
 
 # params saved here already because if a late epoch's process is killed we have at least all results and params up to the epoch before
 save_h5(params, os.path.join(params['path'], params['name'], 'params.h5'))
@@ -314,14 +317,16 @@ print('STARTING TRAINING')
 
 print('starting training for at most {} epochs ({} batches per epoch)'.format(params['maxepochs'],
                                                                               params['train_batches_per_epoch']))
+print('early stop patience is {}'.format(params['earlystop']))
+print()
 
 
 # keras callbacks for earlystopping, model saving and nantermination as well as our own callback
 # remark: val_wbac is not a metric in the keras sense but is provided via the metricscallback
 callbacks = []
 
-#terminateonnan = TerminateOnNaN()
-#callbacks.append(terminateonnan)
+terminateonnan = TerminateOnNaN()
+callbacks.append(terminateonnan)
 
 # collect train and validation metrics after each epoch (loss, wbac, wbac_per_class, bac_per_class_scene, wbac2,
 # wbac2_per_class, sensitivies, specificities, gradient statistics, runtime) and after each batch (loss, gradient statistics)
@@ -360,6 +365,10 @@ results = metricscallback.results
 runtime_total = time.time() - totaltime_start
 results['runtime_total'] = runtime_total
 
+real_epoch_no = len(results['val_wbac'])
+if real_epoch_no < params['maxepochs']:
+    print('training stopped after epoch {} although maxepoch {}'.format(real_epoch_no, params['maxepochs']))
+
 # early stopping
 if params['earlystop'] != -1:
     if earlystopping.stopped_epoch == 0:
@@ -373,6 +382,8 @@ save_h5(results, os.path.join(params['path'], params['name'], 'results.h5'))
 
 # TODO: final plotting and printing
 plotresults(results, params)
+
+params['finished'] = True
 
 
 # TODO: experiment before hyper search: time measurements when finally running to see what takes what part (per epoch)

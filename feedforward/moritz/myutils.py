@@ -1,6 +1,6 @@
 import h5py
 import sys
-import time
+from keras.utils.layer_utils import count_params
 from heiner.accuracy_utils import val_accuracy as heiner_val_accuracy
 from heiner.accuracy_utils import calculate_class_accuracies_metrics_per_scene_instance_in_batch as heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch
 
@@ -23,7 +23,6 @@ def metrics_per_batch_thread_handler(label_queue, scene_instance_id_metrics_dict
                                                                               y_pred, y, mask_value)
 
 
-
 def calculate_metrics(scene_instance_id_metrics_dict):
 
     wbac, wbac2, wbac_per_class, wbac2_per_class, bac_per_scene, bac2_per_scene, \
@@ -42,6 +41,10 @@ def calculate_metrics(scene_instance_id_metrics_dict):
                'wbac2_per_class': wbac2_per_class}                      # balanced accuracy v2: per class (weighted scene avg)
 
     return metrics
+
+# use the keras backend function count_params to sum the total number of params of the model, cf. model.summary()
+def get_number_of_weights(model):
+    return count_params(model.trainable_weights) + count_params(model.non_trainable_weights)
 
 # loads a flat dictionary from a hdf5 file
 def load_h5(filename):

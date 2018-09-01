@@ -176,19 +176,6 @@ class MetricsCallback(Callback):
         # plot results
         plotresults(self.results, self.myparams)
 
-        print('epoch {} of {} => results and plots files are written'.
+        print('results and plots files are written into {}'.
               format(epoch+1, self.myparams['path']+'/'+self.myparams['name']))
-
-
-# time measurements (merged into MetricsCallback)
-# class Timing(Callback):
-#     def __init__(self):
-#         self.duration = []
-#
-#     def on_epoch_begin(self, epoch, logs={}):
-#         self.starttime = time()
-#
-#     def on_epoch_end(self, epoch, logs={}):
-#         self.duration.append(time() - self.starttime)
-#         print('epoch took {:.2} seconds'.format(self.logs[-1]))
-#         print()
+        print()

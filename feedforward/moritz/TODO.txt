@@ -1,4 +1,22 @@
-TODOs:
-- metrik-threadparallelisierung profilen wenn sabik verfügbar ist
-- experimente abschließen ergnten see experiments.txt next tab 
-- TODOs wegmachen aus code und preliminary study abschließen
+TODO
+
+- finales modell trainieren konzipieren => mit heiner abstimmen
+
+- "TODO:"s wegmachen aus code und preliminary study abschließen
+
+- vorläufige experimente abschließen
+    => dropout
+    => featuremaps
+    => kernelsize
+
+- hyperparam_combinations_*.txt sukzessive befüllen (immer genügend auf vorrat) und skript dafür schreiben, welches prozesse startet nacheinander (nur level1?) (=> zwei prozesse können gleichzeitig schreiben=>filelock)
+
+- skript für kombinations-auswertungstabelle (levels 2,3 antizipieren) erstellen
+
+- evaluationsplotting zusammen mit changbin machen
+
+- levels 2, 3 starten
+
+- finales modell trainieren code machen
+
+- instant labels starten (gleich alle drei level)

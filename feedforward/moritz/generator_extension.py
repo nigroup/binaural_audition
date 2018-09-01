@@ -12,7 +12,7 @@ from __future__ import print_function
 import warnings
 import numpy as np
 from scipy.special import expit as sigmoid
-from time import time
+from time import time, sleep
 import threading
 import queue
 
@@ -196,6 +196,7 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                                                              steps_per_epoch))
 
                 trainmetrics_thread.start()
+                #print('thread for calculating the batch train metrics has been started')
 
             for m in model.stateful_metric_functions:
                 m.reset_states()
@@ -300,7 +301,7 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
 
 
                 if steps_done > skip_runtime_avg and steps_done == steps_per_epoch-1:
-                    print('===> after batch {} we have average runtimes: generator {:.2f}, train_predict {:.2f}, metrics {:.2f}'.
+                    print(' --> batch {} we have average runtimes: generator {:.2f}, train_predict {:.2f}, metrics {:.2f}'.
                         format(batch_index, runtime_generator_cumulated/(steps_done-skip_runtime_avg), runtime_train_and_predict_on_batch_cumulated/(steps_done-skip_runtime_avg), runtime_class_accuracies_cumulated/(steps_done-skip_runtime_avg)))
 
                 # Epoch finished.
@@ -331,6 +332,7 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
 
             if multithreading_metrics:
                 trainmetrics_thread.join()
+                print(' --> both threads for calculating the batch metrics -- training and validation -- finished all their work')
 
             callbacks.on_epoch_end(epoch, epoch_logs)
             epoch += 1
@@ -429,6 +431,7 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
                                                          params['mask_value'],
                                                          steps))
             validmetrics_thread.start()
+            #print('thread for calculating the batch validation metrics has been started')
 
         model.val_loss_batch = []
         while steps_done < steps:

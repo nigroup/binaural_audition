@@ -1,6 +1,6 @@
 import argparse
 import os
-import numpy as np
+import glob
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -39,9 +39,14 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     # summary metrics figure
     figsize=(8,9)
     plt.figure(figsize=figsize)
+    if 'finished' in params:
+        finishedstr = ' --> training '+ ('finished' if params['finished'] else 'NOT YET FINISHED')
+    else:
+        finishedstr = ' --> finished param missing (old run)'
     plt.suptitle('summary metrics of '+params['name']+'\n\n'+
                  'runtime (gpu {} on {}): {:.0f}h total'.format(params['gpuid'], params['server'], np.sum(results['runtime'])/3600.)+
                  ('' if len(epochs)==1 else ', {:.0f}s per epoch (excluding first)'.format(np.mean(results['runtime'][1:])))+
+                 finishedstr+
                  '\n\nlegend numbers: best val_wbac epoch; stddevs: batches (losses/gradnorm, dashed) or classes (val_wbac, filled)',
                  fontsize=mediumfontsize)
     plotno = 2 if params['nocalcgradientnorm'] else 3
@@ -127,11 +132,6 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     plt.plot(epochs, results['train_wbac']*100., color=traingray, marker='o', label='train_wbac ({:.2f}% +- {:.2f}%)'.
              format(results['train_wbac'][best_epochidx]*100., train_wbac_std[best_epochidx]))
 
-    # wbac2 validation (class-averaged)
-    val_wbac2_std = np.std(results['val_wbac2_per_class'] * 100., axis=1)
-    plt.plot(epochs, results['val_wbac2']*100., color='brown', marker='o', label='val_wbac2 ({:.2f}% +- {:.2f}%)'.
-             format(results['val_wbac2'][best_epochidx]*100., val_wbac2_std[best_epochidx]))
-
     # wbac validation (class-averaged) +- class std dev
     val_wbac_std = np.std(results['val_wbac_per_class'] * 100., axis=1)
     plt.plot(epochs, results['val_wbac']*100., color='blue', marker='o', label='val_wbac ({:.2f}% +- {:.2f}%)'.
@@ -142,6 +142,12 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     # plt.plot(epochs, results['val_wbac']*100. + val_wbac_std, color='blue', linestyle='dashed',
     #          label='stddev ({})'.format(results['val_wbac'].max()*100.))
     # plt.plot(epochs, results['val_wbac']*100. - val_wbac_std, color='blue', linestyle='dashed')
+
+
+    # wbac2 validation (class-averaged)
+    val_wbac2_std = np.std(results['val_wbac2_per_class'] * 100., axis=1)
+    plt.plot(epochs, results['val_wbac2']*100., color='brown', marker='o', label='val_wbac2 ({:.2f}% +- {:.2f}%)'.
+             format(results['val_wbac2'][best_epochidx]*100., val_wbac2_std[best_epochidx]))
 
     # axis config
     if datalimits:
@@ -334,7 +340,8 @@ if __name__ == '__main__':
     parser.add_argument('--mode', type=str, default='trainplot',
                         help='currently only \'trainplot\' is supported')
     parser.add_argument('--folder', type=str,
-                        help='folder in which the params and results reside and into which we should (over)write the plots')
+                        help='folder in which the params and results reside and into which we should (over)write '+
+                             'the plots. can contain wildcard character *')
     parser.add_argument('--datalimits', action='store_true', default=False,
                         help='whether to use limits that are specific to the data of the current results'+
                              ' (i.e., axes not comparable to other experiments)')
@@ -343,6 +350,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.mode == 'trainplot' and args.folder:
-        plot_train_experiment(folder=args.folder,
-                              datalimits=args.datalimits,
-                              firstsceneonly=args.firstsceneonly)
+        if '*' not in args.folder:
+            folders = [args.folder]
+        else:
+            folders = glob.glob(args.folder)
+
+        for f in folders:
+            print('making visualization for folder {}'.format(f))
+            plot_train_experiment(folder=f,
+                                  datalimits=args.datalimits,
+                                  firstsceneonly=args.firstsceneonly)
