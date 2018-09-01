@@ -157,8 +157,9 @@ if params['resume'] != 'negative':
     resume_path, resume_name = os.path.split(params['resume'])
     resumed_params = load_h5(os.path.join(resume_path, resume_name, 'params.h5'))
     print('overriding params incl. name from resumed folder {}'.format(params['resume']))
-    del resumed_params['maxepochs'] # only use maxepochs and gpuid from cmdline or default
+    del resumed_params['maxepochs'] # use maxepochs and gpuid and earlystop from cmdline or default
     del resumed_params['gpuid']
+    del resumed_params['earlystop']
     resume_save = params['resume']
     params.update(resumed_params)
     params['resume'] = resume_save
