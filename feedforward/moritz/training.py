@@ -387,6 +387,8 @@ plotresults(results, params)
 
 params['finished'] = True
 
+save_h5(params, os.path.join(params['path'], params['name'], 'params.h5'))
+
 
 # TODO: experiment before hyper search: time measurements when finally running to see what takes what part (per epoch)
 
