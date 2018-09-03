@@ -369,7 +369,8 @@ class HCombManager:
         handle.seek(0)
         handle.truncate()
         pickle.dump(hcomb_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        pickle_dict_to_csv.write_to_csv_from_data(hcomb_list, self.filepath)
+        if len(hcomb_list) > 0:
+            pickle_dict_to_csv.write_to_csv_from_data(hcomb_list, self.filepath)
 
 class RandomSearch:
 
