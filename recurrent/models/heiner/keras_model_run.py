@@ -301,7 +301,7 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
 
             # STAGE thresholds
             # TODO they have to be determined -> now: just stage 1
-            stage_thresholds = {1: np.inf, 2: np.inf, 3: np.inf}  # 3 is the last stage
+            stage_thresholds = {1: 0.835, 2: 0.835, 3: np.inf}  # 3 is the last stage
 
             if metrics_over_folds['best_val_acc_mean_over_folds'] >= stage_thresholds[h.STAGE]:
                 go_to_next_stage = True
