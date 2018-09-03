@@ -1,6 +1,27 @@
 import h5py
 import sys
+from keras.utils.layer_utils import count_params
 from heiner.accuracy_utils import val_accuracy as heiner_val_accuracy
+from heiner.accuracy_utils import calculate_class_accuracies_metrics_per_scene_instance_in_batch as heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch
+
+def metrics_per_batch_thread_handler(label_queue, scene_instance_id_metrics_dict, mask_value, batches_per_epoch):
+    # the arrays y and y_pred within the queue are not allowed to change across batches in order for being thread-safe
+    # assumption 1: batchloader yields array copies (true for moritz loader)
+    # assumption 2: *_and_predict_on_batch return newly allocated arrays
+    for i in range(batches_per_epoch):
+
+        # t_start = time.time()
+        # print('DEBUG: thread waiting for data of batch {}'.format(i+1)+
+        #       ('' if i==0 else '[metrics calculation took {:.2f}]s'.format(t_start-t_intermediate)))
+
+        y_pred, y = label_queue.get()
+
+        # t_intermediate = time.time()
+        # print('DEBUG: thread received data, calculating metrics for batch {} [data waiting took {:.2f}s]'.format(i+1, t_intermediate-t_start))
+
+        heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
+                                                                              y_pred, y, mask_value)
+
 
 def calculate_metrics(scene_instance_id_metrics_dict):
 
@@ -20,6 +41,10 @@ def calculate_metrics(scene_instance_id_metrics_dict):
                'wbac2_per_class': wbac2_per_class}                      # balanced accuracy v2: per class (weighted scene avg)
 
     return metrics
+
+# use the keras backend function count_params to sum the total number of params of the model, cf. model.summary()
+def get_number_of_weights(model):
+    return count_params(model.trainable_weights) + count_params(model.non_trainable_weights)
 
 # loads a flat dictionary from a hdf5 file
 def load_h5(filename):

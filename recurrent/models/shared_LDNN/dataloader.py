@@ -24,7 +24,7 @@ ON      = +1
 OFF     = 0
 UNCLEAR = -1
 '''
-def _read_py_function(filename,mean,std):
+def _read_py_function(filename,mean,std,mode):
     filename = filename.decode(sys.getdefaultencoding())
     fx, fy = np.array([]).reshape(0, 160), np.array([]).reshape(0, 13)
     # each filename is : path1&start_index&end_index@path2&start_index&end_index
@@ -33,17 +33,17 @@ def _read_py_function(filename,mean,std):
         p, start, end = instance.split('&')
         with np.load(p) as data:
             x = data['x'][0]
-            y = data['y'][0]
+            y = data['y_block'][0] if mode == 'block' else data['y'][0]
             fx = np.concatenate((fx, x[int(start):int(end)]), axis=0)
             fy = np.concatenate((fy, y[int(start):int(end)]), axis=0)
     fx = (fx-mean)/std
     l = np.array([fx.shape[0]])
     # print('multi processes:',time.ctime())
     return fx.astype(np.float32), fy.astype(np.int32), l.astype(np.int32)
-def read_trainset(path_set, batchsize,mean,std):
+def read_trainset(path_set, batchsize,mean,std,mode):
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(
-        lambda filename: tuple(tf.py_func(_read_py_function, [filename,mean,std], [tf.float32, tf.int32, tf.int32])))
+        lambda filename: tuple(tf.py_func(_read_py_function, [filename,mean,std,mode], [tf.float32, tf.int32, tf.int32])))
     # batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     batch = dataset.batch(batchsize)
 
@@ -60,42 +60,42 @@ def read_trainset(path_set, batchsize,mean,std):
  UNCLEAR = -1
  NAN: validation use training data set, NaN is already transformed to 1
 '''
-def _read_py_function1(filename,mean,std):
+def _read_py_function1(filename,mean,std,mode):
     filename = filename.decode(sys.getdefaultencoding())
     with np.load(filename) as data:
         x = data['x'][0]
         x = (x - mean) / std
-        y = data['y'][0]
+        y = data['y_block'][0] if mode == 'block' else data['y'][0]
         # for padding value 0, change OFF'0'-> 2
         y[y == 0] = 2
         l = np.array([x.shape[0]])
         return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
 
-def read_validationset(path_set, batchsize,mean,std):
+def read_validationset(path_set, batchsize,mean,std,mode):
     # shuffle path_set
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(
-        lambda filename: tuple(tf.py_func(_read_py_function1, [filename,mean,std], [tf.float32, tf.int32, tf.int32])))
+        lambda filename: tuple(tf.py_func(_read_py_function1, [filename,mean,std,mode], [tf.float32, tf.int32, tf.int32])))
     batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     return batch
 # testing loader-------------------------------
-def _read_py_function2(filename,mean,std):
+def _read_py_function2(filename,mean,std,mode):
     filename = filename.decode(sys.getdefaultencoding())
     data = np.load(filename)
     x = data['x'][0]
     x = (x - mean) / std
-    y = data['y'][0]
+    y = data['y_block'][0] if mode == 'block' else data['y'][0]
     # for padding value 0, change OFF'0'-> 2
     y[y == 0] = 2
     #  and assign NaN frames zero cost in testing (for easier acoustic interpretation of the results)
     # y[y == 'nan'] = 2
     l = np.array([x.shape[0]])
     return x.astype(np.float32), y.astype(np.int32), l.astype(np.int32)
-def read_validationset2(path_set, batchsize,mean,std):
+def read_testset(path_set, batchsize,mean,std,mode):
     # shuffle path_set
     dataset = tf.data.Dataset.from_tensor_slices(path_set)
     dataset = dataset.map(
-        lambda filename: tuple(tf.py_func(_read_py_function2, [filename,mean,std], [tf.float32, tf.int32, tf.int32])))
+        lambda filename: tuple(tf.py_func(_read_py_function2, [filename,mean,std,mode], [tf.float32, tf.int32, tf.int32])))
     batch = dataset.padded_batch(batchsize, padded_shapes=([None, None], [None, None], [None]))
     return batch
 
@@ -243,7 +243,12 @@ def get_validation_data(cv_id, scenes, epochs, timelengths):
     x = INDEX_PATH[INDEX_PATH[:, 1].argsort()]
     result = x[:,2].tolist()
     return result
-def get_scenes_weight(scene_list,cv_id):
+def get_test_data(folder = 7):
+    pkl_file = open('/mnt/binaural/data/scenes2018/test/testdata_path_lcb.pickle', 'rb')
+    data = pickle.load(pkl_file)
+    paths = data[str(folder)]
+    return paths
+def get_scenes_weight_instant(scene_list,cv_id):
     """Fetches postive_count and negative counts.
 
         Args:
@@ -268,6 +273,33 @@ def get_scenes_weight(scene_list,cv_id):
     pos = [x / total for x in count_pos]
     neg = [x / total for x in count_neg]
     return [y / x for x, y in zip(pos, neg)]
+def get_scenes_weight(scene_nbs,cv_id):
+    """Fetches postive_count and negative counts.
+
+        Args:
+            scene_list: A list contains scene ID.
+            cv_id: which folder be used as validation set.
+
+        Returns:
+            weights: [class1,class2,...,class13]
+
+        """
+    weight_dir = '/mnt/binaural/data/scenes2018/train/train_weights_blockbased.npy'
+    #  folder, scene, w_postive, w_negative
+    if type(cv_id) is int:
+        fold_nbs = [cv_id]
+    if scene_nbs == -1:
+        scene_nbs = list(range(1, 81))
+    if type(scene_nbs) is int:
+        scene_nbs = [scene_nbs]
+    weights_array = np.load(weight_dir)
+    fold_nbs = np.array(fold_nbs) - 1
+    scene_nbs = np.array(scene_nbs) - 1
+    weights_array = weights_array[fold_nbs, :, :, :]
+    weights_array = weights_array[:, scene_nbs, :, :]
+    class_pos_neg_counts = np.sum(weights_array, axis=(0, 1))
+    # weight on positive = negative count / positive count
+    return class_pos_neg_counts[:, 1] / class_pos_neg_counts[:, 0]
 def get_sub_scenes_weight(path_list):
     """especially for subsampling
 
@@ -310,14 +342,27 @@ def cal_class_sens_spes(four_list,weight):
     X = np.array(class_sens_spes)
     Y = np.array(class_sens_spes) * weight
     return X, Y
-def get_bac(df):
+def get_bac(df,mode):
     ####################### init nsrc weights
-    w = 1 / np.array([21, 10, 29, 21, 29, 21, 21, 10, 20, 20, 29, 21, 29, 29, 21, 21, 10,
-                      20, 21, 29, 20, 20, 29, 29, 21, 20, 29, 29, 20, 21, 21, 29, 10, 10,
-                      29, 21, 21, 29, 29, 29, 21, 21, 29, 10, 20, 29, 29, 20, 20, 20, 29,
-                      21, 20, 29, 29, 20, 21, 29, 29, 20, 21, 29, 20, 21, 21, 29, 20, 10,
-                      10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
-    w = w / np.sum(w)
+    if mode == 'train':
+        w = 1 / np.array([21, 10, 29, 21, 29, 21, 21, 10, 20, 20, 29, 21, 29, 29, 21, 21, 10,
+                          20, 21, 29, 20, 20, 29, 29, 21, 20, 29, 29, 20, 21, 21, 29, 10, 10,
+                          29, 21, 21, 29, 29, 29, 21, 21, 29, 10, 20, 29, 29, 20, 20, 20, 29,
+                          21, 20, 29, 29, 20, 21, 29, 29, 20, 21, 29, 20, 21, 21, 29, 20, 10,
+                          10, 29, 10, 20, 29, 20, 29, 10, 20, 29, 21, 20])
+        w = w / np.sum(w)
+    else:
+        w = 1 / np.array([3, 3, 3, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50, 55, 60, 50,
+                                55, 60, 50, 55, 60, 50, 55, 60, 60, 50, 55, 60, 50, 55, 60, 50, 55,
+                                55, 60, 60, 60, 60, 60, 50, 50, 50, 50, 55, 55, 55, 55, 60, 60, 60,
+                                60, 50, 50, 50, 50, 55, 55, 55, 55, 60, 60, 60, 60, 50, 50, 50, 50,
+                                55, 55, 55, 55, 60, 60, 60, 60, 50, 50, 50, 50, 55, 55, 55, 55, 60,
+                                60, 60, 60, 50, 50, 50, 50, 55, 55, 55, 55, 60, 60, 60, 60, 50, 50,
+                                50, 50, 55, 55, 55, 55, 60, 60, 60, 60, 50, 50, 50, 50, 55, 55, 55,
+                                55, 60, 60, 60, 60, 60, 60, 60, 60, 50, 50, 50, 50, 55, 55, 55, 55,
+                                60, 60, 60, 60, 50, 50, 50, 50, 55, 55, 55, 55, 60, 60, 60, 60, 50,
+                                50, 50, 50, 55, 55, 55, 55, 55, 55, 55, 55, 60, 60, 60, 60])
+        w = w / np.sum(w)
 
     ####################### load dataframe
     X, Y, Z, Q = [], [], [], []
@@ -393,7 +438,7 @@ def get_performence(true_pos,true_neg,false_pos,false_neg, index):
         result.append(FN[i])
     return np.array(result)/N
 
-def average_performance(list,dir,epoch_num,folder):
+def average_performance(list,dir,epoch_num,folder,mode = 'train',testfold=7):
     header = ['sceneID','instance',
               'class1tp','class1tn','class1fp','class1fn',
               'class2tp', 'class2tn', 'class2fp', 'class2fn',
@@ -409,9 +454,13 @@ def average_performance(list,dir,epoch_num,folder):
               'class12tp', 'class12tn', 'class12fp', 'class12fn',
               'class13tp', 'class13tn', 'class13fp', 'class13fn']
     df = pd.DataFrame(list,columns=header)
-    dir += 'folder'+ str(folder) + '_' +str(epoch_num) + '.pkl'
-    df.to_pickle(dir)
+    if mode == 'train':
+        dir += 'folder'+ str(folder) + '_' +str(epoch_num) + '.pkl'
+        df.to_pickle(dir)
+    else:
+        dir += 'CVFold_' + str(folder) + '_TestFolder_' + str(testfold) +'.pkl'
+        df.to_pickle(dir)
 
-    bac1,bac2,class_sens_spes = get_bac(df)
+    bac1,bac2,class_sens_spes = get_bac(df,mode)
 
     return bac1, bac2,class_sens_spes

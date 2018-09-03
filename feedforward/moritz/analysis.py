@@ -1,15 +1,16 @@
 import argparse
 import os
-import numpy as np
+import glob
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from myutils import load_h5
 from constants import *
 
-def plotresults(results, params, datalimits=False, firstsceneonly=False):
+def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsceneonly=False):
 
     if firstsceneonly:
+        # for debugging purposes we use the first scene only but the scene-weights of 1/21. need to be undone
         for acc in ['wbac', 'wbac_per_class', 'sens_spec_per_class', 'wbac2', 'wbac2_per_class']:
             results['val_' + acc] *= 21.
             results['train_' + acc] *= 21.
@@ -24,7 +25,6 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     best_epochidx = np.argmax(results['val_wbac'])
     best_bac2_epochidx = np.argmax(results['val_wbac2'])
     if 'earlystop_best_epochidx' in results:
-        print('enable following assertion again!!!!!!!') # TODO enable again!
         # ensure that best epoch by earlystopping is the best epoch by simply maximizing validation wbac
         assert best_epochidx == results['earlystop_best_epochidx']
 
@@ -35,13 +35,20 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     traingray = (.3, .3, .3)
     smallfontsize = 6
     mediumfontsize = 8
+    avg_win = 5
 
     # summary metrics figure
     figsize=(8,9)
     plt.figure(figsize=figsize)
+    if 'finished' in params:
+        finishedstr = ' --> training '+ ('finished' if params['finished'] else 'NOT YET FINISHED')
+    else:
+        finishedstr = ' --> finished param missing (old run)'
     plt.suptitle('summary metrics of '+params['name']+'\n\n'+
-                 'runtime: {:.0f}h total'.format(np.sum(results['runtime'])/3600.)+
-                 ('' if len(epochs)==1 else ', {:.0f}s per epoch (excluding first)'.format(np.mean(results['runtime'][1:]))),
+                 'runtime (gpu {} on {}): {:.0f}h total'.format(params['gpuid'], params['server'], np.sum(results['runtime'])/3600.)+
+                 ('' if len(epochs)==1 else ', {:.0f}s per epoch (excluding first)'.format(np.mean(results['runtime'][1:])))+
+                 finishedstr+
+                 '\n\nlegend numbers: best val_wbac epoch; stddevs: batches (losses/gradnorm, dashed) or classes (val_wbac, filled)',
                  fontsize=mediumfontsize)
     plotno = 2 if params['nocalcgradientnorm'] else 3
 
@@ -66,10 +73,11 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
             plt.plot([x_epoch_right, x_epoch_right+deltaepoch_train],
                      [results['train_loss_batch'][epidx, -1],
                       results['train_loss_batch'][epidx+1, 0]], color='lightgray', alpha=0.5, zorder=0)
-    plt.plot(epochs, results['train_loss'], color=traingray, marker='o', label='train_loss ({:.3f})'.format(results['train_loss'].min()))
-    # std dev across batches
-    stddev_train = np.std(results['train_loss_batch'], axis=1)
-    plt.plot(epochs, results['train_loss']+stddev_train, color='dimgray', linestyle='dashed', alpha=0.7, label='stddev', zorder=1)
+
+    stddev_train = np.std(results['train_loss_batch'], axis=1) # std dev across batches
+    plt.plot(epochs, results['train_loss'], color=traingray, marker='o', label='train_loss ({:.3f} +- {:.3f})'.
+             format(results['train_loss'][best_epochidx], stddev_train[best_epochidx]))
+    plt.plot(epochs, results['train_loss']+stddev_train, color='dimgray', linestyle='dashed', alpha=0.7, zorder=1)
     plt.plot(epochs, results['train_loss']-stddev_train, color='dimgray', linestyle='dashed', alpha=0.7, zorder=1)
 
 
@@ -86,8 +94,10 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
             plt.plot([x_epoch_right, x_epoch_right+deltaepoch_valid],
                      [results['val_loss_batch'][epidx, -1],
                       results['val_loss_batch'][epidx+1, 0]], color='lightblue', alpha=0.4, zorder=0)
-    plt.plot(epochs, results['val_loss'], color='blue', marker='o', label='val_loss ({:.3f})'.format(results['val_loss'].min()))# std dev across batches
+
     stddev_valid = np.std(results['val_loss_batch'], axis=1)
+    plt.plot(epochs, results['val_loss'], color='blue', marker='o', label='val_loss ({:.3f} +- {:.3f})'.
+             format(results['val_loss'][best_epochidx], stddev_valid[best_epochidx]))# std dev across batches
     plt.plot(epochs, results['val_loss']+stddev_valid, color='blue', linestyle='dashed', alpha=0.7, zorder=1)
     plt.plot(epochs, results['val_loss']-stddev_valid, color='blue', linestyle='dashed', alpha=0.7, zorder=1)
 
@@ -109,7 +119,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
     plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
     plt.tick_params(axis='y', which='both', labelleft='on', labelright='on')
-    plt.legend(fontsize=mediumfontsize, loc='lower left')
+    plt.legend(fontsize=smallfontsize, loc='lower left')
 
     # ================================================
     # axis: weighted balanced accuracy over epochs
@@ -119,11 +129,26 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     dacc = 2.
 
     # wbac training (class-averaged)
-    plt.plot(epochs, results['train_wbac']*100., color=traingray, marker='o', label='train_wbac ({:.2f}%)'.format(results['train_wbac'].max()*100.))
+    train_wbac_std = np.std(results['train_wbac_per_class'] * 100., axis=1)
+    plt.plot(epochs, results['train_wbac']*100., color=traingray, marker='o', label='train_wbac ({:.2f}% +- {:.2f}%)'.
+             format(results['train_wbac'][best_epochidx]*100., train_wbac_std[best_epochidx]))
+
+    # wbac validation (class-averaged) +- class std dev
+    val_wbac_std = np.std(results['val_wbac_per_class'] * 100., axis=1)
+    plt.plot(epochs, results['val_wbac']*100., color='blue', marker='o', label='val_wbac ({:.2f}% +- {:.2f}%)'.
+             format(results['val_wbac'][best_epochidx]*100., val_wbac_std[best_epochidx]))
+    plt.fill_between (epochs, results['val_wbac']*100. - val_wbac_std,
+                      results['val_wbac']*100. + val_wbac_std,
+                      facecolor='blue', alpha=0.12, zorder=0)
+    # plt.plot(epochs, results['val_wbac']*100. + val_wbac_std, color='blue', linestyle='dashed',
+    #          label='stddev ({})'.format(results['val_wbac'].max()*100.))
+    # plt.plot(epochs, results['val_wbac']*100. - val_wbac_std, color='blue', linestyle='dashed')
+
+
     # wbac2 validation (class-averaged)
-    plt.plot(epochs, results['val_wbac2']*100., color='brown', marker='o', label='val_wbac2 ({:.2f}%)'.format(results['val_wbac2'].max()*100.))
-    # wbac validation (class-averaged)
-    plt.plot(epochs, results['val_wbac']*100., color='blue', marker='o', label='val_wbac ({:.2f}%)'.format(results['val_wbac'].max()*100.))
+    val_wbac2_std = np.std(results['val_wbac2_per_class'] * 100., axis=1)
+    plt.plot(epochs, results['val_wbac2']*100., color='brown', marker='o', label='val_wbac2 ({:.2f}% +- {:.2f}%)'.
+             format(results['val_wbac2'][best_epochidx]*100., val_wbac2_std[best_epochidx]))
 
     # axis config
     if datalimits:
@@ -141,7 +166,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
                   * 100.
     plt.ylim(min_acc, max_acc)
     plt.ylabel('accuracy (%)', fontsize=mediumfontsize)
-    plt.legend(fontsize=mediumfontsize, loc='upper left')
+    plt.legend(fontsize=smallfontsize, loc='best')
     plt.grid()
     plt.xlim(0, epochs[-1])
     plt.xticks(epochs)
@@ -183,11 +208,10 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
                          [results['gradientnorm_batch'][epidx, -1],
                           results['gradientnorm_batch'][epidx + 1, 0]], color='lightgray')
         plt.plot(epochs, results['gradientnorm'], color=traingray, marker='o', label='gradientnorm')
-        plt.plot(epochs, np.ones_like(epochs)*params['gradientclip'], color='green', linestyle='dashed',
-                 label='clip value')
+        plt.plot(epochs, np.ones_like(epochs)*params['gradientclip'], color='green', label='clip value')
         stddev_grad = np.std(results['gradientnorm_batch'], axis=1)
-        plt.plot(epochs, results['gradientnorm']+stddev_grad, color='dimgray', linestyle='dashed', alpha=0.7, zorder=1)
-        plt.plot(epochs, results['gradientnorm']-stddev_grad, color='dimgray', linestyle='dashed', alpha=0.7, zorder=1)
+        plt.plot(epochs, results['gradientnorm']+stddev_grad, color='black', label='stddev', linestyle='dashed', alpha=0.7, zorder=3)
+        plt.plot(epochs, results['gradientnorm']-stddev_grad, color='black', linestyle='dashed', alpha=0.7, zorder=3)
 
         # axis config
         plt.grid()
@@ -198,7 +222,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
         plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
         plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
         plt.tick_params(axis='y', which='both', labelleft='on', labelright='on')
-        plt.legend(fontsize=mediumfontsize, loc='best')
+        plt.legend(fontsize=smallfontsize, loc='best')
         plt.xlabel('epochs', fontsize=mediumfontsize)
 
     plt.savefig(os.path.join(params['path'], params['name'], 'metrics_summary.png'))
@@ -235,7 +259,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     if not datalimits:
         plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
     plt.ylabel('class bac (%)', fontsize=mediumfontsize)
-    plt.legend(fontsize=smallfontsize, ncol=4, loc='upper left')
+    plt.legend(fontsize=smallfontsize, ncol=4, loc='best')
     plt.grid()
     plt.xlim(epochs[0], epochs[-1])
     plt.xticks(epochs)
@@ -257,7 +281,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     if not datalimits:
         plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
     plt.ylabel('class bac2 (%)', fontsize=mediumfontsize)
-    plt.legend(fontsize=smallfontsize, ncol=4, loc='upper left').set_zorder(3)
+    plt.legend(fontsize=smallfontsize, ncol=4, loc='best').set_zorder(3)
     plt.grid()
     plt.xlim(epochs[0], epochs[-1])
     plt.xticks(epochs)
@@ -284,7 +308,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     if not datalimits:
         plt.yticks(np.linspace(min_acc, max_acc, int(round((max_acc-min_acc)/dacc))+1))
     plt.ylabel('class sens/spec (%)', fontsize=mediumfontsize)
-    plt.legend(fontsize=smallfontsize, ncol=4, loc='upper left')
+    plt.legend(fontsize=smallfontsize, ncol=4, loc='best')
     plt.grid()
     plt.xlim(epochs[0], epochs[-1])
     plt.xticks(epochs)
@@ -298,7 +322,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     # bac per class and scene
     # TODO do after runs already started
 
-def plot_train_experiment(folder, datalimits, firstsceneonly):
+def plot_train_experiment_from_folder(folder, datalimits, firstsceneonly):
     params = load_h5(os.path.join(folder, 'params.h5'))
     results = load_h5(os.path.join(folder, 'results.h5'))
 
@@ -310,14 +334,15 @@ def plot_train_experiment(folder, datalimits, firstsceneonly):
     #     results['earlystop_best_epochidx'] = results['epoch_best']
 
     # do actual plotting
-    plotresults(results, params, datalimits, firstsceneonly)
+    plot_train_experiment_from_dicts(results, params, datalimits, firstsceneonly)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str, default='trainplot',
-                        help='folder in which the params and results reside and into which we should (over)write the plots')
+                        help='currently only \'trainplot\' is supported')
     parser.add_argument('--folder', type=str,
-                        help='folder in which the params and results reside and into which we should (over)write the plots')
+                        help='folder in which the params and results reside and into which we should (over)write '+
+                             'the plots. can contain wildcard character *')
     parser.add_argument('--datalimits', action='store_true', default=False,
                         help='whether to use limits that are specific to the data of the current results'+
                              ' (i.e., axes not comparable to other experiments)')
@@ -326,6 +351,40 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.mode == 'trainplot' and args.folder:
-        plot_train_experiment(folder=args.folder,
-                              datalimits=args.datalimits,
-                              firstsceneonly=args.firstsceneonly)
+        if '*' not in args.folder:
+            folders = [args.folder]
+        else:
+            folders = glob.glob(args.folder)
+
+        for f in folders:
+            print('making visualization for folder {}'.format(f))
+            plot_train_experiment_from_folder(folder=f,
+                                              datalimits=args.datalimits,
+                                              firstsceneonly=args.firstsceneonly)
+
+    if args.mode == 'hyper' and args.folder:
+        # TODO: rename this file to analysis
+        # remark: hyperparam subset selection by specifying parts of the name, e.g. batchinterprete_2_hyper/n*_dr*_ks3...
+        if '*' not in args.folder:
+            folders = glob.glob(args.folder+'/*')
+        else:
+            folders = glob.glob(args.folder)
+
+        hyperparam_combinations = {}
+        for f in folders:
+            if os.path.isdir(f):
+                print('collecting data from folder {}'.format(f))
+                params = load_h5(os.path.join(f, 'params.h5'))
+                results = load_h5(os.path.join(f, 'results.h5'))
+                name =  os.path.basename(f)
+                featuremaps = params['featuremaps']
+                dropoutrate = params['dropoutrate']
+                val_wbac = results['val_wbac']
+                trainepochs = len(val_wbac) # i.e., until last epoch (5 later than best epoch if earlystopping was active)
+                hyperparam_combinations[(featuremaps, dropoutrate)] = (val_wbac, trainepochs)
+
+        # TODO: write csv file
+
+        # scatter plot with big dots and color = wbac2 value [within 0.8 and 0.9] -- size of the dot kind of inverse to trainepochs
+        for (featuremaps, dropoutrate), (val_wbac, trainepochs) in hyperparam_combinations.items():
+            plt.plot(featuremaps, dropoutrate, marker='o')

@@ -23,7 +23,7 @@ import numpy as np
 For block_intepreter with rectangle 
 '''
 logger = logging.getLogger(__name__)
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -44,13 +44,15 @@ class HyperParameters:
                 os.makedirs(self.SESSION_DIR)
         else:
             self.RESTORE_DATE = FOLD_NAME
-            self.OLD_EPOCH = 2
+            self.OLD_EPOCH = 6
             self.LOG_FOLDER = './log/' + self.RESTORE_DATE + '/'
             self.SESSION_DIR = self.LOG_FOLDER + str(VAL_FOLD) + '/'
 
 
         # How many scenes include in this model.
-        self.SCENES = ['scene'+str(i) for i in range(1,2)]
+        self.SCENES = ['scene'+str(i) for i in range(2,3)]
+        # label type
+        self.LABEL_MODE = 'block'
 
         # early stopping--patient
         self.PATIENCE = 5
@@ -62,13 +64,12 @@ class HyperParameters:
         # Parameters for MLP
         self.NUM_NEURON = 1200
         self.NUM_MLP = 1
-
         # regularization
         self.LAMBDA_L2 = 0
         self.OUTPUT_KEEP_PROB = 0.5
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
-        self.BATCH_SIZE = 32
+        self.BATCH_SIZE = 128
         self.VALIDATION_BATCH_SIZE = 20
         self.EPOCHS = 50
         self.TIMELENGTH = 1000
@@ -105,7 +106,7 @@ class HyperParameters:
     def validation(self, batch_size):
         with tf.name_scope('LDNN'):
             with tf.device('/cpu:0'):
-                valid_batch = read_validationset(self.SET['validation'], batch_size,self.MEAN,self.STD)
+                valid_batch = read_validationset(self.SET['validation'], batch_size,self.MEAN,self.STD,self.LABEL_MODE)
                 handle = tf.placeholder(tf.string, shape=[])
                 iterator = tf.data.Iterator.from_string_handle(handle, valid_batch.output_types,
                                                                valid_batch.output_shapes)
@@ -121,9 +122,12 @@ class HyperParameters:
             logits, update_op, reset_op = MultiRNN(X, batch_size, seq, self.NUM_CLASSES,
                                          self.NUM_LSTM, self.NUM_HIDDEN, self.OUTPUT_KEEP_PROB,
                                          self.NUM_MLP, self.NUM_NEURON, training=False)
-            w = get_scenes_weight(self.SCENES, self.VAL_FOLD)
+            if self.LABEL_MODE == 'block':
+                w = get_scenes_weight(-1, self.VAL_FOLD)# block-based
+            else:
+                w = get_scenes_weight_instant(self.SCENES, self.VAL_FOLD)
             with tf.variable_scope('loss'):
-                loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32), logits, tf.constant(w))
+                loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32), logits, tf.constant(w,dtype=tf.float32))
                 # number of frames without zero_frame
                 counted_non_zeros = tf.cast(tf.reduce_sum(mask_zero_frames), tf.float32)
                 # eliminate zero_frame loss
@@ -160,7 +164,7 @@ class HyperParameters:
                 # numpy_path = np.array(self.SET['train'])
                 # self.path_placeholder = tf.placeholder(numpy_path.dtype, numpy_path.shape)
                 self.path_placeholder = tf.placeholder(tf.string, len(self.SET['train']))
-                train_batch = read_trainset(self.path_placeholder, self.BATCH_SIZE,self.MEAN,self.STD)
+                train_batch = read_trainset(self.path_placeholder, self.BATCH_SIZE,self.MEAN,self.STD,self.LABEL_MODE)
                 handle = tf.placeholder(tf.string, shape=[])
                 iterator = tf.data.Iterator.from_string_handle(handle, train_batch.output_types,
                                                                train_batch.output_shapes)
@@ -175,12 +179,14 @@ class HyperParameters:
                                          self.NUM_LSTM, self.NUM_HIDDEN, self.OUTPUT_KEEP_PROB,
                                          self.NUM_MLP, self.NUM_NEURON, training=True)
 
-            # Get weight for weighted cross entory
-            w = get_scenes_weight(self.SCENES, self.VAL_FOLD)
+            if self.LABEL_MODE == 'block':
+                w = get_scenes_weight(-1, self.VAL_FOLD)# block-based
+            else:
+                w = get_scenes_weight_instant(self.SCENES, self.VAL_FOLD)
 
             # Define loss and optimizer
             with tf.variable_scope('loss'):
-                loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32), logits, tf.constant(w))
+                loss_op = tf.nn.weighted_cross_entropy_with_logits(tf.cast(Y, tf.float32), logits, tf.constant(w,dtype=tf.float32))
                 # number of frames without zero_frame
                 counted_non_zeros = tf.cast(tf.reduce_sum(mask_zero_frames), tf.float32)
                 # eliminate zero_frame loss
@@ -189,12 +195,12 @@ class HyperParameters:
                 # for unreg in [tf_var.name for tf_var in tf.trainable_variables() if
                 #               ("bias" in tf_var.name)]:
                 #     print(unreg)
-                # l2 = self.LAMBDA_L2 * sum(
-                #     tf.nn.l2_loss(tf_var)
-                #     for tf_var in tf.trainable_variables()
-                #     if not ("bias" in tf_var.name)
-                # )
-                # loss_op += l2
+                l2 = self.LAMBDA_L2 * sum(
+                    tf.nn.l2_loss(tf_var)
+                    for tf_var in tf.trainable_variables()
+                    if not ("bias" in tf_var.name)
+                )
+                loss_op += l2
             with tf.variable_scope('optimize'):
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.LEARNING_RATE)
                 # train_op = optimizer.minimize(loss_op)
@@ -277,7 +283,7 @@ class HyperParameters:
                 if not self.RESTORE:
                     sess.run(init)
                 else:
-                    saver.restore(sess, self.SESSION_DIR + 'model.ckpt')
+                    saver.restore(sess, self.SESSION_DIR + str(self.OLD_EPOCH) +'_model.ckpt')
                     print("Model restored.")
                 section = '\n{0:=^40}\n'
                 logger.info(section.format('Run training epoch'))
@@ -378,11 +384,12 @@ class HyperParameters:
                                         spe / v_batches_per_epoch,
                                         f / v_batches_per_epoch,
                                         epoch_duration1))
-                        for item in class_sens_spes:
-                            logger.info(
-                                '''Sensitivity: {},specificity: {:.3f}'''
-                                    .format(item[0],
-                                            item[1]))
+                        # print(class_sens_spes)
+                        # for item in class_sens_spes:
+                        #     logger.info(
+                        #         '''Sensitivity: {},specificity: {:.3f}'''
+                        #             .format(item[0],
+                        #                     item[1]))
                         print(epoch_number)
                         epoch_number += 1
                         train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
@@ -401,7 +408,7 @@ class HyperParameters:
 
 if __name__ == "__main__":
     # fname = datetime.datetime.now().strftime("%Y%m%d")
-    fname ='henier_graident'
+    fname ='testing'
     # use cv_folder3 as first level
     for i in range(3,4):
         with tf.Graph().as_default():

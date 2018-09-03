@@ -14,13 +14,13 @@ def obtain_nextlarger_residuallayers_refining_historysize(params):
 
     new_historylength = (params['kernelsize'] - 1) * 2 ** (params['residuallayers'] - 1) + 1
     if new_historylength != params['historylength']:
+        output = output + 'the given historylength {} was modified to {}\n'.format(params['historylength'], new_historylength)
         params['historylength'] = new_historylength
         changestr = '(next larger) '
-        output = output + '\nhistorysize was updated to {} (corresponding to the next residuallayer)'.format(new_historylength)
     else:
         changestr = ''
 
-    output = 'computed from given historysize {} the {}number of residuallayers {}'.format(params['historylength'],
+    output = output + 'computed from historysize {} the {}number of residuallayers {}'.format(params['historylength'],
                                                                                            changestr,
                                                                                            params['residuallayers'])
 
