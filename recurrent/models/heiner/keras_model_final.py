@@ -41,9 +41,9 @@ def run_final_experiment(tmux, available_gpus, id_to_test, epochs_to_train, mode
     os.makedirs(save_path, exist_ok=True)
 
     rs.add_hcombs_to_run_via_id(id_to_test, save_path, save_path_hcomb_list=save_path_hcomb_list,
-                                changes_dict={'MAX_EPOCHS': epochs_to_train})
+                                changes_dict={'MAX_EPOCHS': epochs_to_train, 'STAGE': -1})
 
-    reset_hcombs = True
+    reset_hcombs = False
 
     if use_tmux.use_tmux:
 
