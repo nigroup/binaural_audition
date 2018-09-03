@@ -23,10 +23,36 @@ def plot_metrics(metrics, save_dir):
                 continue
             if 'class' in metric_name:
                 if 'sens' in metric_name or 'spec' in metric_name:
-                    continue
+                    _plot_sens_spec_class(metric_name, data, save_dir)
                 _plot_loss_and_acc(metric_name, data, save_dir, over_classes=True)
             else:
                 _plot_loss_and_acc(metric_name, data, save_dir, over_classes=False, epochs_done=epochs_done)
+
+
+def _plot_sens_spec_class(metric_name, data, save_dir):
+    x = np.arange(1, data.shape[0] + 1, 1)
+
+    labels = ['alarm', 'baby', 'femaleSpeech',  'fire', 'crash', 'dog', 'engine', 'footsteps', 'knock', 'phone',
+              'piano', 'maleSpeech', 'femaleScreammaleScream']
+    colors = np.linspace(0, 1, len(labels))
+    cmap = plt.get_cmap('tab20')
+    colors = [cmap(val) for val in colors]
+
+    fig, ax = plt.subplots(figsize=(13, 13))
+
+    for class_ind in range(data.shape[1]):
+
+        ax.plot(x, data[:, class_ind, 0], '.-', label='sens.: ' + labels[class_ind],
+                c=colors[class_ind])
+        ax.plot(x, data[:, class_ind, 1], '.--', label='spec.: ' + labels[class_ind],
+                c=colors[class_ind])
+
+    ax.set_title(metric_name)
+    handles, plt_labels = ax.get_legend_handles_labels()
+    plt.legend(handles, plt_labels, loc='lower center', ncol=data.shape[1] // 2, bbox_to_anchor=(0.5, -0.13),
+               fontsize='small')
+    plt.savefig(path.join(save_dir, metric_name) + '.pdf')
+    plt.close()
 
 
 def _plot_acc_over_folds(metrics, save_dir):
@@ -176,14 +202,15 @@ def _plot_sens_spec(metric_name, data, save_dir):
         plt.savefig(path.join(save_dir, metric_name) + '_' + str(n) + '.pdf')
         plt.close()
 
-def _test_plot_sens_spec():
+def _test_plot_sens_spec_class():
     import pickle
-    with open('/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/stage1/hcomb_0/val_fold3/metrics.pickle', 'rb') as handle:
+    save_dir = '/mnt/antares_raid/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/hcomb_25/val_fold3/'
+    with open(path.join(save_dir, 'metrics.pickle'), 'rb') as handle:
         metrics = pickle.load(handle)
-    metric_name = 'val_class_sens_spec'
-    # data = metrics[metric_name]
-    data = np.random.rand(1, 80, 13, 2)
-    _plot_sens_spec(metric_name, data, '/home/spiess/twoears_proj/models/heiner/model_directories/LDNN_v1/stage1/hcomb_0/val_fold3/')
+    metric_name = 'val_sens_spec_class'
+    data = metrics[metric_name]
+    # data = np.random.rand(1, 80, 13, 2)
+    _plot_sens_spec_class(metric_name, data, save_dir)
 
 def _test_plot_loss():
     import pickle
@@ -235,7 +262,9 @@ if __name__ == '__main__':
 
     # _test_plot_loss()
 
-    _test_plot_global_gradient_norm()
+    # _test_plot_global_gradient_norm()
+
+    _test_plot_sens_spec_class()
 #
 # for key, metric in metrics.items():
 #     metrics[key] = np.array(metric)
