@@ -93,7 +93,8 @@ class DataLoader:
             if self.mode == 'train' and len(self.fold_nbs) != 5 or self.mode == 'val' and len(self.fold_nbs) != 1:
                 if self.mode == 'train' and len(self.fold_nbs) == 6:
                     self.train_on_all_folds = True
-                raise ValueError('input standardization can for now just be applied if only ONE val_fold is used')
+                else:
+                    raise ValueError('input standardization can for now just be applied if only ONE val_fold is used')
 
         # whether to create last batches by padding the rows which are not long enough
         self.use_every_timestep = use_every_timestep
@@ -138,7 +139,7 @@ class DataLoader:
         else:
             if self.mode == 'test':
                 self.filenames = deque(self.filenames)
-                self.length = len(self.filenames)
+                self.length = [len(self.filenames)]
                 self._data_efficiency = 1.0
             else:
                 # validation loader which is not stateful (means state should be reset after each batch) will not use a
@@ -151,12 +152,12 @@ class DataLoader:
                 self.features = features
                 self.classes = classes
 
-                self.length = int(np.ceil(len(self.filenames) / self.batchsize))
-                self._data_efficiency = 1.0
+                self.length = [int(np.ceil(len(self.filenames) / self.batchsize))]
+                self._data_efficiency = [1.0]
                 if self.epochs > 1:
                     self.act_epoch = 1
-                    self.length = [self.length] * self.epochs
-                    self._data_efficiency = [self._data_efficiency] * self.epochs
+                    self.length = self.length * self.epochs
+                    self._data_efficiency = self._data_efficiency * self.epochs
 
                 length_tuples = [(self._length_dict()[fn], fn) for fn in self.filenames]
                 self.filenames = [tup[1] for tup in sorted(length_tuples, key=lambda x: x[0], reverse=True)]
@@ -482,9 +483,13 @@ class DataLoader:
 
     def _next_batch_test(self):
         if len(self.filenames) > 0:
-            with np.load(self.filenames.pop()) as data:
+            filename = self.filenames.pop()
+            with np.load(filename) as data:
                 sequence = data['x']
                 labels = data['y'] if self.instant_mode else data['y_block']
+                labels = np.stack([labels,
+                                  np.full(labels.shape, self._scene_instance_ids_dict()[filename], dtype=np.float32)],
+                                  axis=3)
                 return self._input_standardization_if_wanted(sequence), labels
         else:
             return None, None
@@ -631,9 +636,6 @@ class DataLoader:
             self.effective_length.append(effective_length)
             self.length.append(length)
 
-        if self.epochs == 1:
-            self.length = self.length[0]
-            self.effective_length = self.effective_length[0]
 
     def _length_dict(self):
         if self.length_dict is None:
