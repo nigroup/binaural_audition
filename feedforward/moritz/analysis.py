@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from myutils import load_h5
 from constants import *
 
-def plotresults(results, params, datalimits=False, firstsceneonly=False):
+def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsceneonly=False):
 
     if firstsceneonly:
         # for debugging purposes we use the first scene only but the scene-weights of 1/21. need to be undone
@@ -35,6 +35,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     traingray = (.3, .3, .3)
     smallfontsize = 6
     mediumfontsize = 8
+    avg_win = 5
 
     # summary metrics figure
     figsize=(8,9)
@@ -321,7 +322,7 @@ def plotresults(results, params, datalimits=False, firstsceneonly=False):
     # bac per class and scene
     # TODO do after runs already started
 
-def plot_train_experiment(folder, datalimits, firstsceneonly):
+def plot_train_experiment_from_folder(folder, datalimits, firstsceneonly):
     params = load_h5(os.path.join(folder, 'params.h5'))
     results = load_h5(os.path.join(folder, 'results.h5'))
 
@@ -333,7 +334,7 @@ def plot_train_experiment(folder, datalimits, firstsceneonly):
     #     results['earlystop_best_epochidx'] = results['epoch_best']
 
     # do actual plotting
-    plotresults(results, params, datalimits, firstsceneonly)
+    plot_train_experiment_from_dicts(results, params, datalimits, firstsceneonly)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -357,9 +358,9 @@ if __name__ == '__main__':
 
         for f in folders:
             print('making visualization for folder {}'.format(f))
-            plot_train_experiment(folder=f,
-                                  datalimits=args.datalimits,
-                                  firstsceneonly=args.firstsceneonly)
+            plot_train_experiment_from_folder(folder=f,
+                                              datalimits=args.datalimits,
+                                              firstsceneonly=args.firstsceneonly)
 
     if args.mode == 'hyper' and args.folder:
         # TODO: rename this file to analysis

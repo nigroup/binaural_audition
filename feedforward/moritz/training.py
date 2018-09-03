@@ -24,7 +24,7 @@ from batchloader import BatchLoader
 from hyperparams import obtain_nextlarger_residuallayers_refining_historysize
 from training_callback import MetricsCallback
 from myutils import get_number_of_weights, save_h5, load_h5, printerror
-from visualization import plotresults
+from analysis import plot_train_experiment_from_dicts
 
 
 override_params = {}
@@ -43,14 +43,6 @@ override_params = {}
 # #override_params['resume'] = 'playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es3_vf3'
 # override_params['earlystop'] = 3
 # override_params['weightnorm'] = False
-
-# the following for allow groth => as long as we develop
-os.environ["CUDA_VISIBLE_DEVICES"] = '0' # cf. nvidia-smi ids
-import tensorflow as tf
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
-session = tf.Session(config=config)
-
 
 totaltime_start = time.time()
 
@@ -136,8 +128,8 @@ initial_output = obtain_nextlarger_residuallayers_refining_historysize(params)
 
 # NAME
 
-name_short = 'n{}_dr{}_ks{}_hl{}_lr{}'.format(params['featuremaps'], params['dropoutrate'], params['kernelsize'],
-                                              params['historylength'], params['learningrate'])
+name_short = 'n{}_dr{}_ks{}_hl{}_lr{}_bs{}'.format(params['featuremaps'], params['dropoutrate'], params['kernelsize'],
+                                              params['historylength'], params['learningrate'], params['batchsize'])
 name_long = name_short + '_wn{}_bs{}_bl{}_es{}'.format(params['weightnorm'],
             params['batchsize'], params['batchlength'], params['earlystop'])
 name_short += '_vf{}'.format(args.validfold)
@@ -188,11 +180,18 @@ print('PREPARING')
 print('choosing gpu id {} on {}'.format(params['gpuid'], params['server']))
 os.environ["CUDA_VISIBLE_DEVICES"] = str(params['gpuid']) # cf. nvidia-smi ids
 
-
 print('output of nvidia-smi program (via subprocess): ')
 #os.system('nvidia-smi') # I though need the output to extract process ids but skipped using it (thus not using os.system)
 smi = subprocess.run(['nvidia-smi'], stdout=subprocess.PIPE).stdout.decode('utf-8')
 print(smi)
+
+# the following for allow groth => as long as we develop
+# os.environ["CUDA_VISIBLE_DEVICES"] = '0' # cf. nvidia-smi ids
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+session = tf.Session(config=config)
+
 
 print(initial_output)
 print()
@@ -383,7 +382,7 @@ save_h5(results, os.path.join(params['path'], params['name'], 'results.h5'))
 
 
 # TODO: final plotting and printing
-plotresults(results, params)
+plot_train_experiment_from_dicts(results, params)
 
 params['finished'] = True
 

@@ -3,13 +3,17 @@ TODO
 - finales modell trainieren konzipieren => mit heiner abstimmen
 
 - "TODO:"s wegmachen aus code und preliminary study abschließen
-    accs in log => in prozent 81.1% statt 0.811 o.ä.
-
+darunter:
+    - add to plot: moving  loss/acc average over say three epochs (to see validation trend)
+    
 - vorläufige experimente abschließen
     => dropout
     => featuremaps
     => kernelsize
 
+- validate loss weights (heiner maybe not uses all data)
+no of 1 labels and of 0 labels for each fold and class => pos,neg,tot=pos+neg per fold+class
+    
 - hyperparam_combinations_*.txt sukzessive befüllen (immer genügend auf vorrat) und skript dafür schreiben, welches prozesse startet nacheinander (nur level1?) (=> zwei prozesse können gleichzeitig schreiben=>filelock)
 
 - skript für kombinations-auswertungstabelle (levels 2,3 antizipieren) erstellen

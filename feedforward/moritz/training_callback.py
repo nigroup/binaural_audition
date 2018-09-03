@@ -5,7 +5,7 @@ import os
 from time import time
 from keras.callbacks import Callback
 from myutils import calculate_metrics, save_h5
-from visualization import plotresults
+from analysis import plot_train_experiment_from_dicts
 
 class MetricsCallback(Callback):
     def __init__(self, params, oldresults=None):
@@ -141,13 +141,13 @@ class MetricsCallback(Callback):
         # get gradient norm statistics per epoch
         if not self.myparams['nocalcgradientnorm']:
             self.gradient_norm.append(np.array(self.gradient_norm_per_batch[-1]).mean())
-            gradstring = ', gradient norm avg {:.1f}'.format(self.gradient_norm[-1])
+            gradstring = ', gradient norm avg {:.2f}'.format(self.gradient_norm[-1])
 
         if self.myparams['validfold'] == -1:
-            print('epoch {} ended with training wbac {:.2f}'.format(epoch+1, metrics_training['wbac']))
+            print('epoch {} ended with training wbac {:.1f}%'.format(epoch+1, metrics_training['wbac']*100.))
         else:
-            print('epoch {} took {:.2f} and ended with validation wbac {:.2f} (training wbac {:.2f})'.
-                  format(epoch + 1, self.runtime[-1], metrics_validation['wbac'], metrics_training['wbac'])
+            print('epoch {} took {:.2f} and ended with validation wbac {:.1f}% (training wbac {:.1f}%)'.
+                  format(epoch + 1, self.runtime[-1], metrics_validation['wbac']*100., metrics_training['wbac']*100.)
                   +gradstring)
 
         # collect results
@@ -174,7 +174,7 @@ class MetricsCallback(Callback):
         save_h5(self.results, os.path.join(self.myparams['path'], self.myparams['name'], 'results.h5'))
 
         # plot results
-        plotresults(self.results, self.myparams)
+        plot_train_experiment_from_dicts(self.results, self.myparams)
 
         print('results and plots files are written into {}'.
               format(epoch+1, self.myparams['path']+'/'+self.myparams['name']))
