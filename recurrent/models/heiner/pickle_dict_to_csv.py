@@ -3,7 +3,7 @@
 import csv
 import sys
 import pickle
-import heiner.hyperparameters as hyper
+from . import hyperparameters as hyper
 
 def write_to_csv(file):
     with open(file, 'rb') as handle:

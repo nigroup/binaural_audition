@@ -187,7 +187,13 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
                 best_val_acc = np.max(val_phase.accs)
                 best_val_acc_bac2 = old_metrics['val_accs_bac2'][np.argmax(val_phase.accs)]
 
+                # set the dataloaders to correct epoch
+                train_phase.resume_from_epoch(h.epochs_finished[val_fold - 1] + 1)
+                val_phase.resume_from_epoch(h.epochs_finished[val_fold - 1] + 1)
+
             stage_was_finished = True
+
+
 
             for e in range(h.epochs_finished[val_fold - 1], h.MAX_EPOCHS):
 
@@ -400,10 +406,6 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
                                                   'model_ckp_epoch_{epoch:02d}-val_acc_{val_final_acc:.3f}.hdf5'),
                                      verbose=1, monitor='val_final_acc')
     model_ckp_last.set_model(model)
-    model_ckp_best = ModelCheckpoint(os.path.join(model_save_dir,
-                                                  'best_model_ckp_epoch_{epoch:02d}-val_acc_{val_final_acc:.3f}.hdf5'),
-                                     verbose=1, monitor='val_final_acc', save_best_only=True)
-    model_ckp_best.set_model(model)
 
     args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str, GLOBAL_GRADIENT_NORM_PLOT,
             h.RECURRENT_DROPOUT, h.METRIC]
@@ -433,6 +435,8 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
             train_phase.global_gradient_norms = old_metrics['global_gradient_norm'].tolist()[
                                                 :train_iterations_done]
 
+        train_phase.resume_from_epoch(h.epochs_finished[val_fold - 1] + 1)
+
     for e in range(h.epochs_finished[val_fold - 1], h.MAX_EPOCHS):
 
         train_phase.run()
@@ -460,6 +464,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
         if GLOBAL_GRADIENT_NORM_PLOT:
             plot.plot_global_gradient_norm(np.array(train_phase.global_gradient_norms), model_save_dir,
                                            epochs_done=e + 1)
+
 
 
     del model
@@ -496,6 +501,8 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
         if units != h.N_CLASSES:
             y = Dropout(h.MLP_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
     model = Model(x, y)
+
+    model.summary()
 
     latest_weights_path, _, _, _, _, _ = tensorflow_utils.latest_training_state(model_save_dir)
     model.load_weights(latest_weights_path)

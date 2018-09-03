@@ -149,12 +149,12 @@ class TestPhase:
     def run(self):
         scene_instance_id_metrics_dict = dict()
 
-        for iteration in range(1, self.dloader_len + 1):
+        for iteration in range(1, self.dloader_len[self.e] + 1):
             self.model.reset_states()
 
             iteration_start_time = time.time()
-            it_str = '{}_iteration: {:{prec}} / {:{prec}}'.format(self.prefix, iteration, self.dloader_len,
-                                                                  prec=len(str(self.dloader_len)))
+            it_str = '{}_iteration: {:{prec}} / {:{prec}}'.format(self.prefix, iteration, self.dloader_len[self.e],
+                                                                  prec=len(str(self.dloader_len[self.e])))
 
 
 
@@ -272,6 +272,16 @@ class Phase:
         self.sens_spec_class = []
 
         self.global_gradient_norms = []
+
+
+    def resume_from_epoch(self, resume_epoch):
+        if hasattr(self.dloader, 'act_epoch'):
+            for _ in range(self.e, resume_epoch - 1):
+                _ = self.dloader.next_epoch()
+                self.e += 1
+            assert self.dloader.act_epoch == resume_epoch
+        else:
+            raise ValueError('Can resume for training or validation loader only.')
 
     @property
     def epoch_str(self):

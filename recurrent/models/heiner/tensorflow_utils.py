@@ -139,12 +139,12 @@ def latest_training_state(model_save_dir):
     all_best_available_weights = glob.glob(path.join(model_save_dir, 'best_model_ckp_*.hdf5'))
 
     all_best_available_weights.sort()
-    best_latest_weights_path = all_best_available_weights[-1]
 
     if len(all_best_available_weights) == 0:
         best_epoch = epochs_finished
         best_val_acc = val_acc
     else:
+        best_latest_weights_path = all_best_available_weights[-1]
         best_epoch_start = find_start(best_latest_weights_path, 'epoch')
         best_val_acc_start = find_start(best_latest_weights_path, 'val_acc')
         best_epoch = int(best_latest_weights_path[best_epoch_start:best_epoch_start + 2])
