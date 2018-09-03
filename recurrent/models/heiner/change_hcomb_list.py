@@ -4,6 +4,8 @@ from os import path
 import numpy as np
 import heiner.utils as utils
 
+import heiner.accuracy_utils as acc_utils
+
 
 def load_hcomb_list(path_):
     with open(path_, 'rb') as handle:
@@ -153,6 +155,40 @@ def pickle_dump(obj, path_):
 def pickle_dicts(d):
     for (path_, obj) in d.items():
         pickle_dump(obj, path_)
+
+def recalc_metrics(metrics):
+    ret = ('final', 'per_class', 'per_scene')
+    available_ret = ('final', 'per_class', 'per_class_scene', 'per_scene', 'per_class_scene_scene_instance')
+    for r in ret:
+        if r not in available_ret:
+            raise ValueError('unknown ret. available: {}, wanted: {}'.format(available_ret, r))
+
+    ret_dict = dict()
+
+    mode = 'val'
+
+    metric = ('BAC', 'BAC2')
+
+    sens_spec_class_scene = metrics['val_sens_spec_class_scene']
+    sens_class_scene, spec_class_scene = sens_spec_class_scene[:, :, 0], sens_spec_class_scene[:, :, 1]
+    sens_spec_class = acc_utils.calculate_sens_spec_per_class(sens_spec_class_scene, mode)
+    ret_dict['per_scene'] = acc_utils.calculate_accuracy_per_scene(sens_class_scene, spec_class_scene, metric=metric)
+
+    class_accuracies = acc_utils.calculate_class_accuracies_weighted_average(sens_spec_class, metric=metric)
+    ret_dict['per_class'] = class_accuracies
+
+    ret_dict['final'] = acc_utils.calculate_accuracy_final(class_accuracies)
+
+    r_v = []
+    for r in ret:
+        if type(ret_dict[r]) is tuple:
+            r_v += list(ret_dict[r])
+        else:
+            r_v.append(ret_dict[r])
+    r_v += [sens_spec_class_scene, sens_spec_class]
+
+    return r_v[0] if len(r_v) == 1 else tuple(r_v)
+    pass
 
 if __name__ == '__main__':
 
