@@ -483,7 +483,7 @@ class DataLoader:
 
     def _next_batch_test(self):
         if len(self.filenames) > 0:
-            filename = self.filenames.pop()
+            filename = self.filenames.popleft()
             with np.load(filename) as data:
                 sequence = data['x']
                 labels = data['y'] if self.instant_mode else data['y_block']
