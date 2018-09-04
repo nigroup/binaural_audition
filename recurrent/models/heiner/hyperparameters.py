@@ -1,5 +1,6 @@
 import pickle
 from copy import deepcopy
+import os
 from os import path
 
 from heiner.utils import unique_dict
@@ -7,7 +8,7 @@ from heiner.utils import unique_dict
 import numpy as np
 import portalocker
 
-import heiner.pickle_dict_to_csv as pickle_dict_to_csv
+import csv
 
 class H:
     def __init__(self, ID=-1, N_CLASSES=13, TIME_STEPS=2000, N_FEATURES=160, BATCH_SIZE=64, MAX_EPOCHS=50,
@@ -177,7 +178,7 @@ class HCombManager:
 
             hcomb_to_run = hcombs_to_run[0]
             hcombs_to_run = hcombs_to_run[1:]
-            self._write_hcomb_list(hcombs_to_run, handle)
+            self._write_hcomb_list(hcombs_to_run, handle, to_run=True)
             return hcomb_to_run
 
     def get_hcomb_id(self, h, always_append_hcombs=False):
@@ -329,48 +330,18 @@ class HCombManager:
 
             self._write_hcomb_list(hcomb_list, handle)
 
-    # IMPORTANT: happens if hcomb finished
-    # def _merge_with_stage_1(self, h):
-    #     with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
-    #         hcomb_list = self._read_hcomb_list(handle)
-    #
-    #         hcomb_list_copy = deepcopy(hcomb_list)
-    #         for hcomb in hcomb_list_copy:
-    #             self._make_comparable(hcomb, h)
-    #             hcomb['STAGE'] = h['STAGE']
-    #         if h in hcomb_list_copy:
-    #             index = hcomb_list_copy.index(h)
-    #             h['epochs_finished'] = list(map(add, h['epochs_finished'], hcomb_list[index]['epochs_finished']))
-    #             h['best_epochs'] = list(zip(hcomb_list[index]['best_epochs'], h['best_epochs']))
-    #             h['val_acc'] = list(map(add, h['val_acc'], hcomb_list[index]['val_acc']))
-    #             h['best_val_acc'] = list(map(add, h['best_val_acc'], hcomb_list[index]['best_val_acc']))
-    #             val_acc = np.array(h['val_acc'])
-    #             h['best_val_acc_mean'] = np.mean(val_acc[val_acc != 0])
-    #             h['best_val_acc_std'] = np.std(val_acc[val_acc != 0])
-    #
-    #             h['val_acc_bac2'] = list(map(add, h['val_acc_bac2'], hcomb_list[index]['val_acc_bac2']))
-    #             h['best_val_acc_bac2'] = list(map(add, h['best_val_acc_bac2'], hcomb_list[index]['best_val_acc_bac2']))
-    #             val_acc_bac2 = np.array(h['val_acc_bac2'])
-    #             h['best_val_acc_mean_bac2'] = np.mean(val_acc[val_acc_bac2 != 0])
-    #             h['best_val_acc_std_bac2'] = np.std(val_acc[val_acc_bac2 != 0])
-    #
-    #             h['elapsed_time_minutes'] += hcomb_list[index]['elapsed_time_minutes']
-    #         else:
-    #             raise ValueError('Cannot find HComb in Stage 1')
-    #
-    #         self.replace_at_id(hcomb_list, index, h)
-    #
-    #         self._write_hcomb_list(hcomb_list, handle)
-
     def _read_hcomb_list(self, handle):
         return pickle.load(handle)
 
-    def _write_hcomb_list(self, hcomb_list, handle):
+    def _write_hcomb_list(self, hcomb_list, handle, to_run=False):
         handle.seek(0)
         handle.truncate()
         pickle.dump(hcomb_list, handle, protocol=pickle.HIGHEST_PROTOCOL)
         if len(hcomb_list) > 0:
-            pickle_dict_to_csv.write_to_csv_from_data(hcomb_list, self.filepath)
+            fp = self.filepath_to_run if to_run else self.filepath
+            write_to_csv_from_data(hcomb_list, fp)
+        else:
+            os.remove(self.filepath_to_run)
 
 class RandomSearch:
 
@@ -509,7 +480,7 @@ class RandomSearch:
             with open(filepath, 'wb') as handle:
                 hs_to_run = self._get_hcombs_to_run(number_of_hcombs)
                 pickle.dump(hs_to_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
-                pickle_dict_to_csv.write_to_csv_from_data(hs_to_run, filepath)
+                write_to_csv_from_data(hs_to_run, filepath)
         else:
             with open(filepath, 'rb') as handle:
                 hcombs_old = pickle.load(handle)
@@ -520,7 +491,7 @@ class RandomSearch:
                 hcombs_new = hcombs_old
             with open(filepath, 'wb') as handle:
                 pickle.dump(hcombs_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
-                pickle_dict_to_csv.write_to_csv_from_data(hcombs_new, filepath)
+                write_to_csv_from_data(hcombs_new, filepath)
 
     def add_hcombs_to_run_via_id(self, ids, save_path, changes_dict=None, save_path_hcomb_list=None):
         if type(ids) is int:
@@ -548,7 +519,7 @@ class RandomSearch:
         if not path.exists(filepath_to_run):
             with open(filepath_to_run, 'wb') as handle:
                 pickle.dump(hs_to_run, handle, protocol=pickle.HIGHEST_PROTOCOL)
-                pickle_dict_to_csv.write_to_csv_from_data(hs_to_run, filepath_to_run)
+                write_to_csv_from_data(hs_to_run, filepath_to_run)
         else:
             with open(filepath_to_run, 'rb') as handle:
                 hcombs_old = pickle.load(handle)
@@ -557,4 +528,29 @@ class RandomSearch:
                 hcombs_new = unique_dict(hcombs_new)
             with open(filepath_to_run, 'wb') as handle:
                 pickle.dump(hcombs_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
-                pickle_dict_to_csv.write_to_csv_from_data(hcombs_new, filepath_to_run)
+                write_to_csv_from_data(hcombs_new, filepath_to_run)
+
+
+def write_to_csv(file):
+    with open(file, 'rb') as handle:
+        d = pickle.load(handle)
+    write_to_csv_from_data(d, file)
+
+
+def write_to_csv_from_data(d, file):
+    if not type(d) is list:
+        d = [d]
+    if not type(d[0]) is dict:
+        d = [d_.__dict__ for d_ in d]
+    keys = d[0].keys()
+    if 'hyperparameter' in file:
+        h = H()
+        h = h.__dict__
+        h_keys = h.keys()
+        if set(keys) == set(h_keys):
+            keys = h_keys
+    filename = file.replace('.pickle', '')
+    with open(filename+'.csv', 'w') as output_file:
+        dict_writer = csv.DictWriter(output_file, keys)
+        dict_writer.writeheader()
+        dict_writer.writerows(d)
