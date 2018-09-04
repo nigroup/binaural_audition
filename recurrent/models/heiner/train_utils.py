@@ -30,10 +30,10 @@ def create_generator_multithreading(dloader):
 
 
 def create_train_dataloader(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
-                            BUFFER, use_multithreading=True):
+                            BUFFER, use_multithreading=True, input_standardization=True):
     train_loader = DataLoader('train', LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, batchsize=BATCHSIZE,
                               timesteps=TIMESTEPS, epochs=EPOCHS, features=NFEATURES, classes=NCLASSES,
-                              buffer=BUFFER, use_multithreading=use_multithreading)
+                              buffer=BUFFER, use_multithreading=use_multithreading, input_standardization=input_standardization)
     train_loader_len = train_loader.len()
     print('Number of batches per epoch (training): ' + str(train_loader_len))
 
@@ -43,10 +43,10 @@ def create_train_dataloader(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TI
 
 
 def create_val_dataloader(LABEL_MODE, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES, VAL_FOLDS,
-                          VAL_STATEFUL, BUFFER, use_multithreading=True):
+                          VAL_STATEFUL, BUFFER, use_multithreading=True, input_standardization=True):
     val_loader = DataLoader('val', LABEL_MODE, VAL_FOLDS, TRAIN_SCENES, epochs=EPOCHS, batchsize=BATCHSIZE,
                             timesteps=TIMESTEPS, features=NFEATURES, classes=NCLASSES, val_stateful=VAL_STATEFUL,
-                            buffer=BUFFER, use_multithreading=use_multithreading)
+                            buffer=BUFFER, use_multithreading=use_multithreading, input_standardization=input_standardization)
 
     val_loader_len = val_loader.len()
     print('Number of batches per epoch (validation): ' + str(val_loader_len))
@@ -56,8 +56,9 @@ def create_val_dataloader(LABEL_MODE, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS
     return val_loader
 
 
-def create_test_dataloader(LABEL_MODE):
-    test_loader = DataLoader('test', LABEL_MODE, [7, 8], -1)
+def create_test_dataloader(LABEL_MODE, input_standardization=True, val_fold3_as_test=False):
+    test_loader = DataLoader('test', LABEL_MODE, -1, -1, input_standardization=input_standardization,
+                             val_fold3_as_test=val_fold3_as_test)
 
     test_loader_len = test_loader.len()
     print('Number of batches per epoch (test): ' + str(test_loader_len))

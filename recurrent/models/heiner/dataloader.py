@@ -15,7 +15,7 @@ class DataLoader:
                  seed=1, seed_by_epoch=True, priority_queue=True, use_every_timestep=False, mask_val=-1.0,
                  val_stateful=False, k_scenes_to_subsample=-1,
                  input_standardization=True,
-                 use_multithreading=False):
+                 use_multithreading=False, val_fold3_as_test=False):
 
         self.mode = mode
         self.path_pattern = path_pattern
@@ -27,7 +27,10 @@ class DataLoader:
         if self.mode == 'train' or self.mode == 'val':
             self.path_pattern = path.join(self.path_pattern, 'train')
         else:
-            self.path_pattern = path.join(self.path_pattern, 'test')
+            if val_fold3_as_test:
+                self.path_pattern = path.join(self.path_pattern, 'test_val_fold_3')
+            else:
+                self.path_pattern = path.join(self.path_pattern, 'test')
         self.pickle_path = self.path_pattern
         self.pickle_path_pattern = self.path_pattern
 

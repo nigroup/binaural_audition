@@ -209,6 +209,14 @@ class HCombManager:
             h.__dict__ = hcomb_list[index]
             return index, h, already_contained
 
+    def get_hcomb_per_id(self, id_):
+        with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
+            hcomb_list = self._read_hcomb_list(handle)
+
+            h = H()
+            h.__dict__ = hcomb_list[id_]
+            return h
+
     def set_hostname_and_batch_size(self, id_, h, hostname, batch_size):
         with portalocker.Lock(self.filepath, mode='r+b', timeout=self.timeout) as handle:
             hcomb_list = self._read_hcomb_list(handle)

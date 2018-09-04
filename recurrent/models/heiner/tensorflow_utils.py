@@ -15,6 +15,8 @@ def get_loss_weights(fold_nbs, scene_nbs, label_mode, path_pattern='/mnt/binaura
     weights_array = np.load(save_path)
     if type(fold_nbs) is int:
         fold_nbs = [fold_nbs]
+    if fold_nbs == -1:
+        fold_nbs = list(range(1, 7))
     if scene_nbs == -1:
         scene_nbs = list(range(1, 81))
     if type(scene_nbs) is int:
