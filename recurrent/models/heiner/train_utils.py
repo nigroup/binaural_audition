@@ -291,17 +291,17 @@ class Phase:
         def _drop_in_recurrent_kernel(rk):
             # print('Zeros in weight matrix before dropout: {}'.format(np.sum(rk == 0)))
 
-            # rk_s = rk.shape
-            # mask = np.random.binomial(1., 1-self.recurrent_dropout, (rk_s[0], 1))
-            # mask = np.tile(mask, rk_s[0]*4)
-            # rk = rk * mask * (1./(1-self.recurrent_dropout))
+            rk_s = rk.shape
+            mask = np.random.binomial(1., 1-self.recurrent_dropout, (rk_s[0], 1))
+            mask = np.tile(mask, rk_s[0]*4)
+            rk = rk * mask * (1./(1-self.recurrent_dropout))
 
             ########################## NEW (like in https://arxiv.org/pdf/1708.02182.pdf)
 
-            rk_s = rk.shape
-            mask = np.random.binomial(1., 1 - self.recurrent_dropout, rk_s)
-            rk *= mask
-            rk *= (1. / (1 - self.recurrent_dropout))
+            # rk_s = rk.shape
+            # mask = np.random.binomial(1., 1 - self.recurrent_dropout, rk_s)
+            # rk *= mask
+            # rk *= (1. / (1 - self.recurrent_dropout))
 
             # print('Zeros in weight matrix after dropout: {}'.format(np.sum(rk == 0)))
             # print('Weight matrix norm after dropout: {}'.format(np.linalg.norm(rk)))
@@ -365,6 +365,10 @@ class Phase:
                 iteration_start_time_tf_graph_call = time.time()
                 loss, out_logits, gradient_norm = m_ext.train_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0],
                                                                             calc_global_gradient_norm=self.calc_global_gradient_norm)
+
+                if np.isnan(loss):
+                    return True
+
                 y_pred = sigmoid(out_logits, out=out_logits)
                 y_pred = np.greater_equal(y_pred, self.OUTPUT_THRESHOLD, out=y_pred)
 
@@ -388,6 +392,10 @@ class Phase:
                 )
             else:
                 loss, out_logits = m_ext.test_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
+
+                if np.isnan(loss):
+                    return True
+
                 y_pred = sigmoid(out_logits, out=out_logits)
                 y_pred = np.greater_equal(y_pred, self.OUTPUT_THRESHOLD, out=y_pred)
 
@@ -443,3 +451,5 @@ class Phase:
 
         # increase epoch
         self.e += 1
+
+        return False
