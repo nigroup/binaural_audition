@@ -12,6 +12,8 @@ import glob
 import os
 import time
 
+import copy
+
 
 def create_generator(dloader):
     while True:
@@ -157,8 +159,6 @@ class TestPhase:
             it_str = '{}_iteration: {:{prec}} / {:{prec}}'.format(self.prefix, iteration, self.dloader_len[self.e],
                                                                   prec=len(str(self.dloader_len[self.e])))
 
-
-
             iteration_start_time_data_loading = time.time()
 
             b_x, b_y = next(self.gen)
@@ -190,6 +190,8 @@ class TestPhase:
             loss_log_str = '{:<20}  {:<20}  {:<20}  {}'.format(self.val_fold_str, self.epoch_str, it_str, time_spent_str)
             print(loss_log_str)
 
+        # TODO change it back
+        scene_instance_id_metrics_dict_counts = copy.deepcopy(scene_instance_id_metrics_dict)
 
         # TODO: can get a mismatch here, as number of returned values may change depending on parameter 'ret'
         final_acc, final_acc_bac2, class_accuracies, class_accuracies_bac2, \
@@ -213,6 +215,10 @@ class TestPhase:
         print(acc_log_str)
 
         self.e += 1
+
+        # TODO change it back
+
+        return False, scene_instance_id_metrics_dict_counts
 
 class Phase:
 
@@ -429,6 +435,9 @@ class Phase:
         if self.train:
             final_acc, sens_spec_class_scene = acc_u.train_accuracy(scene_instance_id_metrics_dict, metric=self.metric)
         else:
+            # TODO change it back
+            scene_instance_id_metrics_dict_counts = copy.deepcopy(scene_instance_id_metrics_dict)
+
             # TODO: can get a mismatch here, as number of returned values may change depending on parameter 'ret'
             final_acc, final_acc_bac2, class_accuracies, class_accuracies_bac2, \
             class_scene_accuracies, class_scene_accuracies_bac2, \
@@ -453,4 +462,5 @@ class Phase:
         # increase epoch
         self.e += 1
 
-        return False
+        # TODO change it back
+        return False, scene_instance_id_metrics_dict_counts

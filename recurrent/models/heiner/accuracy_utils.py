@@ -3,7 +3,8 @@ import numba
 
 
 def get_scene_number_from_scene_instance_id(scene_instance_id):
-    return int(scene_instance_id // 1e6)
+    return int(scene_instance_id // 1e5)
+
 
 @numba.jit
 def mask_from(y_true, mask_val):
@@ -61,7 +62,8 @@ def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('f
 
 @numba.jit
 def calc_batch_metrics(y_pred, y_true, mask_val):
-    all_scene_instance_ids = np.unique(y_true[:, :, 0, 1][y_true[:, :, 0, 1] != mask_val])
+    all_scene_instance_ids = np.unique(y_true[:, :, 0, 1])
+    all_scene_instance_ids = all_scene_instance_ids[all_scene_instance_ids != mask_val]
     batch_metrics = np.zeros((len(all_scene_instance_ids), 13, 4))
 
     i = 0
@@ -86,7 +88,7 @@ def calc_batch_metrics(y_pred, y_true, mask_val):
         batch_metrics[i, :, :] = np.stack((true_positives, false_negatives, true_negatives, false_positives), axis=1)
         i += 1
 
-    return all_scene_instance_ids.astype(np.int), batch_metrics
+    return all_scene_instance_ids, batch_metrics
 
 
 def calculate_class_accuracies_metrics_per_scene_instance_in_batch(scene_instance_id_metrics_dict,
@@ -212,6 +214,7 @@ def calculate_sens_spec_per_class(sens_spec_class_scene, mode):
     sens_spec_class = np.sum(sens_spec_class, axis=0)
     return sens_spec_class
 
+
 def calculate_accuracy_per_scene(sens_class_scene, spec_class_scene, metric='BAC'):
     final_scene_number_accuracies = []
 
@@ -241,6 +244,7 @@ def calculate_accuracy_final(class_accuracies):
     else:
         return tuple(final_accuracies)
 
+
 def test_val_accuracy(with_wrong_predictions=False):
     np.random.seed(1)
     n_scenes = 80
@@ -264,7 +268,7 @@ def test_val_accuracy(with_wrong_predictions=False):
         scene_ids = np.random.choice(range(1, n_scenes+1), (shape[0], shape[1], 1)).astype(np.float32)
         scene_ids = np.tile(scene_ids, shape[2])
         y_true_ids = scene_ids
-        y_true_ids = y_true_ids * 1e6
+        y_true_ids = y_true_ids * 1e5
         scene_instance_ids = np.random.choice(range(1, n_scene_instances_per_scene), (shape[0], shape[1], 1)).astype(np.float32)
         scene_instance_ids = np.tile(scene_instance_ids, shape[2])
         y_true_ids = y_true_ids + scene_instance_ids
@@ -276,6 +280,7 @@ def test_val_accuracy(with_wrong_predictions=False):
     batches = np.array(batches)
     # print(batches[batches[:, :, :, 0, 1] == 80000008][:, :, 0])
     return val_accuracy(scene_instance_id_metrics_dict)
+
 
 def test_val_accuracy_real_data(with_wrong_predictions=False):
     import heiner.train_utils as tr_utils
@@ -316,8 +321,8 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
 
                 # test per scene -> passes
 
-                # p_y = np.where(b_y[:, :, :, 1] // 1e6 == 1, np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape)), p_y)
-                # p_y = np.where(b_y[:, :, :, 1] // 1e6 == 2, np.abs(p_y - np.random.choice([0, 1], p_y.shape)), p_y)
+                # p_y = np.where(b_y[:, :, :, 1] // 1e5 == 1, np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape)), p_y)
+                # p_y = np.where(b_y[:, :, :, 1] // 1e5 == 2, np.abs(p_y - np.random.choice([0, 1], p_y.shape)), p_y)
                 #
                 p_y[pad] = mask_val
             else:
@@ -330,6 +335,7 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
     scenes_i = np.array(scenes) - 1
     # print(np.mean(sens_spec_per_class_and_scene[scenes_i, :, :]))
     return None
+
 
 if __name__ == '__main__':
     # print(test_val_accuracy(with_wrong_predictions=True))

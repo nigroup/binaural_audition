@@ -306,7 +306,7 @@ class DataLoader:
             self.file_ind_queue = self._create_deque(shuffle=False)
         self.buffer_x = np.zeros((self.batchsize, self.buffer_size, self.features), np.float32)
 
-        # last dimension: 0 -> labels, 1 -> scene_instance_id (scheme: scene_number * 1e6 + id in scene)
+        # last dimension: 0 -> labels, 1 -> scene_instance_id (scheme: scene_number * 1e5 + id in scene)
         self.buffer_y = np.full((self.batchsize, self.buffer_size, self.classes, 2), self.mask_val, np.float32)
         self.row_start = 0
         self.row_lengths = np.zeros(self.batchsize, np.int32)
@@ -506,7 +506,7 @@ class DataLoader:
             max_length = self._length_dict()[self.filenames_deque[0]]
             b_x = np.zeros((self.batchsize, max_length, self.features), np.float32)
 
-            # last dimension: 0 -> labels, 1 -> scene_instance_id (scheme: scene_number * 1e6 + id in scene)
+            # last dimension: 0 -> labels, 1 -> scene_instance_id (scheme: scene_number * 1e5 + id in scene)
             b_y = np.full((self.batchsize, max_length, self.classes, 2), self.mask_val, np.float32)
 
             r=0
@@ -682,7 +682,7 @@ class DataLoader:
             scene_number = int(scene_nb_regex.findall(file)[0])
             if scene_number not in scene_counts:
                 scene_counts[scene_number] = 1
-            id_ = scene_number*1e6 + scene_counts[scene_number]
+            id_ = scene_number*1e5 + scene_counts[scene_number]
             scene_counts[scene_number] += 1
             return id_
 
