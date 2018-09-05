@@ -203,8 +203,8 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
                 else:
                     stage_was_finished = False
 
-                train_loss_is_nan = train_phase.run()
-                val_loss_is_nan = val_phase.run()
+                train_loss_is_nan, _ = train_phase.run()
+                val_loss_is_nan, _ = val_phase.run()
 
                 if train_loss_is_nan or val_loss_is_nan:
                     break
@@ -303,7 +303,6 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
                 metrics_over_folds = utils.load_metrics(model_dir)
 
             # STAGE thresholds
-            # TODO they have to be determined -> now: just stage 1
             stage_thresholds = {1: 0.835, 2: 0.835, 3: np.inf}  # 3 is the last stage
 
             if metrics_over_folds['best_val_acc_mean_over_folds'] >= stage_thresholds[h.STAGE]:
@@ -335,7 +334,6 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
 
     print('\nBuild model...\n')
 
-    # TODO CHECK IF TIME_STEPS HAS TO BE NONE
     x = Input(batch_shape=(h.BATCH_SIZE, h.TIME_STEPS, h.N_FEATURES), name='Input', dtype='float32')
     y = x
 
@@ -369,7 +367,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
     model_is_resumed = False
     epochs_finished_old = None
 
-    # TODO use val_fold = 0 as dummy for finished epochs
+    # use val_fold = 0 as dummy for finished epochs
     val_fold = 1
     val_fold_str = 'final_experiment: {} ({} / {})'.format(val_fold, 1, 1)
 
@@ -442,7 +440,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
 
     for e in range(h.epochs_finished[val_fold - 1], h.MAX_EPOCHS):
 
-        train_loss_is_nan = train_phase.run()
+        train_loss_is_nan, _ = train_phase.run()
 
         if train_loss_is_nan:
             break
@@ -486,7 +484,6 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
 
     print('\nBuild model for testing...\n')
 
-    # TODO CHECK IF TIME_STEPS HAS TO BE NONE
     x = Input(batch_shape=(1, None, h.N_FEATURES), name='Input', dtype='float32')
     y = x
 
@@ -520,7 +517,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
     test_phase = tr_utils.TestPhase(model, test_loader, h.OUTPUT_THRESHOLD, h.MASK_VAL, 1, val_fold_str,
                                     metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_class_scene', 'per_scene'))
 
-    test_phase.run()
+    test_loss_is_nan, _ = test_phase.run()
 
     metrics_test = {
         'metric': h.METRIC,
