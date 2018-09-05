@@ -1,18 +1,17 @@
-from heiner import model_extension as m_ext
-from heiner import accuracy_utils as acc_u
-from heiner.dataloader import DataLoader
-from keras.layers import CuDNNLSTM
-from keras import backend as K
-from keras.utils.data_utils import GeneratorEnqueuer
-from scipy.special import expit as sigmoid
-
-
-import numpy as np
+import copy
 import glob
 import os
 import time
 
-import copy
+import numpy as np
+from keras import backend as K
+from keras.layers import CuDNNLSTM
+from keras.utils.data_utils import GeneratorEnqueuer
+from scipy.special import expit as sigmoid
+
+from heiner import accuracy_utils as acc_u
+from heiner import model_extension as m_ext
+from heiner.dataloader import DataLoader
 
 
 def create_generator(dloader):
@@ -108,7 +107,8 @@ def update_latest_model_ckp(model_ckp_last, model_save_dir, e, acc):
 class TestPhase:
 
     def __init__(self, model, dloader, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str, metric='BAC2',
-                 ret=('final', 'per_class', 'per_class_scene', 'per_scene')):
+                 ret=('final', 'per_class', 'per_class_scene', 'per_scene'),
+                 code_test_mode = False):
         self.prefix = 'test'
 
         self.model = model
@@ -144,6 +144,8 @@ class TestPhase:
 
         self.sens_spec_class_scene = []
         self.sens_spec_class = []
+
+        self.code_test_mode = code_test_mode
 
     @property
     def epoch_str(self):
@@ -190,8 +192,8 @@ class TestPhase:
             loss_log_str = '{:<20}  {:<20}  {:<20}  {}'.format(self.val_fold_str, self.epoch_str, it_str, time_spent_str)
             print(loss_log_str)
 
-        # TODO change it back
-        scene_instance_id_metrics_dict_counts = copy.deepcopy(scene_instance_id_metrics_dict)
+        scene_instance_id_metrics_dict_counts = copy.deepcopy(scene_instance_id_metrics_dict) \
+            if self.code_test_mode else None
 
         # TODO: can get a mismatch here, as number of returned values may change depending on parameter 'ret'
         final_acc, final_acc_bac2, class_accuracies, class_accuracies_bac2, \
@@ -216,8 +218,6 @@ class TestPhase:
 
         self.e += 1
 
-        # TODO change it back
-
         return False, scene_instance_id_metrics_dict_counts
 
 class Phase:
@@ -225,7 +225,8 @@ class Phase:
     def __init__(self, train_or_val, model, dloader, BUFFER, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str,
                  calc_global_gradient_norm, recurrent_dropout=0.,
                  metric='BAC',
-                 ret=('final', 'per_class', 'per_class_scene', 'per_scene')):
+                 ret=('final', 'per_class', 'per_class_scene', 'per_scene'),
+                 code_test_mode=False):
 
         self.prefix = train_or_val
         if train_or_val == 'train':
@@ -280,6 +281,8 @@ class Phase:
 
         self.global_gradient_norms = []
 
+        self.code_test_mode = code_test_mode
+
 
     def resume_from_epoch(self, resume_epoch):
         if hasattr(self.dloader, 'act_epoch'):
@@ -298,23 +301,22 @@ class Phase:
         def _drop_in_recurrent_kernel(rk):
             # print('Zeros in weight matrix before dropout: {}'.format(np.sum(rk == 0)))
 
-            rk_s = rk.shape
-            mask = np.random.binomial(1., 1-self.recurrent_dropout, (rk_s[0], 1))
-            mask = np.tile(mask, rk_s[0]*4)
-            rk = rk * mask * (1./(1-self.recurrent_dropout))
+            # rk_s = rk.shape
+            # mask = np.random.binomial(1., 1-self.recurrent_dropout, (rk_s[0], 1))
+            # mask = np.tile(mask, rk_s[0]*4)
+            # rk = rk * mask * (1./(1-self.recurrent_dropout))
 
             ########################## NEW (like in https://arxiv.org/pdf/1708.02182.pdf)
 
-            # rk_s = rk.shape
-            # mask = np.random.binomial(1., 1 - self.recurrent_dropout, rk_s)
-            # rk *= mask
-            # rk *= (1. / (1 - self.recurrent_dropout))
+            rk_s = rk.shape
+            mask = np.random.binomial(1., 1 - self.recurrent_dropout, rk_s)
+            rk *= mask
+            rk *= (1. / (1 - self.recurrent_dropout))
 
             # print('Zeros in weight matrix after dropout: {}'.format(np.sum(rk == 0)))
             # print('Weight matrix norm after dropout: {}'.format(np.linalg.norm(rk)))
 
             return rk, mask
-
 
         original_weights_and_masks = []
         for layer in self.model.layers:
@@ -434,9 +436,12 @@ class Phase:
 
         if self.train:
             final_acc, sens_spec_class_scene = acc_u.train_accuracy(scene_instance_id_metrics_dict, metric=self.metric)
+
+            scene_instance_id_metrics_dict_counts = None
         else:
-            # TODO change it back
-            scene_instance_id_metrics_dict_counts = copy.deepcopy(scene_instance_id_metrics_dict)
+
+            scene_instance_id_metrics_dict_counts = copy.deepcopy(scene_instance_id_metrics_dict) \
+                if self.code_test_mode else None
 
             # TODO: can get a mismatch here, as number of returned values may change depending on parameter 'ret'
             final_acc, final_acc_bac2, class_accuracies, class_accuracies_bac2, \
@@ -462,5 +467,4 @@ class Phase:
         # increase epoch
         self.e += 1
 
-        # TODO change it back
         return False, scene_instance_id_metrics_dict_counts

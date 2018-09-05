@@ -66,7 +66,8 @@ def compare_blockbased(gpu):
 
     args = [0.5, -1, 1, 'val fold 3', False, 0.0, 'BAC']
     # validation phase
-    val_phase = tr_utils.Phase('val', model, val_loader, 100, *args)
+    val_phase = tr_utils.Phase('val', model, val_loader, 100, *args,
+                               code_test_mode=True)
 
     has_nan_val, sid_dict_val = val_phase.run()
 
@@ -104,7 +105,8 @@ def compare_blockbased(gpu):
 
     test_loader = tr_utils.create_test_dataloader('blockbased', val_fold3_as_test=True, input_standardization=False)
     test_phase = tr_utils.TestPhase(model_test, test_loader, 0.5, -1, 1, 'test fold',
-                                    metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_class_scene', 'per_scene'))
+                                    metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_class_scene', 'per_scene'),
+                                    code_test_mode=True)
 
     has_nan_test, sid_dict_test = test_phase.run()
 
