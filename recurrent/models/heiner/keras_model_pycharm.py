@@ -8,4 +8,4 @@ if __name__ == '__main__':
 
     # keras_model.run_experiment(False, 1, 'BAC', '0', 5, False, 1000, model_name=model_name)
 
-    keras_model_final.run_final_experiment(False, '3', 15, 1, model_name='LDNN_final', model_name_old='LDNN_v1')
+    keras_model_final.run_final_experiment(False, '2', 15, 1, model_name='LDNN_final', model_name_old='LDNN_v1')

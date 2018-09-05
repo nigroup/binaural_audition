@@ -203,8 +203,11 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
                 else:
                     stage_was_finished = False
 
-                train_phase.run()
-                val_phase.run()
+                train_loss_is_nan = train_phase.run()
+                val_loss_is_nan = val_phase.run()
+
+                if train_loss_is_nan or val_loss_is_nan:
+                    break
 
                 tr_utils.update_latest_model_ckp(model_ckp_last, model_save_dir, e, val_phase.accs[-1])
                 tr_utils.update_best_model_ckp(model_ckp_best, model_save_dir, e, val_phase.accs[-1])
@@ -439,7 +442,10 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
 
     for e in range(h.epochs_finished[val_fold - 1], h.MAX_EPOCHS):
 
-        train_phase.run()
+        train_loss_is_nan = train_phase.run()
+
+        if train_loss_is_nan:
+            break
 
         tr_utils.update_latest_model_ckp(model_ckp_last, model_save_dir, e, 0.0)
 
