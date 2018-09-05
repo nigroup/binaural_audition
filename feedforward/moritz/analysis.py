@@ -9,6 +9,11 @@ from constants import *
 
 def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsceneonly=False):
 
+    if params['validfold'] != -1:
+        val_test_str = 'val'
+    else:
+        val_test_str = 'test'
+
     if firstsceneonly:
         # for debugging purposes we use the first scene only but the scene-weights of 1/21. need to be undone
         for acc in ['wbac', 'wbac_per_class', 'sens_spec_per_class', 'wbac2', 'wbac2_per_class']:
@@ -96,7 +101,7 @@ def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsce
                       results['val_loss_batch'][epidx+1, 0]], color='lightblue', alpha=0.4, zorder=0)
 
     stddev_valid = np.std(results['val_loss_batch'], axis=1)
-    plt.plot(epochs, results['val_loss'], color='blue', marker='o', label='val_loss ({:.3f} +- {:.3f})'.
+    plt.plot(epochs, results['val_loss'], color='blue', marker='o', label=val_test_str+'_loss ({:.3f} +- {:.3f})'.
              format(results['val_loss'][best_epochidx], stddev_valid[best_epochidx]))# std dev across batches
     plt.plot(epochs, results['val_loss']+stddev_valid, color='blue', linestyle='dashed', alpha=0.7, zorder=1)
     plt.plot(epochs, results['val_loss']-stddev_valid, color='blue', linestyle='dashed', alpha=0.7, zorder=1)
@@ -135,7 +140,7 @@ def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsce
 
     # wbac validation (class-averaged) +- class std dev
     val_wbac_std = np.std(results['val_wbac_per_class'] * 100., axis=1)
-    plt.plot(epochs, results['val_wbac']*100., color='blue', marker='o', label='val_wbac ({:.2f}% +- {:.2f}%)'.
+    plt.plot(epochs, results['val_wbac']*100., color='blue', marker='o', label=val_test_str+'_wbac ({:.2f}% +- {:.2f}%)'.
              format(results['val_wbac'][best_epochidx]*100., val_wbac_std[best_epochidx]))
     plt.fill_between (epochs, results['val_wbac']*100. - val_wbac_std,
                       results['val_wbac']*100. + val_wbac_std,
@@ -147,7 +152,7 @@ def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsce
 
     # wbac2 validation (class-averaged)
     val_wbac2_std = np.std(results['val_wbac2_per_class'] * 100., axis=1)
-    plt.plot(epochs, results['val_wbac2']*100., color='brown', marker='o', label='val_wbac2 ({:.2f}% +- {:.2f}%)'.
+    plt.plot(epochs, results['val_wbac2']*100., color='brown', marker='o', label=val_test_str+'_wbac2 ({:.2f}% +- {:.2f}%)'.
              format(results['val_wbac2'][best_epochidx]*100., val_wbac2_std[best_epochidx]))
 
     # axis config
@@ -249,7 +254,7 @@ def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsce
     # ================================================
     # weighted balanced accuracy per class (and class average)
     plt.subplot(3, 1, 1)
-    plt.plot(epochs, results['val_wbac']*100., color='blue', linewidth=2, marker='o', label='val_wbac')
+    plt.plot(epochs, results['val_wbac']*100., color='blue', linewidth=2, marker='o', label=val_test_str+'_wbac')
     for i in range(DIM_LABELS):
         plt.plot(epochs, results['val_wbac_per_class'][:, i]*100., color=colors_class[i]) #,
                  #label=CLASS_NAMES[i])
@@ -271,7 +276,7 @@ def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsce
     # ================================================
     # axis: same as axis but bac2 instead of bac
     plt.subplot(3, 1, 2)
-    plt.plot(epochs, results['val_wbac2']*100., color='brown', linewidth=2, marker='o', label='val_wbac2')
+    plt.plot(epochs, results['val_wbac2']*100., color='brown', linewidth=2, marker='o', label=val_test_str+'_wbac2')
     for i in range(DIM_LABELS):
         plt.plot(epochs, results['val_wbac2_per_class'][:, i]*100., color=colors_class[i],
                  label=CLASS_NAMES[i])
@@ -294,7 +299,7 @@ def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsce
     # ================================================
     # axis: sensitivity/specificity per class (and class average)
     plt.subplot(3, 1, 3)
-    plt.plot(epochs, results['val_wbac']*100., color='blue', linewidth=2, marker='o', label='val_wbac')
+    plt.plot(epochs, results['val_wbac']*100., color='blue', linewidth=2, marker='o', label=val_test_str+'_wbac')
     for i in range(DIM_LABELS):
         label_sens = CLASS_NAMES[i]+'_sens' if i==0 else None
         label_spec = CLASS_NAMES[i]+'_spec' if i==0 else None
@@ -357,10 +362,11 @@ if __name__ == '__main__':
             folders = glob.glob(args.folder)
 
         for f in folders:
-            print('making visualization for folder {}'.format(f))
-            plot_train_experiment_from_folder(folder=f,
-                                              datalimits=args.datalimits,
-                                              firstsceneonly=args.firstsceneonly)
+            if os.path.isdir(f) and '0.0' in f:
+                print('making visualization for folder {}'.format(f))
+                plot_train_experiment_from_folder(folder=f,
+                                                  datalimits=args.datalimits,
+                                                  firstsceneonly=args.firstsceneonly)
 
     if args.mode == 'hyper' and args.folder:
         # TODO: rename this file to analysis
@@ -372,7 +378,7 @@ if __name__ == '__main__':
 
         hyperparam_combinations = {}
         for f in folders:
-            if os.path.isdir(f):
+            if os.path.isdir(f) and '0.0' in f:
                 print('collecting data from folder {}'.format(f))
                 params = load_h5(os.path.join(f, 'params.h5'))
                 results = load_h5(os.path.join(f, 'results.h5'))

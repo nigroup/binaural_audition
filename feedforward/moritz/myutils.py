@@ -1,5 +1,9 @@
 import h5py
+import argparse
+import re
+import os
 import sys
+import glob
 from keras.utils.layer_utils import count_params
 from heiner.accuracy_utils import val_accuracy as heiner_val_accuracy
 from heiner.accuracy_utils import calculate_class_accuracies_metrics_per_scene_instance_in_batch as heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch
@@ -46,6 +50,37 @@ def calculate_metrics(scene_instance_id_metrics_dict):
 def get_number_of_weights(model):
     return count_params(model.trainable_weights) + count_params(model.non_trainable_weights)
 
+# fix previous experiments
+def fix_experiment_files(folder):
+    if '*' not in folder:
+        folders = glob.glob(folder + '/*')
+    else:
+        folders = glob.glob(folder)
+
+    for f in folders:
+        if os.path.isdir(f) and '0.0' in f:
+            paramsfile = os.path.join(f, 'params.h5')
+            params = load_h5(paramsfile)
+
+            modified = False
+
+            # fix unfinished experiments => should all be finished (running ones will update by themselves)
+            if 'finished' not in params or not params['finished']:
+                print('params[\'finished\'] = False for {}...fix: setting it to True'.format(f))
+                params['finished'] = True
+                modified = True
+
+            # if kernelsize is not scalar => determine kernelsize from foldername
+            if params['kernelsize'].shape:
+                corrected_kernelsize = int(re.search('ks([1-9])_', f).group(1))
+                print('params[\'kernelsize\'] = {} for {} ...fix: setting it to {}'.
+                      format(params['kernelsize'], f, corrected_kernelsize))
+                params['kernelsize'] = corrected_kernelsize
+                modified = True
+
+            if modified:
+                save_h5(params, paramsfile)
+
 # loads a flat dictionary from a hdf5 file
 def load_h5(filename):
     data = {}
@@ -64,3 +99,12 @@ def save_h5(dict_flat, filename):
 # prints text to stderr
 def printerror(text):
     print('ERROR: '+text, file=sys.stderr)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--fixexpfiles', action='store_true')
+    parser.add_argument('--folder', type=str)
+    args = parser.parse_args()
+
+    if args.fixexpfiles:
+        fix_experiment_files(args.folder)

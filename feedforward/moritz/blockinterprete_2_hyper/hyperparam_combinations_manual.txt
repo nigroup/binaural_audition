@@ -1,0 +1,13 @@
+# started on sabik on 1st Sept 2018 18:50
+heinerpy training.py --path=blockinterprete_2_hyper --featuremaps=50; 
+heinerpy training.py --path=blockinterprete_2_hyper --featuremaps=50 --dropoutrate=0.25; 
+heinerpy training.py --path=blockinterprete_2_hyper --featuremaps=50 --dropoutrate=0.5;
+heinerpy training.py --path=blockinterprete_2_hyper --featuremaps=50 --dropoutrate=0.75; 
+heinerpy training.py --path=blockinterprete_2_hyper --featuremaps=75; 
+heinerpy training.py --path=blockinterprete_2_hyper --featuremaps=75 --dropoutrate=0.5; 
+heinerpy training.py --path=blockinterprete_2_hyper --featuremaps=75 --dropoutrate=0.75; 
+heinerpy training.py --path=blockinterprete_2_hyper --featuremaps=150; 
+heinerpy training.py --path=blockinterprete_2_hyper --featuremaps=150 --dropoutrate=0.75; 
+heinerpy training.py --path=blockinterprete_2_hyper --featuremaps=300; 
+heinerpy training.py --path=blockinterprete_2_hyper --featuremaps=300 --dropoutrate=0.75; 
+# all until here were started (but maybe are terminated lateron)
