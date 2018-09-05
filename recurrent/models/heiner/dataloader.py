@@ -344,7 +344,7 @@ class DataLoader:
     def _fill_in_new_sequence(self, row_ind):
         if len(self.file_ind_queue) == 0:
             return
-        act_file_ind = self.file_ind_queue.pop()
+        act_file_ind = self.file_ind_queue.popleft()
         self._parse_sequence(row_ind, act_file_ind, 0)
 
     def _fill_in_divided_sequence(self, row_ind):
@@ -387,7 +387,7 @@ class DataLoader:
         self.buffer_y[row_ind, start:end, :, 1] = scene_instance_id
         self.row_lengths[row_ind] = end
         if self.val_stateful and self.row_lengths[row_ind] < self.buffer_size:
-            self.row_lengths[row_ind] = (self.row_lengths[row_ind] // self.timesteps + 1) * self.timesteps
+            self.row_lengths[row_ind] = int(np.ceil(self.row_lengths[row_ind] / self.timesteps)) * self.timesteps
 
     def fill_buffer(self):
         filled = True
@@ -452,7 +452,8 @@ class DataLoader:
                     next_in_batch_same = last_scene_instance_ids_in_act_batch == first_scene_instance_ids_in_next_batch
                     next_in_batch_same = np.logical_and(next_in_batch_same,
                                                         last_scene_instance_ids_in_act_batch != self.mask_val)
-                    keep_states = np.logical_or((self.row_leftover[:, 0] != -1), next_in_batch_same)
+                    # keep_states = np.logical_or((self.row_leftover[:, 0] != -1), next_in_batch_same)
+                    keep_states = next_in_batch_same
                 else:
                     keep_states = self.row_leftover[:, 0] != -1
                 keep_states = keep_states[:, np.newaxis]
@@ -561,8 +562,10 @@ class DataLoader:
             else:
                 if self.val_stateful and sim_lengths[row] < self.buffer_size:
                     old_length = sim_lengths[row]
-                    sim_lengths[row] = (sim_lengths[row] // self.timesteps + 1) * self.timesteps
+                    sim_lengths[row] = int(np.ceil(sim_lengths[row] / self.timesteps)) * self.timesteps
                     return 0, sim_lengths[row] - old_length     # second value are the skipped steps
+                if self.val_stateful:
+                    return 0, 0
                 return 0
 
         self.length = []
@@ -599,6 +602,10 @@ class DataLoader:
                     if not stopping_condition:
                         if left_lengths[row] > 0:
                             sim_lengths[row] += left_lengths[row]
+                            if self.val_stateful:
+                                old_length = sim_lengths[row]
+                                sim_lengths[row] = int(np.ceil(sim_lengths[row] / self.timesteps)) * self.timesteps
+                                skipped_steps += (sim_lengths[row] - old_length)
                             if sim_lengths[row] > self.buffer_size:
                                 left_lengths[row] = sim_lengths[row] - self.buffer_size
                                 sim_lengths[row] = self.buffer_size
@@ -606,7 +613,7 @@ class DataLoader:
                         elif len(dq) > 0:
                             if self.priority_queue:
                                 _, row = heapq.heappop(heap)
-                            curr_ind = dq.pop()
+                            curr_ind = dq.popleft()
                             l = self._length_dict()[self.filenames[curr_ind]]
                             if self.val_stateful:
                                 leftover, skipped = add_to_length_until_buffersize(l, row)

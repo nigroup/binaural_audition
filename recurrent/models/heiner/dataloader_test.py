@@ -13,7 +13,7 @@ class DataLoaderTester(DataLoader):
                  buffer=10, features=160, classes=13, path_pattern='/mnt/binaural/data/scenes2018/',
                  seed_by_epoch=True,
                  priority_queue=True, use_every_timestep=False, val_stateful=False, input_standardization=False):
-        super().__init__(mode, 'blockbased', 1, 1, batchsize=batchsize, timesteps=timesteps, epochs=epochs,
+        super().__init__(mode, 'blockbased', -1, -1, batchsize=batchsize, timesteps=timesteps, epochs=epochs,
                          buffer=buffer, features=features, classes=classes, path_pattern=path_pattern,
                          seed_by_epoch=seed_by_epoch,
                          priority_queue=priority_queue, use_every_timestep=use_every_timestep, val_stateful=val_stateful,
@@ -60,8 +60,9 @@ for factor in factors:
     np.savez(save_path, x=x, y=y, y_block=y_block)
 path_pattern = tmp_dir + '/*.npz'
 filenames = glob.glob(path_pattern)
-dloader = DataLoaderTester('val', filenames, batchsize=3, timesteps=7, epochs=1, buffer=5, val_stateful=True,
+dloader = DataLoaderTester('val', filenames, batchsize=2, timesteps=3, epochs=1, buffer=5, val_stateful=True,
                            features=1, classes=1, path_pattern=tmp_dir, seed_by_epoch=False, use_every_timestep=True)
+
 
 def create_generator(dloader):
     act_epoch = dloader.act_epoch
@@ -85,18 +86,19 @@ def create_generator(dloader):
 
 
 g = create_generator(dloader)
-print('len:' + str(dloader.len()))
+print('len:' + str(dloader.len()[0]))
 #next(g)
 c = 0
 rets = [[], [], []]
 for ret in g:
     c += 1
     for j, r in enumerate(ret):
-        rets[j].append(r)
+        rets[j].append(r.copy())
 
 x = np.concatenate(rets[0], axis=1)
 y = np.concatenate(rets[1], axis=1)
 ks = np.concatenate(rets[2], axis=1)
+
 
 def factors_in_queue():
     if dloader.mode == 'train':
