@@ -10,6 +10,8 @@ from heiner import train_utils as tr_utils
 from heiner import tensorflow_utils
 from heiner import utils
 
+import pickle
+
 def compare_blockbased(gpu):
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
 
@@ -89,7 +91,10 @@ def compare_blockbased(gpu):
     save_dir = '/home/spiess/twoears_proj/models/heiner/test_blockbased_validation/'
     save_dir_val = os.path.join(save_dir, 'val')
     os.makedirs(save_dir_val, exist_ok=True)
-    utils.pickle_metrics(metrics, save_dir_val)
+    # utils.pickle_metrics(metrics, save_dir_val)
+
+    # with open(os.path.join(save_dir_val, 'sid_dict.pickle'), 'wb') as handle:
+    #     pickle.dump(sid_dict_val, handle)
 
     ################################################ TEST MODEL
 
@@ -126,11 +131,14 @@ def compare_blockbased(gpu):
 
     save_dir_test = os.path.join(save_dir, 'test')
     os.makedirs(save_dir_test, exist_ok=True)
-    utils.pickle_metrics(metrics_test, save_dir_test)
+    # utils.pickle_metrics(metrics_test, save_dir_test)
+
+    # with open(os.path.join(save_dir_test, 'sid_dict.pickle'), 'wb') as handle:
+    #     pickle.dump(sid_dict_test, handle)
 
     sid_dict_diff = []
     for key_val, key_test in zip(sorted(list(sid_dict_val.keys())), sorted(list(sid_dict_test.keys()))):
-        if np.sum(sid_dict_val[key_val] - sid_dict_test[key_test]) != 0:
+        if np.sum(np.abs(sid_dict_val[key_val] - sid_dict_test[key_test])) != 0:
             sid_dict_diff.append((key_val, key_test))
 
     assert len(sid_dict_diff) == 0
@@ -138,11 +146,11 @@ def compare_blockbased(gpu):
 
 if __name__ == '__main__':
     # from tqdm import tqdm
-    # import pickle
+    # import copy
     # import heiner.accuracy_utils as acc_utils
     #
     # save_dir = '/home/spiess/twoears_proj/models/heiner/test_blockbased_validation/'
-    # save_dir_val = os.path.join(save_dir, 'val_2', 'sid_dict.pickle')
+    # save_dir_val = os.path.join(save_dir, 'val', 'sid_dict.pickle')
     # save_dir_test = os.path.join(save_dir, 'test', 'sid_dict.pickle')
     #
     # with open(save_dir_val, 'rb') as handle:
@@ -150,6 +158,22 @@ if __name__ == '__main__':
     #
     # with open(save_dir_test, 'rb') as handle:
     #     sid_test = pickle.load(handle)
+    #
+    # r_val = acc_utils.val_accuracy(copy.deepcopy(sid_val), metric=('BAC', 'BAC2'), ret=('per_class_scene_scene_instance', ))
+    #
+    # r_test = acc_utils.val_accuracy(copy.deepcopy(sid_test), metric=('BAC', 'BAC2'), ret=('per_class_scene_scene_instance', ))
+    #
+    # sid_dict_diff = []
+    # for key_val, key_test in zip(sorted(list(sid_val.keys())), sorted(list(sid_test.keys()))):
+    #     if np.sum(np.abs(sid_val[key_val] - sid_test[key_test])) != 0:
+    #         sid_dict_diff.append((key_val, key_test, (sid_val[key_val] - sid_test[key_test])))
+    #
+    # sid_dict_diff = []
+    # for key_val, key_test in zip(sorted(list(r_val[0].keys())), sorted(list(r_test[0].keys()))):
+    #     if np.sum(r_val[0][key_val] - r_test[0][key_test]) != 0:
+    #         sid_dict_diff.append((key_val, key_test))
+
+    # print()
 
     gpu = '2'
     compare_blockbased(gpu)

@@ -192,6 +192,7 @@ class TestPhase:
             loss_log_str = '{:<20}  {:<20}  {:<20}  {}'.format(self.val_fold_str, self.epoch_str, it_str, time_spent_str)
             print(loss_log_str)
 
+
         scene_instance_id_metrics_dict_counts = copy.deepcopy(scene_instance_id_metrics_dict) \
             if self.code_test_mode else None
 
