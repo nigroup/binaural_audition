@@ -524,26 +524,26 @@ class BatchLoader(HeinerDataloader):
 # testing:
 if __name__ == '__main__':
 
-    # train
-    # mode = 'train'
-    # folds = [1, 2, 3, 4, 5, 6] # final model
+    # ### train
+    mode = 'train'
+    folds = [1, 2, 3, 4, 5, 6] # final model
     # folds = [1, 2, 4, 5, 6] # lvl1
     # folds = [1, 2, 3, 5, 6] # lvl2
     # folds = [1, 3, 4, 5, 6] # lvl3
-    # scenes = list(range(1, 80 + 1))  # -1 # all scenes (80 for train)
+    scenes = list(range(1, 80 + 1))  # -1 # all scenes (80 for train)
 
-    # test
+    # ### test
     # mode = 'test'
     # folds = [7, 8] # test folds
     # scenes = list(range(1, 168 + 1)) # all 168 test scenes
 
-    # val/toy
-    mode = 'val'
-    folds = [3]
+    # ### val/toy
+    # mode = 'val'
+    # folds = [3]
     # folds = [4]
     # folds = [2]
     # scenes = [1]
-    scenes = list(range(1, 80 + 1))  # -1 # all scenes (80 for train)
+    # scenes = list(range(1, 80 + 1))  # -1 # all scenes (80 for train)
 
     inputstd = True
     # inputstd = False
@@ -556,7 +556,8 @@ if __name__ == '__main__':
               'noinputstandardization': not inputstd,
               'mask_value': -1}
 
-    print('batchloader ({} mode, folds {}, scenes {}) before initialization.....'.format(mode, folds, scenes))
+    print('batchloader ({} mode, inputstd={}, folds {}, scenes {}) before initialization.....'.format(mode, inputstd,
+                                                                                                      folds, scenes))
 
     t_start_allbatches = time()
     batchloader_training = BatchLoader(params=params, mode=mode, fold_nbs=folds,
