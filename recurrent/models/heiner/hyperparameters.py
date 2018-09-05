@@ -351,6 +351,7 @@ class HCombManager:
         else:
             os.remove(self.filepath_to_run)
 
+
 class RandomSearch:
 
     def __init__(self, metric_used='BAC', STAGE=1, time_steps=1000):
@@ -376,11 +377,12 @@ class RandomSearch:
             (0, 0, 0, 1),  # 0.1
             (0, 0, 0, 0)  # 0.1
         ]
-        self.SAMPLING_RANGE_REGULARIZATION_COMBINATION = np.random.choice
+        # self.SAMPLING_RANGE_REGULARIZATION_COMBINATION = np.random.choice
 
         # with weights
-        # from functools import partial
-        # self.SAMPLING_RANGE_REGULARIZATION_COMBINATION = partial(np.random.choice, p=[1, 0, 0, 0])
+        from functools import partial
+        self.SAMPLING_RANGE_REGULARIZATION_COMBINATION = partial(np.random.choice,
+                                                                 p=[0.10, 0.05, 0.2, 0.05, 0.4, 0.2])
 
         # LSTM
         self.RANGE_NUMBER_OF_LSTM_LAYERS = [3, 4, 5]
