@@ -125,7 +125,9 @@ def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict,
     sensitivity = np.zeros((n_scenes, n_classes))
     specificity = np.zeros((n_scenes, n_classes))
 
-    for scene_instance_id, metrics in scene_instance_ids_metrics_dict.items():
+    for scene_instance_id in sorted(list(scene_instance_ids_metrics_dict.keys())):
+        metrics = scene_instance_ids_metrics_dict[scene_instance_id]
+
         scene_number = get_scene_number_from_scene_instance_id(scene_instance_id)
         scene_number -= 1
 
