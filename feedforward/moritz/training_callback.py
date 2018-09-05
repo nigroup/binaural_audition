@@ -31,15 +31,14 @@ class MetricsCallback(Callback):
                                   'wbac2': [],
                                   'wbac2_per_class': []}
 
-            if self.myparams['validfold'] != -1:
-                self.metrics_valid = {'wbac': [],
-                                      'wbac_per_class': [],
-                                      'bac_per_scene': [],
-                                      'bac_per_class_scene': [],
-                                      'sens_spec_per_class': [],
-                                      'sens_spec_per_class_scene': [],
-                                      'wbac2': [],
-                                      'wbac2_per_class': []}
+            self.metrics_valid = {'wbac': [],
+                                  'wbac_per_class': [],
+                                  'bac_per_scene': [],
+                                  'bac_per_class_scene': [],
+                                  'sens_spec_per_class': [],
+                                  'sens_spec_per_class_scene': [],
+                                  'wbac2': [],
+                                  'wbac2_per_class': []}
 
             # gradient norm statistics lists
             if not self.myparams['nocalcgradientnorm']:
@@ -66,9 +65,8 @@ class MetricsCallback(Callback):
                                   'wbac2': list(oldresults['train_wbac2']),
                                   'wbac2_per_class': list(oldresults['train_wbac2_per_class'][k, :] for k in range(no_epochs))}
 
-            if self.myparams['validfold'] != -1:
-                self.metrics_valid = {'wbac': list(oldresults['val_wbac']),
-                                      'wbac_per_class': list(oldresults['val_wbac_per_class'][k, :] for k in range(no_epochs)),
+            self.metrics_valid = {'wbac': list(oldresults['val_wbac']),
+                                  'wbac_per_class': list(oldresults['val_wbac_per_class'][k, :] for k in range(no_epochs)),
                                       'bac_per_scene': list(oldresults['val_bac_per_scene'][k, :] for k in range(no_epochs)),
                                       'bac_per_class_scene': list(oldresults['val_bac_per_class_scene'][k, :, :] for k in range(no_epochs)),
                                       'sens_spec_per_class': list(oldresults['val_sens_spec_per_class'][k, :, :] for k in range(no_epochs)),
@@ -125,18 +123,17 @@ class MetricsCallback(Callback):
             if metric in self.metrics_train:
                 self.metrics_train[metric].append(value)
 
-        if self.myparams['validfold'] != -1:
-            # calculate and extract validation metrics
-            metrics_validation = calculate_metrics(self.model.scene_instance_id_metrics_dict_eval)
-            for metric, value in metrics_validation.items():
-                if metric in self.metrics_valid:
-                    self.metrics_valid[metric].append(value)
+        # calculate and extract validation metrics
+        metrics_validation = calculate_metrics(self.model.scene_instance_id_metrics_dict_eval)
+        for metric, value in metrics_validation.items():
+            if metric in self.metrics_valid:
+                self.metrics_valid[metric].append(value)
 
-            # fetch validation loss per batches
-            self.loss_valid_per_batch.append(self.model.val_loss_batch)
+        # fetch validation loss per batches
+        self.loss_valid_per_batch.append(self.model.val_loss_batch)
 
-            # save validation wbac in order to use it as monitor in original earlystopping and modelcheckpoint callbacks
-            logs['val_wbac'] = metrics_validation['wbac']
+        # save validation wbac in order to use it as monitor in original earlystopping and modelcheckpoint callbacks
+        logs['val_wbac'] = metrics_validation['wbac']
 
         # get gradient norm statistics per epoch
         if not self.myparams['nocalcgradientnorm']:
@@ -144,7 +141,10 @@ class MetricsCallback(Callback):
             gradstring = ', gradient norm avg {:.2f}'.format(self.gradient_norm[-1])
 
         if self.myparams['validfold'] == -1:
-            print('epoch {} ended with training wbac {:.1f}%'.format(epoch+1, metrics_training['wbac']*100.))
+            print('epoch {} took {:.2f} and ended with test wbac {:.1f}% (training wbac {:.1f}%)'.
+                  format(epoch + 1, self.runtime[-1], metrics_validation['wbac'] * 100.,
+                         metrics_training['wbac'] * 100.)
+                  + gradstring)
         else:
             print('epoch {} took {:.2f} and ended with validation wbac {:.1f}% (training wbac {:.1f}%)'.
                   format(epoch + 1, self.runtime[-1], metrics_validation['wbac']*100., metrics_training['wbac']*100.)
@@ -158,11 +158,10 @@ class MetricsCallback(Callback):
         for metric, value in self.metrics_train.items():
             self.results['train_'+metric] = np.array(self.metrics_train[metric])
         # collect validation metrics
-        if self.myparams['validfold'] != -1:
-            self.results['val_loss'] = np.array(self.loss_valid)  # epoch-based loss (created outside)
-            self.results['val_loss_batch'] = np.array(self.loss_valid_per_batch)
-            for metric, value in self.metrics_valid.items():
-                self.results['val_'+metric] = np.array(self.metrics_valid[metric])
+        self.results['val_loss'] = np.array(self.loss_valid)  # epoch-based loss (created outside)
+        self.results['val_loss_batch'] = np.array(self.loss_valid_per_batch)
+        for metric, value in self.metrics_valid.items():
+            self.results['val_'+metric] = np.array(self.metrics_valid[metric])
         # runtime
         self.results['runtime'] = np.array(self.runtime)
         # gradient norm statistics
@@ -177,5 +176,5 @@ class MetricsCallback(Callback):
         plot_train_experiment_from_dicts(self.results, self.myparams)
 
         print('results and plots files are written into {}'.
-              format(epoch+1, self.myparams['path']+'/'+self.myparams['name']))
+              format(self.myparams['path']+'/'+self.myparams['name']))
         print()

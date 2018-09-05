@@ -362,10 +362,11 @@ if __name__ == '__main__':
             folders = glob.glob(args.folder)
 
         for f in folders:
-            print('making visualization for folder {}'.format(f))
-            plot_train_experiment_from_folder(folder=f,
-                                              datalimits=args.datalimits,
-                                              firstsceneonly=args.firstsceneonly)
+            if os.path.isdir(f) and '0.0' in f:
+                print('making visualization for folder {}'.format(f))
+                plot_train_experiment_from_folder(folder=f,
+                                                  datalimits=args.datalimits,
+                                                  firstsceneonly=args.firstsceneonly)
 
     if args.mode == 'hyper' and args.folder:
         # TODO: rename this file to analysis
@@ -377,7 +378,7 @@ if __name__ == '__main__':
 
         hyperparam_combinations = {}
         for f in folders:
-            if os.path.isdir(f):
+            if os.path.isdir(f) and '0.0' in f:
                 print('collecting data from folder {}'.format(f))
                 params = load_h5(os.path.join(f, 'params.h5'))
                 results = load_h5(os.path.join(f, 'results.h5'))

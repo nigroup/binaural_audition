@@ -524,23 +524,39 @@ class BatchLoader(HeinerDataloader):
 # testing:
 if __name__ == '__main__':
 
-    folds = [1, 2, 4, 5, 6]
-    mode = 'train'
-    # folds = [3]
-    # mode = 'val'
-    scenes = list(range(1,80+1)) #-1 # all scenes (80 for train)
-    # scenes = [1, 2]
+    # train
+    # mode = 'train'
+    # folds = [1, 2, 3, 4, 5, 6] # final model
+    # folds = [1, 2, 4, 5, 6] # lvl1
+    # folds = [1, 2, 3, 5, 6] # lvl2
+    # folds = [1, 3, 4, 5, 6] # lvl3
+    # scenes = list(range(1, 80 + 1))  # -1 # all scenes (80 for train)
+
+    # test
+    # mode = 'test'
+    # folds = [7, 8] # test folds
+    # scenes = list(range(1, 168 + 1)) # all 168 test scenes
+
+    # val/toy
+    mode = 'val'
+    folds = [3]
+    # folds = [4]
+    # folds = [2]
+    # scenes = [1]
+    scenes = list(range(1, 80 + 1))  # -1 # all scenes (80 for train)
+
     inputstd = True
     # inputstd = False
     params = {'sceneinstancebufsize': 200, #2000,
-              'historylength': 1017,
+              'historylength': 1025,
               'batchsize': 128,
               'batchlength': 2500,
               'instantlabels': False,
-              'maxepochs': 2,
-              'noinputstandardization': not inputstd}
+              'maxepochs': 1,
+              'noinputstandardization': not inputstd,
+              'mask_value': -1}
 
-    print('batchloader before initialization.....')
+    print('batchloader ({} mode, folds {}, scenes {}) before initialization.....'.format(mode, folds, scenes))
 
     t_start_allbatches = time()
     batchloader_training = BatchLoader(params=params, mode=mode, fold_nbs=folds,
@@ -551,9 +567,9 @@ if __name__ == '__main__':
     no_batches = batchloader_training.batches_per_epoch * params['maxepochs']
     mean_vec_batches = np.zeros((160, no_batches))
     std_vec_batches = np.zeros_like(mean_vec_batches)
-    batchsizes = np.zeros(no_batches)
+    no_unmasked_features = np.zeros(no_batches, dtype=np.int)
 
-    print('iterating once over complete data set:')
+    print('iterating once over the data set:')
     t_start_allbatches = time()
     batchcount = 0
     t_start_batch = time()
@@ -563,20 +579,29 @@ if __name__ == '__main__':
         print('received batch (size {}) {}/{} in epoch {}/{} in {:.2f} sec'.format(batch_x.shape[0], batchloader_training.batchid % batchloader_training.batches_per_epoch + 1,
                                                            batchloader_training.batches_per_epoch, batchloader_training.epoch+1, params['maxepochs'],
                                                                                    time()-t_start_batch))
-        mean_vec_batches[:, batchcount-1] = np.mean(batch_x, axis=(0, 1))
-        std_vec_batches[:, batchcount-1] = np.std(batch_x, axis=(0, 1))
-        batchsizes[batchcount-1] = batch_x.shape[0]
-        # print('mean_vec_batches[{}].T = {}'.format(batchcount-1, mean_vec_batches[:, batchcount-1].T))
+        batch_x_unmasked = batch_x[batch_y[:, :, 0, 1] != params['mask_value']]
+        no_unmasked_features[batchcount-1] = len(batch_x_unmasked)
+        print('batch has {} unmasked of {} total feature vectors'.
+              format(no_unmasked_features[batchcount-1],
+                     batch_x.shape[0]*batch_x.shape[1]))
+        mean_vec_batches[:, batchcount-1] = np.mean(batch_x_unmasked, axis=0)
+        std_vec_batches[:, batchcount-1] = np.std(batch_x_unmasked, axis=0)
         t_start_batch = time()
     assert batchcount == batchloader_training.batches_per_epoch*params['maxepochs']
     print('...done receiving {} batches of {} epochs in {:.2f} seconds'.format(batchcount, params['maxepochs'],
                                                                                time() - t_start_allbatches))
 
     print('calculating mean and std of whole data set to validate input standardization:')
-    mean_vec_total = np.mean(mean_vec_batches, axis=1)
-    var_vec_total = 1./np.sum(batchsizes) * np.sum(batchsizes * (std_vec_batches**2 +
-                                                         (mean_vec_batches-mean_vec_total[:, np.newaxis])**2),
-                                           axis=1)
+    # # assumption of the commented out code: size and length of all batches is equal (pot. smaller last batch is negligible)
+    # mean_vec_total = np.mean(mean_vec_batches, axis=1)
+    # var_vec_total = 1./batchcount * np.sum((std_vec_batches**2 + (mean_vec_batches-mean_vec_total[:, np.newaxis])**2), axis=1)
+    # corrected  code (compared to commented out above): taking into account masking of features
+    mean_vec_total = 1./np.sum(no_unmasked_features) * np.sum(no_unmasked_features[np.newaxis, :] * mean_vec_batches,
+                                                              axis=1)
+    var_vec_total = 1. / np.sum(no_unmasked_features) * np.sum(no_unmasked_features[np.newaxis, :] *
+                                                               (std_vec_batches ** 2 +
+                                                                (mean_vec_batches - mean_vec_total[:, np.newaxis]) ** 2),
+                                                               axis=1)
     std_vec_total = np.sqrt(var_vec_total)
     print('total mean vector (should be close to component-wise zero): \n{}'.format(mean_vec_total))
     print('total std vector (should be close to component-wise unity): \n{}'.format(std_vec_total))

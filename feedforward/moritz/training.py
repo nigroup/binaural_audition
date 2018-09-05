@@ -30,20 +30,6 @@ from analysis import plot_train_experiment_from_dicts
 override_params = {}
 # override_params will be fed into params directly before training (i.e. overrides command line arguments)
 
-# print('\n!!!!!!!!!!!!!!!!!!!!! ONLY DEBUGGING, REMOVE ME ASAP !!!!!!!!!!!!!!!\n\n') # remove also following lines
-# time.sleep(0.5)
-# override_params['featuremaps'] = 10
-# override_params['scenes_trainvalid'] = [1]
-# override_params['trainfolds'] = [1]
-# override_params['historylength'] = 1000
-# override_params['batchlength'] = 2800
-# override_params['noinputstandardization'] = True
-# override_params['sceneinstancebufsize'] = 500
-# override_params['maxepochs'] = 5
-# #override_params['resume'] = 'playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es3_vf3'
-# override_params['earlystop'] = 3
-# override_params['weightnorm'] = False
-
 totaltime_start = time.time()
 
 # COMMAND LINE ARGUMENTS
@@ -51,8 +37,15 @@ totaltime_start = time.time()
 parser = argparse.ArgumentParser()
 
 # general
-parser.add_argument('--path', type=str, default='blockinterprete_2_hyper',
+parser.add_argument('--debug', action='store_true', default=False,
+                        help='if chosen: only one scene and cheap hyperapram configuration selected (overriding '+
+                             'many command line args) for fast debugging')
+
+parser.add_argument('--path', type=str, default='playground',
                         help='folder where to store the files (log, model, hyperparams, results incl. duration)')
+parser.add_argument('--loadparams', type=str, default='negative',
+                        help='will load the params from file except for validfold, maxepochs and gpuid which are taken from cmdline, '+
+                             'e.g., --loadparams=playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es-1_vf3')
 parser.add_argument('--resume', type=str, default='negative',
                         help='will resume the model from its last epoch, '+
                              'e.g., --resume=playground/n10_dr0.0_ks3_hl65_lr0.002_wnFalse_bs256_bl1000_es-1_vf3')
@@ -77,7 +70,9 @@ parser.add_argument('--weightnorm', action='store_true', default=False,
                         help='disables the weight norm version of the Adam optimizer, i.e., falls back to regular Adam')
 parser.add_argument('--learningrate', type=float, default=0.002,
                         help='initial learning rate of the Adam optimizer')
-parser.add_argument('--batchsize', type=int, default=128, # note that batchsize should be proportionally increased to learning rate (some paper)
+# for batchsize: note that sceneinstancebufsize also needs to be increased when larger for more batch independence,
+#                and batchsize should be proportionally increased to learning rate (some paper at least / and youssef?)
+parser.add_argument('--batchsize', type=int, default=128,
                         help='number of time series per batch (should be power of two for efficiency)')
 parser.add_argument('--batchlength', type=int, default=2500, # 2500 batchlength corresponds to 75% of all scene instances to fit into two batches (with a hist size up to 1200 determining the necessary overlap)
                         help='length of the time series per batch (should be significantly larger than history size '+
@@ -87,9 +82,10 @@ parser.add_argument('--maxepochs', type=int, default=30,
 parser.add_argument('--noinputstandardization', action='store_true', default=False,
                         help='disables input standardization')
 parser.add_argument('--earlystop', type=int, default=5,
-                        help='early stop patience, i.e., number of number of non-improving epochs; -1 => no early stopping')
+                        help='early stop patience, i.e., number of number of non-improving epochs (not effective when validfold==-1)')
 parser.add_argument('--validfold', type=int, default=3,
-                        help='number of validation fold (1, ..., 6); -1 => use all 6 for training [latter incompatible with earlystopping]')
+                        help='number of validation fold (1, ..., 6); -1 => use all 6 for training with early stoppping '+
+                             'disabled and the test set as validation set')
 parser.add_argument('--gradientclip', type=float, default=1.5,
                         help='maximal number of epochs (typically stopped early before reaching this value)')
 parser.add_argument('--nocalcgradientnorm', action='store_true', default=False,
@@ -101,14 +97,31 @@ parser.add_argument('--seed', type=int, default=-1,
                         help='if -1: no fixed seed is used, otherwise the value is the seed (multiplied by epochs)')
 parser.add_argument('--instantlabels', action='store_true', default=False,
                         help='if chosen: instant labels; otherwise: block-interprete labels')
-parser.add_argument('--sceneinstancebufsize', type=int, default=3000,
+parser.add_argument('--sceneinstancebufsize', type=int, default=1500, #3000
                         help='number of buffered scene instances from which to draw the time series of a batch')
-parser.add_argument('--batchbufsize', type=int, default=10,
+parser.add_argument('--batchbufsize', type=int, default=5, #10,
                         help='number of buffered batches (only relevant in batch buffer\'s multiprocessing mode)')
 
 args = parser.parse_args()
 
 
+# DEBUGING TOGGLE
+if args.debug:
+    print('\n!!!!!!!!!!!!!!!!!!!!! DEBUGING MODE RUNNING !!!!!!!!!!!!!!!\n\n') # remove also following lines
+    time.sleep(1.5)
+    override_params['featuremaps'] = 10
+    override_params['scenes_trainvalid'] = [1]
+    override_params['scenes_test'] = [1]
+    override_params['trainfolds'] = [1]
+    override_params['noinputstandardization'] = True
+    override_params['sceneinstancebufsize'] = 200
+    override_params['maxepochs'] = 4
+    override_params['earlystop'] = 2
+    # test set
+    override_params['validfold'] = -1
+    # resuming
+    # override_params['resume'] = 'playground/n10_dr0.0_ks3_hl1025_lr0.002_bs128_vf3'
+    # override_params['maxepochs'] = 7
 
 # (HYPER)PARAMS
 
@@ -144,11 +157,11 @@ elif 'final' in params['path']:
 else:
     params['name'] = name_long
 
-# loading params from file except for maxepochs
+# loading params from file except for maxepochs/gpuid/earlystop
 if params['resume'] != 'negative':
+    print('overriding params incl. name with values from resumed folder {}'.format(params['resume']))
     resume_path, resume_name = os.path.split(params['resume'])
     resumed_params = load_h5(os.path.join(resume_path, resume_name, 'params.h5'))
-    print('overriding params incl. name from resumed folder {}'.format(params['resume']))
     del resumed_params['maxepochs'] # use maxepochs and gpuid and earlystop from cmdline or default
     del resumed_params['gpuid']
     del resumed_params['earlystop']
@@ -157,6 +170,27 @@ if params['resume'] != 'negative':
     params['resume'] = resume_save
     params['path'] = resume_path
     params['name'] = resume_name
+
+if params['loadparams'] != 'negative':
+    print(('overriding params [except maxepochs, gpuid, validfold, name, path, server, finished, resume] '+
+           'with values from folder {}').format(params['loadparams']))
+    loaded_params = load_h5(os.path.join(params['loadparams'], 'params.h5'))
+    # take the next three params from cmdline or default
+    del loaded_params['maxepochs']
+    del loaded_params['gpuid']
+    del loaded_params['validfold']
+    # remove further params since we want to generate/fetch them from scratch:
+    del loaded_params['name']
+    del loaded_params['path']
+    del loaded_params['server']
+    if 'finished' in loaded_params:
+        del loaded_params['finished']
+    if 'resume' in loaded_params:
+        del loaded_params['resume'] # prevent resuming only because the loaded model was resumed
+    # transform some params to proper types
+    loaded_params['kernelsize'] = loaded_params['kernelsize'].item()
+    # update params
+    params.update(loaded_params)
 
 experimentfolder = os.path.join(params['path'], params['name'])
 if os.path.exists(experimentfolder) and params['resume']=='negative':
@@ -208,20 +242,20 @@ print()
 print('BUILDING DATA LOADER')
 
 
-trainfolds = [1, 2, 3, 4, 5, 6]
+params['trainfolds'] = [1, 2, 3, 4, 5, 6]
 if params['validfold'] != -1:
-    if params['validfold'] in trainfolds:
-        trainfolds.remove(params['validfold'])
+    if params['validfold'] in params['trainfolds']:
+        params['trainfolds'].remove(params['validfold'])
     else:
-        raise ValueError('the validation fold needs to be one of the six possible folds')
-
-params['trainfolds'] = trainfolds
-
+        raise ValueError('the validation fold needs to be one of the six possible (train/valid) folds')
+else:
+    params['scenes_test'] = list(range(1, NUMBER_SCENES_TEST+1))
 
 if params['firstsceneonly']:
     params['scenes_trainvalid'] = [1] # corresponds to nSrc=2, with the master at 112,5 degree and the (weaker, SNR=4) distractor at -112.5
 else:
     params['scenes_trainvalid'] = list(range(1, NUMBER_SCENES_TRAINING_VALIDATION+1))
+    # TODO: split scenes_trainvalid to scenes_train and scenes_valid [for test set difference req.]
 
 
 params.update(override_params)
@@ -236,19 +270,26 @@ if params['resume'] != 'negative':
     # transform to expected format
     params['trainfolds'] = list(params['trainfolds'])
     params['scenes_trainvalid'] = list(params['scenes_trainvalid'])
-    params['kernelsize'] = list(params['trainfolds'])
+    if params['validfold'] == -1:
+        params['scenes_test'] = list(params['scenes_test'])
 
 print('trainfolds: {}, validfold: {}'.format(params['trainfolds'], params['validfold']))
 
 batchloader_training = BatchLoader(params=params, mode='train', fold_nbs=params['trainfolds'],
                                    scene_nbs=params['scenes_trainvalid'], batchsize=params['batchsize'],
-                                   seed=params['seed'] if params['seed']!=-1 else random.randint(1,1000)) # seed for testing
+                                   seed=params['seed'] if params['seed']!=-1 else random.randint(1,1000)) # seed for training only
 
-if params['validfold'] == -1:
-    batchloader_validation = None
-else:
+if params['validfold'] != -1:
+    # validation set
     batchloader_validation = BatchLoader(params=params, mode='val', fold_nbs=[params['validfold']],
-                                         scene_nbs=params['scenes_trainvalid'], batchsize=params['batchsize'])  # seed for testing
+                                         scene_nbs=params['scenes_trainvalid'],
+                                         batchsize=params['batchsize'])  # no seed for validation
+
+else:
+    # test set
+    batchloader_validation = BatchLoader(params=params, mode='test', fold_nbs=[7, 8],
+                                         scene_nbs=params['scenes_test'],
+                                         batchsize=params['batchsize'])  # no seed required for testing
 
 params['train_batches_per_epoch'] = batchloader_training.batches_per_epoch
 params['valid_batches_per_epoch'] = batchloader_validation.batches_per_epoch
@@ -277,7 +318,7 @@ if params['weightnorm']:
 else:
     optimizer = Adam
 # weighting with inverse label frequency, ignoring cost of predictions of true labels value MASK_VALUE via masking the loss of such labels
-loss_weights = heiner_tfutils.get_loss_weights(fold_nbs=trainfolds, scene_nbs=params['scenes_trainvalid'],
+loss_weights = heiner_tfutils.get_loss_weights(fold_nbs=params['trainfolds'], scene_nbs=params['scenes_trainvalid'],
                                              label_mode='instant' if params['instantlabels'] else 'blockbased')
 masked_weighted_crossentropy_loss = heiner_tfutils.my_loss_builder(MASK_VALUE, loss_weights)
 # TODO: potential performance optimization: in label mode reduce to weighted crossentropy loss, i.e., without masked
@@ -317,10 +358,8 @@ print()
 print('STARTING TRAINING')
 
 print('starting training for at most {} epochs ({} batches per epoch)'.format(params['maxepochs'],
-                                                                              params['train_batches_per_epoch']))
-print('early stop patience is {}'.format(params['earlystop']))
-print()
 
+                                                                              params['train_batches_per_epoch']))
 
 # keras callbacks for earlystopping, model saving and nantermination as well as our own callback
 # remark: val_wbac is not a metric in the keras sense but is provided via the metricscallback
@@ -336,9 +375,11 @@ if params['resume'] == 'negative':
 metricscallback = MetricsCallback(params, oldresults)
 callbacks.append(metricscallback)
 
-if params['earlystop'] != -1:
+if params['validfold'] != -1:
     earlystopping = EarlyStopping(monitor='val_wbac', mode='max', patience=params['earlystop'])
     callbacks.append(earlystopping)
+    print('early stop patience is {}'.format(params['earlystop']))
+
 
 modelcheckpoint = ModelCheckpoint(os.path.join(params['path'], params['name'], 'model.h5'))
 callbacks.append(modelcheckpoint)
@@ -371,7 +412,7 @@ if real_epoch_no < params['maxepochs']:
     print('training stopped after epoch {} although maxepoch {}'.format(real_epoch_no, params['maxepochs']))
 
 # early stopping
-if params['earlystop'] != -1:
+if params['validfold'] != -1:
     if earlystopping.stopped_epoch == 0:
         printerror('early stopping could not be applied with patience {}, maxepochs {} was seemingly too small'.format(params['earlystop'], params['maxepochs']))
     else:
@@ -381,12 +422,12 @@ if params['earlystop'] != -1:
 save_h5(results, os.path.join(params['path'], params['name'], 'results.h5'))
 
 
-# TODO: final plotting and printing
-plot_train_experiment_from_dicts(results, params)
-
 params['finished'] = True
 
 save_h5(params, os.path.join(params['path'], params['name'], 'params.h5'))
+
+# TODO: final plotting and printing
+plot_train_experiment_from_dicts(results, params)
 
 
 # TODO: experiment before hyper search: time measurements when finally running to see what takes what part (per epoch)

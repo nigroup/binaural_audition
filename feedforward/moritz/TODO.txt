@@ -1,10 +1,15 @@
 TODO
 
-- finales modell trainieren konzipieren => mit heiner abstimmen
+- final model standardization checken + an heiner zurückmelden
+
+- rename manually all experiments: bs64 / bs128 (also fix naming required?)
+
+- manually fix results/params: finished to True everywhere and determine kernelsize from name (only relevant for resumed experiments) and set it again
 
 - "TODO:"s wegmachen aus code und preliminary study abschließen
 darunter:
     - add to plot: moving  loss/acc average over say three epochs (to see validation trend)
+    - batchloader => seed & resume check
     
 - vorläufige experimente abschließen
     => dropout
@@ -17,6 +22,8 @@ no of 1 labels and of 0 labels for each fold and class => pos,neg,tot=pos+neg pe
 - hyperparam_combinations_*.txt sukzessive befüllen (immer genügend auf vorrat) und skript dafür schreiben, welches prozesse startet nacheinander (nur level1?) (=> zwei prozesse können gleichzeitig schreiben=>filelock)
 
 - skript für kombinations-auswertungstabelle (levels 2,3 antizipieren) erstellen
+
+- sicherstellen, dass keine fehlenden teile oder doppelte daten test set evaluierung benutzt werden
 
 - evaluationsplotting zusammen mit changbin machen
 
