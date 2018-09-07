@@ -20,7 +20,9 @@ from heiner import tensorflow_utils
 from heiner import utils
 from heiner.my_tmuxprocess import TmuxProcess
 
-from tqdm import tqdm
+import multiprocessing
+import heiner.add_to_random_search as add_to_random_search
+
 
 def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT):
     ################################################# CROSS VALIDATION
@@ -37,286 +39,281 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
     best_val_class_accuracies_over_folds_bac2 = [[0] * NUMBER_OF_CLASSES] * len(ALL_FOLDS)
     best_val_acc_over_folds_bac2 = [0] * len(ALL_FOLDS)
 
-    go_to_next_stage = True
+    go_to_next_stage = False
 
-    while go_to_next_stage:
+    print(5 * '\n' + 'Starting Cross Validation STAGE {}...\n'.format(h.STAGE))
 
-        go_to_next_stage = False
+    for i_val_fold, val_fold in enumerate(h.VAL_FOLDS):
+        model_save_dir = os.path.join(model_dir, 'val_fold{}'.format(val_fold))
+        os.makedirs(model_save_dir, exist_ok=True)
 
-        print(5 * '\n' + 'Starting Cross Validation STAGE {}...\n'.format(h.STAGE))
+        TRAIN_FOLDS = list(set(ALL_FOLDS).difference({val_fold}))
 
-        for i_val_fold, val_fold in enumerate(h.VAL_FOLDS):
-            model_save_dir = os.path.join(model_dir, 'val_fold{}'.format(val_fold))
-            os.makedirs(model_save_dir, exist_ok=True)
+        val_fold_str = 'val_fold: {} ({} / {})'.format(val_fold, i_val_fold + 1, len(h.VAL_FOLDS))
 
-            TRAIN_FOLDS = list(set(ALL_FOLDS).difference({val_fold}))
+        ################################################# MODEL DEFINITION
 
-            val_fold_str = 'val_fold: {} ({} / {})'.format(val_fold, i_val_fold + 1, len(h.VAL_FOLDS))
+        print('\nBuild model...\n')
 
-            ################################################# MODEL DEFINITION
+        x = Input(batch_shape=(h.BATCH_SIZE, h.TIME_STEPS, h.N_FEATURES), name='Input', dtype='float32')
+        y = x
 
-            print('\nBuild model...\n')
+        # Input dropout
+        y = Dropout(h.INPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, h.N_FEATURES))(y)
+        for units in h.UNITS_PER_LAYER_LSTM:
+            y = CuDNNLSTM(units, return_sequences=True, stateful=True)(y)
 
-            x = Input(batch_shape=(h.BATCH_SIZE, h.TIME_STEPS, h.N_FEATURES), name='Input', dtype='float32')
-            y = x
+            # LSTM Output dropout
+            y = Dropout(h.LSTM_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
+        for units in h.UNITS_PER_LAYER_MLP:
+            if units != h.N_CLASSES:
+                y = Dense(units, activation='relu')(y)
+            else:
+                y = Dense(units, activation='linear')(y)
 
-            # Input dropout
-            y = Dropout(h.INPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, h.N_FEATURES))(y)
-            for units in h.UNITS_PER_LAYER_LSTM:
-                y = CuDNNLSTM(units, return_sequences=True, stateful=True)(y)
+            # MLP Output dropout but not last layer
+            if units != h.N_CLASSES:
+                y = Dropout(h.MLP_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
+        model = Model(x, y)
 
-                # LSTM Output dropout
-                y = Dropout(h.LSTM_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
-            for units in h.UNITS_PER_LAYER_MLP:
-                if units != h.N_CLASSES:
-                    y = Dense(units, activation='relu')(y)
-                else:
-                    y = Dense(units, activation='linear')(y)
+        model.summary()
+        print(5 * '\n')
 
-                # MLP Output dropout but not last layer
-                if units != h.N_CLASSES:
-                    y = Dropout(h.MLP_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
-            model = Model(x, y)
+        my_loss = tensorflow_utils.my_loss_builder(h.MASK_VAL,
+                                                   tensorflow_utils.get_loss_weights(TRAIN_FOLDS, h.TRAIN_SCENES,
+                                                                                     h.LABEL_MODE))
 
-            model.summary()
-            print(5 * '\n')
+        ################################################# LOAD CHECKPOINTED MODEL
 
-            my_loss = tensorflow_utils.my_loss_builder(h.MASK_VAL,
-                                                       tensorflow_utils.get_loss_weights(TRAIN_FOLDS, h.TRAIN_SCENES,
-                                                                                         h.LABEL_MODE))
+        model_is_resumed = False
+        epochs_finished_old = None
 
-            ################################################# LOAD CHECKPOINTED MODEL
+        latest_weights_path, epochs_finished, val_acc, best_epoch_, best_val_acc_, epochs_without_improvement_ \
+            = tensorflow_utils.latest_training_state(model_save_dir)
+        if latest_weights_path is not None:
+            model.load_weights(latest_weights_path)
 
-            model_is_resumed = False
-            epochs_finished_old = None
+            model_is_resumed = True
 
-            latest_weights_path, epochs_finished, val_acc, best_epoch_, best_val_acc_, epochs_without_improvement_ \
-                = tensorflow_utils.latest_training_state(model_save_dir)
-            if latest_weights_path is not None:
-                model.load_weights(latest_weights_path)
+            if h.epochs_finished[val_fold - 1] != epochs_finished:
+                epochs_finished_old = h.epochs_finished[val_fold - 1]
+                print(
+                    'MISMATCH: Latest state in hyperparameter combination list is different to checkpointed state.')
+                h.epochs_finished[val_fold - 1] = epochs_finished
+                h.val_acc[val_fold - 1] = val_acc
+                hcm.replace_at_id(ID, h)
 
-                model_is_resumed = True
+        ################################################# COMPILE MODEL
 
-                if h.epochs_finished[val_fold - 1] != epochs_finished:
-                    epochs_finished_old = h.epochs_finished[val_fold - 1]
-                    print(
-                        'MISMATCH: Latest state in hyperparameter combination list is different to checkpointed state.')
-                    h.epochs_finished[val_fold - 1] = epochs_finished
-                    h.val_acc[val_fold - 1] = val_acc
-                    hcm.replace_at_id(ID, h)
+        adam = Adam(lr=h.LEARNING_RATE, clipnorm=1.)
+        model.compile(optimizer=adam, loss=my_loss, metrics=None)
 
-            ################################################# COMPILE MODEL
+        print('\nModel compiled.\n')
 
-            adam = Adam(lr=h.LEARNING_RATE, clipnorm=1.)
-            model.compile(optimizer=adam, loss=my_loss, metrics=None)
+        ################################################# DATA LOADER
+        use_multithreading = True
+        BUFFER = utils.get_buffer_size_wrt_time_steps(h.TIME_STEPS)
 
-            print('\nModel compiled.\n')
+        train_loader, val_loader = tr_utils.create_dataloaders(h.LABEL_MODE, TRAIN_FOLDS, h.TRAIN_SCENES,
+                                                               h.BATCH_SIZE,
+                                                               h.TIME_STEPS, h.MAX_EPOCHS, h.N_FEATURES,
+                                                               h.N_CLASSES,
+                                                               [val_fold], h.VAL_STATEFUL,
+                                                               BUFFER=BUFFER, use_multithreading=use_multithreading)
 
-            ################################################# DATA LOADER
-            use_multithreading = True
-            BUFFER = utils.get_buffer_size_wrt_time_steps(h.TIME_STEPS)
+        ################################################# CALLBACKS
+        model_ckp_last = ModelCheckpoint(os.path.join(model_save_dir,
+                                                      'model_ckp_epoch_{epoch:02d}-val_acc_{val_final_acc:.3f}.hdf5'),
+                                         verbose=1, monitor='val_final_acc')
+        model_ckp_last.set_model(model)
+        model_ckp_best = ModelCheckpoint(os.path.join(model_save_dir,
+                                                      'best_model_ckp_epoch_{epoch:02d}-val_acc_{val_final_acc:.3f}.hdf5'),
+                                         verbose=1, monitor='val_final_acc', save_best_only=True)
+        model_ckp_best.set_model(model)
 
-            train_loader, val_loader = tr_utils.create_dataloaders(h.LABEL_MODE, TRAIN_FOLDS, h.TRAIN_SCENES,
-                                                                   h.BATCH_SIZE,
-                                                                   h.TIME_STEPS, h.MAX_EPOCHS, h.N_FEATURES,
-                                                                   h.N_CLASSES,
-                                                                   [val_fold], h.VAL_STATEFUL,
-                                                                   BUFFER=BUFFER, use_multithreading=use_multithreading)
+        args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str, GLOBAL_GRADIENT_NORM_PLOT,
+                h.RECURRENT_DROPOUT, h.METRIC]
 
-            ################################################# CALLBACKS
-            model_ckp_last = ModelCheckpoint(os.path.join(model_save_dir,
-                                                          'model_ckp_epoch_{epoch:02d}-val_acc_{val_final_acc:.3f}.hdf5'),
-                                             verbose=1, monitor='val_final_acc')
-            model_ckp_last.set_model(model)
-            model_ckp_best = ModelCheckpoint(os.path.join(model_save_dir,
-                                                          'best_model_ckp_epoch_{epoch:02d}-val_acc_{val_final_acc:.3f}.hdf5'),
-                                             verbose=1, monitor='val_final_acc', save_best_only=True)
-            model_ckp_best.set_model(model)
+        # training phase
+        train_phase = tr_utils.Phase('train', model, train_loader, BUFFER, *args)
 
-            args = [h.OUTPUT_THRESHOLD, h.MASK_VAL, h.MAX_EPOCHS, val_fold_str, GLOBAL_GRADIENT_NORM_PLOT,
-                    h.RECURRENT_DROPOUT, h.METRIC]
+        # validation phase
+        val_phase = tr_utils.Phase('val', model, val_loader, BUFFER, *args)
 
-            # training phase
-            train_phase = tr_utils.Phase('train', model, train_loader, BUFFER, *args)
+        # needed for early stopping
+        best_val_acc = -1 if not model_is_resumed else best_val_acc_
+        best_val_acc_bac2 = -1
+        best_epoch = 0 if not model_is_resumed else best_epoch_
+        epochs_without_improvement = 0 if not model_is_resumed else epochs_without_improvement_
 
-            # validation phase
-            val_phase = tr_utils.Phase('val', model, val_loader, BUFFER, *args)
+        if model_is_resumed:
+            old_metrics = utils.load_metrics(model_save_dir)
 
-            # needed for early stopping
-            best_val_acc = -1 if not model_is_resumed else best_val_acc_
-            best_val_acc_bac2 = -1
-            best_epoch = 0 if not model_is_resumed else best_epoch_
-            epochs_without_improvement = 0 if not model_is_resumed else epochs_without_improvement_
+            # merge metrics
+            h.METRIC = old_metrics['metric']
+            train_phase.metric = h.METRIC
+            val_phase.metric = h.METRIC
 
-            if model_is_resumed:
-                old_metrics = utils.load_metrics(model_save_dir)
+            train_iterations_done = old_metrics['train_losses'].shape[0]
+            val_iterations_done = old_metrics['val_losses'].shape[0]
+            epochs_done = old_metrics['val_accs'].shape[0]
+            if epochs_finished_old is not None:
+                epochs_done_old = epochs_done
+                epochs_done = epochs_done if epochs_finished > epochs_done else epochs_finished
+                train_iterations_done = int(train_iterations_done / epochs_done_old) * epochs_done
+                val_iterations_done = int(val_iterations_done / epochs_done_old) * epochs_done
 
-                # merge metrics
-                h.METRIC = old_metrics['metric']
-                train_phase.metric = h.METRIC
-                val_phase.metric = h.METRIC
+            train_phase.losses = old_metrics['train_losses'].tolist()[:train_iterations_done]
+            train_phase.accs = old_metrics['train_accs'].tolist()[:epochs_done]
+            val_phase.losses = old_metrics['val_losses'].tolist()[:val_iterations_done]
+            val_phase.accs = old_metrics['val_accs'].tolist()[:epochs_done]
+            val_phase.accs_bac2 = old_metrics['val_accs_bac2'].tolist()[:epochs_done]
+            val_phase.class_accs = old_metrics['val_class_accs'].tolist()[:epochs_done]
+            val_phase.class_accs_bac2 = old_metrics['val_class_accs_bac2'].tolist()[:epochs_done]
+            val_phase.class_scene_accs = old_metrics['val_class_scene_accs'].tolist()[:epochs_done]
+            val_phase.class_scene_accs_bac2 = old_metrics['val_class_scene_accs_bac2'].tolist()[:epochs_done]
+            val_phase.scene_accs = old_metrics['val_scene_accs'].tolist()[:epochs_done]
+            val_phase.scene_accs_bac2 = old_metrics['val_scene_accs_bac2'].tolist()[:epochs_done]
+            train_phase.sens_spec_class_scene = old_metrics['train_sens_spec_class_scene'].tolist()[:epochs_done]
+            val_phase.sens_spec_class_scene = old_metrics['val_sens_spec_class_scene'].tolist()[:epochs_done]
+            val_phase.sens_spec_class = old_metrics['val_sens_spec_class'].tolist()[:epochs_done]
 
-                train_iterations_done = old_metrics['train_losses'].shape[0]
-                val_iterations_done = old_metrics['val_losses'].shape[0]
-                epochs_done = old_metrics['val_accs'].shape[0]
-                if epochs_finished_old is not None:
-                    epochs_done_old = epochs_done
-                    epochs_done = epochs_done if epochs_finished > epochs_done else epochs_finished
-                    train_iterations_done = int(train_iterations_done / epochs_done_old) * epochs_done
-                    val_iterations_done = int(val_iterations_done / epochs_done_old) * epochs_done
+            if 'global_gradient_norm' in old_metrics:
+                train_phase.global_gradient_norms = old_metrics['global_gradient_norm'].tolist()[
+                                                    :train_iterations_done]
 
-                train_phase.losses = old_metrics['train_losses'].tolist()[:train_iterations_done]
-                train_phase.accs = old_metrics['train_accs'].tolist()[:epochs_done]
-                val_phase.losses = old_metrics['val_losses'].tolist()[:val_iterations_done]
-                val_phase.accs = old_metrics['val_accs'].tolist()[:epochs_done]
-                val_phase.accs_bac2 = old_metrics['val_accs_bac2'].tolist()[:epochs_done]
-                val_phase.class_accs = old_metrics['val_class_accs'].tolist()[:epochs_done]
-                val_phase.class_accs_bac2 = old_metrics['val_class_accs_bac2'].tolist()[:epochs_done]
-                val_phase.class_scene_accs = old_metrics['val_class_scene_accs'].tolist()[:epochs_done]
-                val_phase.class_scene_accs_bac2 = old_metrics['val_class_scene_accs_bac2'].tolist()[:epochs_done]
-                val_phase.scene_accs = old_metrics['val_scene_accs'].tolist()[:epochs_done]
-                val_phase.scene_accs_bac2 = old_metrics['val_scene_accs_bac2'].tolist()[:epochs_done]
-                train_phase.sens_spec_class_scene = old_metrics['train_sens_spec_class_scene'].tolist()[:epochs_done]
-                val_phase.sens_spec_class_scene = old_metrics['val_sens_spec_class_scene'].tolist()[:epochs_done]
-                val_phase.sens_spec_class = old_metrics['val_sens_spec_class'].tolist()[:epochs_done]
+            best_val_acc = np.max(val_phase.accs)
+            best_val_acc_bac2 = old_metrics['val_accs_bac2'][np.argmax(val_phase.accs)]
 
-                if 'global_gradient_norm' in old_metrics:
-                    train_phase.global_gradient_norms = old_metrics['global_gradient_norm'].tolist()[
-                                                        :train_iterations_done]
+            # set the dataloaders to correct epoch
+            train_phase.resume_from_epoch(h.epochs_finished[val_fold - 1] + 1)
+            val_phase.resume_from_epoch(h.epochs_finished[val_fold - 1] + 1)
 
-                best_val_acc = np.max(val_phase.accs)
-                best_val_acc_bac2 = old_metrics['val_accs_bac2'][np.argmax(val_phase.accs)]
+        stage_was_finished = True
 
-                # set the dataloaders to correct epoch
-                train_phase.resume_from_epoch(h.epochs_finished[val_fold - 1] + 1)
-                val_phase.resume_from_epoch(h.epochs_finished[val_fold - 1] + 1)
+        for e in range(h.epochs_finished[val_fold - 1], h.MAX_EPOCHS):
 
-            stage_was_finished = True
+            # early stopping
+            if epochs_without_improvement >= h.PATIENCE_IN_EPOCHS and h.PATIENCE_IN_EPOCHS > 0:
+                break
+            else:
+                stage_was_finished = False
 
+            train_loss_is_nan, _ = train_phase.run()
+            val_loss_is_nan, _ = val_phase.run()
 
+            if train_loss_is_nan or val_loss_is_nan:
+                break
 
-            for e in range(h.epochs_finished[val_fold - 1], h.MAX_EPOCHS):
+            tr_utils.update_latest_model_ckp(model_ckp_last, model_save_dir, e, val_phase.accs[-1])
+            tr_utils.update_best_model_ckp(model_ckp_best, model_save_dir, e, val_phase.accs[-1])
 
-                # early stopping
-                if epochs_without_improvement >= h.PATIENCE_IN_EPOCHS and h.PATIENCE_IN_EPOCHS > 0:
-                    break
-                else:
-                    stage_was_finished = False
+            metrics = {
+                'metric': h.METRIC,
+                'train_losses': np.array(train_phase.losses),
+                'train_accs': np.array(train_phase.accs),
+                'val_losses': np.array(val_phase.losses),
+                'val_accs': np.array(val_phase.accs),
+                'val_accs_bac2': np.array(val_phase.accs_bac2),
+                'val_class_accs': np.array(val_phase.class_accs),
+                'val_class_accs_bac2': np.array(val_phase.class_accs_bac2),
+                'val_class_scene_accs': np.array(val_phase.class_scene_accs),
+                'val_class_scene_accs_bac2': np.array(val_phase.class_scene_accs_bac2),
+                'val_scene_accs': np.array(val_phase.scene_accs),
+                'val_scene_accs_bac2': np.array(val_phase.scene_accs_bac2),
+                'train_sens_spec_class_scene': np.array(train_phase.sens_spec_class_scene),
+                'val_sens_spec_class_scene': np.array(val_phase.sens_spec_class_scene),
+                'val_sens_spec_class': np.array(val_phase.sens_spec_class)
+            }
 
-                train_loss_is_nan, _ = train_phase.run()
-                val_loss_is_nan, _ = val_phase.run()
+            if GLOBAL_GRADIENT_NORM_PLOT:
+                metrics['global_gradient_norm'] = np.array(train_phase.global_gradient_norms)
 
-                if train_loss_is_nan or val_loss_is_nan:
-                    break
+            utils.pickle_metrics(metrics, model_save_dir)
 
-                tr_utils.update_latest_model_ckp(model_ckp_last, model_save_dir, e, val_phase.accs[-1])
-                tr_utils.update_best_model_ckp(model_ckp_best, model_save_dir, e, val_phase.accs[-1])
+            if val_phase.accs[-1] > best_val_acc:
+                best_val_acc = val_phase.accs[-1]
+                best_val_acc_bac2 = val_phase.accs_bac2[-1]
+                epochs_without_improvement = 0
+                best_epoch = e + 1
+            else:
+                epochs_without_improvement += 1
 
-                metrics = {
-                    'metric': h.METRIC,
-                    'train_losses': np.array(train_phase.losses),
-                    'train_accs': np.array(train_phase.accs),
-                    'val_losses': np.array(val_phase.losses),
-                    'val_accs': np.array(val_phase.accs),
-                    'val_accs_bac2': np.array(val_phase.accs_bac2),
-                    'val_class_accs': np.array(val_phase.class_accs),
-                    'val_class_accs_bac2': np.array(val_phase.class_accs_bac2),
-                    'val_class_scene_accs': np.array(val_phase.class_scene_accs),
-                    'val_class_scene_accs_bac2': np.array(val_phase.class_scene_accs_bac2),
-                    'val_scene_accs': np.array(val_phase.scene_accs),
-                    'val_scene_accs_bac2': np.array(val_phase.scene_accs_bac2),
-                    'train_sens_spec_class_scene': np.array(train_phase.sens_spec_class_scene),
-                    'val_sens_spec_class_scene': np.array(val_phase.sens_spec_class_scene),
-                    'val_sens_spec_class': np.array(val_phase.sens_spec_class)
-                }
+            hcm.finish_epoch(ID, h, val_phase.accs[-1], best_val_acc, val_phase.accs_bac2[-1], best_val_acc_bac2,
+                             val_fold - 1, e + 1, best_epoch, (timer() - start) / 60)
 
-                if GLOBAL_GRADIENT_NORM_PLOT:
-                    metrics['global_gradient_norm'] = np.array(train_phase.global_gradient_norms)
+            if INTERMEDIATE_PLOTS:
+                plot.plot_metrics(metrics, model_save_dir)
 
-                utils.pickle_metrics(metrics, model_save_dir)
+            if GLOBAL_GRADIENT_NORM_PLOT:
+                plot.plot_global_gradient_norm(np.array(train_phase.global_gradient_norms), model_save_dir,
+                                               epochs_done=e + 1)
 
-                if val_phase.accs[-1] > best_val_acc:
-                    best_val_acc = val_phase.accs[-1]
-                    best_val_acc_bac2 = val_phase.accs_bac2[-1]
-                    epochs_without_improvement = 0
-                    best_epoch = e + 1
-                else:
-                    epochs_without_improvement += 1
+            del metrics
 
-                hcm.finish_epoch(ID, h, val_phase.accs[-1], best_val_acc, val_phase.accs_bac2[-1], best_val_acc_bac2,
-                                 val_fold - 1, e + 1, best_epoch, (timer() - start) / 60)
+        if not stage_was_finished:
 
-                if INTERMEDIATE_PLOTS:
-                    plot.plot_metrics(metrics, model_save_dir)
+            best_val_class_accuracies_over_folds[val_fold - 1] = val_phase.class_accs[best_epoch - 1]
+            best_val_acc_over_folds[val_fold - 1] = val_phase.accs[best_epoch - 1]
 
-                if GLOBAL_GRADIENT_NORM_PLOT:
-                    plot.plot_global_gradient_norm(np.array(train_phase.global_gradient_norms), model_save_dir,
-                                                   epochs_done=e + 1)
+            best_val_class_accuracies_over_folds_bac2[val_fold - 1] = val_phase.class_accs_bac2[best_epoch - 1]
+            best_val_acc_over_folds_bac2[val_fold - 1] = val_phase.accs_bac2[best_epoch - 1]
 
-            if not stage_was_finished:
+            ################################################# CROSS VALIDATION: MEAN AND VARIANCE
+            best_val_class_accs_over_folds = np.array(best_val_class_accuracies_over_folds)
+            best_val_accs_over_folds = np.array(best_val_acc_over_folds)
 
-                best_val_class_accuracies_over_folds[val_fold - 1] = val_phase.class_accs[best_epoch - 1]
-                best_val_acc_over_folds[val_fold - 1] = val_phase.accs[best_epoch - 1]
+            best_val_class_accs_over_folds_bac2 = np.array(best_val_class_accuracies_over_folds_bac2)
+            best_val_accs_over_folds_bac2 = np.array(best_val_acc_over_folds_bac2)
 
-                best_val_class_accuracies_over_folds_bac2[val_fold - 1] = val_phase.class_accs_bac2[best_epoch - 1]
-                best_val_acc_over_folds_bac2[val_fold - 1] = val_phase.accs_bac2[best_epoch - 1]
+            metrics_over_folds = utils.create_metrics_over_folds_dict(best_val_class_accs_over_folds,
+                                                                      best_val_accs_over_folds,
+                                                                      best_val_class_accs_over_folds_bac2,
+                                                                      best_val_accs_over_folds_bac2)
 
-                ################################################# CROSS VALIDATION: MEAN AND VARIANCE
-                best_val_class_accs_over_folds = np.array(best_val_class_accuracies_over_folds)
-                best_val_accs_over_folds = np.array(best_val_acc_over_folds)
+            if h.STAGE > 1:
+                metrics_over_folds_old = utils.load_metrics(model_dir)
 
-                best_val_class_accs_over_folds_bac2 = np.array(best_val_class_accuracies_over_folds_bac2)
-                best_val_accs_over_folds_bac2 = np.array(best_val_acc_over_folds_bac2)
+                best_val_class_accs_over_folds += metrics_over_folds_old['best_val_class_accs_over_folds']
+                best_val_accs_over_folds += metrics_over_folds_old['best_val_acc_over_folds']
+
+                best_val_class_accs_over_folds_bac2 += metrics_over_folds_old['best_val_class_accs_over_folds_bac2']
+                best_val_accs_over_folds_bac2 += metrics_over_folds_old['best_val_acc_over_folds_bac2']
 
                 metrics_over_folds = utils.create_metrics_over_folds_dict(best_val_class_accs_over_folds,
                                                                           best_val_accs_over_folds,
                                                                           best_val_class_accs_over_folds_bac2,
                                                                           best_val_accs_over_folds_bac2)
 
-                if h.STAGE > 1:
-                    metrics_over_folds_old = utils.load_metrics(model_dir)
+            utils.pickle_metrics(metrics_over_folds, model_dir)
 
-                    best_val_class_accs_over_folds += metrics_over_folds_old['best_val_class_accs_over_folds']
-                    best_val_accs_over_folds += metrics_over_folds_old['best_val_acc_over_folds']
+            if INTERMEDIATE_PLOTS:
+                plot.plot_metrics(metrics_over_folds, model_dir)
 
-                    best_val_class_accs_over_folds_bac2 += metrics_over_folds_old['best_val_class_accs_over_folds_bac2']
-                    best_val_accs_over_folds_bac2 += metrics_over_folds_old['best_val_acc_over_folds_bac2']
+            hcm.finish_stage(ID, h,
+                             metrics_over_folds['best_val_acc_mean_over_folds'],
+                             metrics_over_folds['best_val_acc_std_over_folds'],
+                             metrics_over_folds['best_val_acc_mean_over_folds_bac2'],
+                             metrics_over_folds['best_val_acc_std_over_folds_bac2'],
+                             timer() - start)
 
-                    metrics_over_folds = utils.create_metrics_over_folds_dict(best_val_class_accs_over_folds,
-                                                                              best_val_accs_over_folds,
-                                                                              best_val_class_accs_over_folds_bac2,
-                                                                              best_val_accs_over_folds_bac2)
+        else:
+            metrics_over_folds = utils.load_metrics(model_dir)
 
-                utils.pickle_metrics(metrics_over_folds, model_dir)
+        # STAGE thresholds
+        stage_thresholds = {1: 0.835, 2: 0.835, 3: np.inf}  # 3 is the last stage
 
-                if INTERMEDIATE_PLOTS:
-                    plot.plot_metrics(metrics_over_folds, model_dir)
+        if metrics_over_folds['best_val_acc_mean_over_folds'] >= stage_thresholds[h.STAGE]:
+            go_to_next_stage = True
 
-                hcm.finish_stage(ID, h,
-                                 metrics_over_folds['best_val_acc_mean_over_folds'],
-                                 metrics_over_folds['best_val_acc_std_over_folds'],
-                                 metrics_over_folds['best_val_acc_mean_over_folds_bac2'],
-                                 metrics_over_folds['best_val_acc_std_over_folds_bac2'],
-                                 timer() - start)
+        if go_to_next_stage:
+            hcm.next_stage(ID, h)
 
-            else:
-                metrics_over_folds = utils.load_metrics(model_dir)
+        else:
+            if h.STAGE == 3 or stage_thresholds[h.STAGE] != np.inf:
+                hcm.finish_hcomb(ID, h)
 
-            # STAGE thresholds
-            stage_thresholds = {1: 0.835, 2: 0.835, 3: np.inf}  # 3 is the last stage
-
-            if metrics_over_folds['best_val_acc_mean_over_folds'] >= stage_thresholds[h.STAGE]:
-                go_to_next_stage = True
-
-            if go_to_next_stage:
-                hcm.next_stage(ID, h)
-
-                del model
-                K.clear_session()
-
-            else:
-                if h.STAGE == 3 or stage_thresholds[h.STAGE] != np.inf:
-                    hcm.finish_hcomb(ID, h)
+        return go_to_next_stage
 
 
 def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT):
@@ -535,8 +532,12 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
 
     utils.pickle_metrics(metrics_test, model_save_dir)
 
+    go_to_next_stage = False
+    return go_to_next_stage
 
-def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT, final_experiment=False):
+
+def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT, pipe_send_end,
+              final_experiment=False):
     # Memory leak fix
     cfg = K.tf.ConfigProto()
     cfg.gpu_options.allow_growth = True
@@ -553,10 +554,11 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
     pprint(h.__dict__)
 
     if not final_experiment:
-        run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT)
+        go_to_next_stage = run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT)
     else:
-        run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT)
+        go_to_next_stage = run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT)
 
+    pipe_send_end.send(go_to_next_stage)
 
 
 def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIENT_NORM_PLOT=True, final_experiment=False):
@@ -570,7 +572,9 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
         if h is None:
             return gpu
 
+        old_stage = h['STAGE']
         ID, h, already_contained = hcm.get_hcomb_id(h)
+        h.STAGE = old_stage
 
         if h.finished:
             print('Hyperparameter Combination for this model version already evaluated. ABORT.')
@@ -578,7 +582,7 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
 
         if final_experiment:
             hostname, batch_size = utils.get_hostname_batch_size_wrt_time_steps(h.TIME_STEPS, gpu)
-            assert batch_size == h.BATCH_SIZE,"""Final Experiment has to be run with same batch_size.
+            assert batch_size == h.BATCH_SIZE, """Final Experiment has to be run with same batch_size.
             Hyperparameter search on hostname: {} with batch size: {}. Now hostname: {} with batch size: {}.  
                                                 """.format(h.HOSTNAME, h.BATCH_SIZE, hostname, batch_size)
 
@@ -593,19 +597,26 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
         os.makedirs(model_dir, exist_ok=True)
         h.save_to_dir(model_dir)
 
+        recv_end, send_end = multiprocessing.Pipe(False)
+
         if use_tmux.use_tmux:
-
             p_hcomb = TmuxProcess(session_name=use_tmux.session_name, target=run_hcomb,
-                                  args=(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT, final_experiment),
+                                  args=(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT, send_end,
+                                        final_experiment),
                                   name='gpu{}_run_hcomb_{}'.format(gpu, ID))
-            print('Running hcomb_{} on GPU {}.'.format(ID, gpu))
-            print('Start: {}'.format(datetime.datetime.now().isoformat()))
-            p_hcomb.start()
-            p_hcomb.join()
-            print('Exitcode {}.'.format(p_hcomb.exitcode))
-            if p_hcomb.exitcode == 1:
-                print('Aborted by CTRL + C.')
-            print('End: {}\n'.format(datetime.datetime.now().isoformat()))
-
         else:
-            run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT, final_experiment)
+            p_hcomb = multiprocessing.Process(target=run_hcomb,
+                                        args=(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT,
+                                              send_end, final_experiment))
+
+        print('Running hcomb_{} on GPU {}.'.format(ID, gpu))
+        print('Start: {}'.format(datetime.datetime.now().isoformat()))
+        p_hcomb.start()
+        p_hcomb.join()
+        print('Exitcode {}.'.format(p_hcomb.exitcode))
+        if p_hcomb.exitcode == 1:
+            print('Aborted by CTRL + C.')
+        print('End: {}\n'.format(datetime.datetime.now().isoformat()))
+        go_to_next_stage = recv_end.recv()
+        if go_to_next_stage:
+            add_to_random_search.add_hcombs_from_ids(ID, save_path)
