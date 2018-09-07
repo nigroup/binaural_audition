@@ -119,7 +119,7 @@ if args.debug:
     override_params['maxepochs'] = 4
     override_params['earlystop'] = 2
     # test set
-    override_params['validfold'] = -1
+    # override_params['validfold'] = -1
     # resuming
     # override_params['resume'] = 'playground/n10_dr0.0_ks3_hl1025_lr0.002_bs128_vf3'
     # override_params['maxepochs'] = 7
