@@ -1,3 +1,0 @@
-TODO:
-
-- optionally finally fine tuning featuremaps, droppoutrate, learningrate

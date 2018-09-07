@@ -1,1 +1,0 @@
-this folder's training and validation results only exists on the computing servers 
