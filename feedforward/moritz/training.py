@@ -221,12 +221,13 @@ print(smi)
 import tensorflow as tf
 config = tf.ConfigProto()
 
-if params['batchsize'] == 64:
-    config.gpu_options.per_process_gpu_memory_fraction = 0.399
-elif params['batchsize'] == 128:
-    config.gpu_options.per_process_gpu_memory_fraction = 0.6
-else:
-    config.gpu_options.allow_growth = True
+config.gpu_options.per_process_gpu_memory_fraction = 0.4999
+# if params['batchsize'] == 64:
+#     config.gpu_options.per_process_gpu_memory_fraction = 0.399
+# elif params['batchsize'] == 128:
+#     config.gpu_options.per_process_gpu_memory_fraction = 0.6
+# else:
+#     config.gpu_options.allow_growth = True
 
 session = tf.Session(config=config)
 
