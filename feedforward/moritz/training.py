@@ -10,6 +10,7 @@ import matplotlib
 matplotlib.use('Agg')
 
 import keras
+import keras.backend as K
 from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping, ModelCheckpoint, TerminateOnNaN
 
@@ -216,20 +217,20 @@ print('output of nvidia-smi program (via subprocess): ')
 smi = subprocess.run(['nvidia-smi'], stdout=subprocess.PIPE).stdout.decode('utf-8')
 print(smi)
 
-# the following for allow groth => as long as we develop
-# os.environ["CUDA_VISIBLE_DEVICES"] = '0' # cf. nvidia-smi ids
-import tensorflow as tf
-config = tf.ConfigProto()
-
-config.gpu_options.per_process_gpu_memory_fraction = 0.4999
-# if params['batchsize'] == 64:
-#     config.gpu_options.per_process_gpu_memory_fraction = 0.399
-# elif params['batchsize'] == 128:
-#     config.gpu_options.per_process_gpu_memory_fraction = 0.6
-# else:
-#     config.gpu_options.allow_growth = True
-
-session = tf.Session(config=config)
+# control GPU memory allocation for debugging or running multiple experiments per GPU
+# K.clear_session() # to prevent memory leak
+# import tensorflow as tf
+# config = tf.ConfigProto()
+# config.gpu_options.allow_growth = True
+# #config.gpu_options.per_process_gpu_memory_fraction = 0.4999
+# # if params['batchsize'] == 64:
+# #     config.gpu_options.per_process_gpu_memory_fraction = 0.399
+# # elif params['batchsize'] == 128:
+# #     config.gpu_options.per_process_gpu_memory_fraction = 0.6
+# # else:
+# #     config.gpu_options.allow_growth = True
+# session = tf.Session(config=config)
+# K.clear_session() # to prevent memory leak
 
 
 print(initial_output)

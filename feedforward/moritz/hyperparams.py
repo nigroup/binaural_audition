@@ -79,18 +79,21 @@ def run_hyperparam_combinations(gpuid, batchsize):
         if returnval != 0:
             printerror('on {}: with system() return value {} the combination {} did not succeed'.
                        format(socket.gethostname(), returnval, nexthcomp))
+            successstr = 'NOT successfully'
 
             # 4a) append combination to hcombs_problem.txt
             hcombfile_problem = open(hcombfilename_problem, 'a')
             hcombfile_problem.write(nexthcomp + '\n')
             hcombfile_problem.close()
+        else:
+            successstr = 'successfully'
 
         # 4b) remove combination from hcombs_inprogress.txt
         # we should lock the file in between but runs should very seldom interact
         lines_inprogress = open(hcombfilename_inprogress).readlines()
         for i in range(len(lines_inprogress)):
             if lines_inprogress[i] == nexthcomp:
-                print('removing from {} the successfully run combination {}'.format(hcombfilename_inprogress, nexthcomp))
+                print('removing from {} the {} run combination {}'.format(hcombfilename_inprogress, successstr, nexthcomp))
                 del lines_inprogress[i]
         open(hcombfilename_inprogress, 'w').writelines(lines_inprogress)
 
