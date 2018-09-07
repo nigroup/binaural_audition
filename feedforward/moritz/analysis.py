@@ -396,7 +396,7 @@ if __name__ == '__main__':
                         hyperparam_combinations.append((results, params))
 
                     else:
-                        print('skipping not yet finished {}'.format(expname))
+                        print('ATTENTION: skipping not yet finished {}'.format(expname))
 
         # TODO: write csv file
 
@@ -417,7 +417,7 @@ if __name__ == '__main__':
         bestepochs = []
 
         plt.figure(figsize=figsize)
-        plt.suptitle('hyperparameter overview of {}'.format(args.folder), fontsize=mediumfontsize)
+        plt.suptitle('hyperparameter overview of {} (gray: best epoch)'.format(args.folder), fontsize=mediumfontsize)
         # scatter plot with big dots and color = wbac2 value [within 0.8 and 0.9] -- size of the dot kind of inverse to trainepochs
         for (results, params) in hyperparam_combinations:
             bestepoch_idx = np.argmax(results['val_wbac'])
@@ -449,7 +449,8 @@ if __name__ == '__main__':
         # triang_feature_droprate = matplotlib.tri.Triangulation(featuremaps, dropoutrates)
         # plt.tricontour(triang_feature_droprate, bestepochs, colors='k') #, levels=[10, 15, 20])
         cs = plt.tricontour(featuremaps, dropoutrates, np.array(bestepochs, dtype=np.int), 4, colors='lightgray')  # , levels=[10, 15, 20])
-        plt.clabel(cs, cs.levels)
+        fmt = matplotlib.ticker.FormatStrFormatter("%d")
+        plt.clabel(cs, cs.levels, fmt=fmt)
         # config
         plt.xlim(0, 160)
         plt.xlabel('number of featuremaps', fontsize=mediumfontsize)

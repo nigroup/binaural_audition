@@ -1,25 +1,14 @@
 TODO
 
-- final model standardization checken + an heiner zurückmelden
+- detect the additional (failed) runs via (error) logfile and move it from inprogress to top
 
-- rename manually all experiments: bs64 / bs128 (also fix naming required?)
+- rerun 64bs experiment gpuid=1 on sabik
 
-- manually fix results/params: finished to True everywhere and determine kernelsize from name (only relevant for resumed experiments) and set it again
-
-- "TODO:"s wegmachen aus code und preliminary study abschließen
-darunter:
-    - add to plot: moving  loss/acc average over say three epochs (to see validation trend)
-    - batchloader => seed & resume check
-    
-- vorläufige experimente abschließen
-    => dropout
-    => featuremaps
-    => kernelsize
-
-- validate loss weights (heiner maybe not uses all data)
-no of 1 labels and of 0 labels for each fold and class => pos,neg,tot=pos+neg per fold+class
-    
 - hyperparam_combinations_*.txt sukzessive befüllen (immer genügend auf vorrat) und skript dafür schreiben, welches prozesse startet nacheinander (nur level1?) (=> zwei prozesse können gleichzeitig schreiben=>filelock)
+
+- start experiments: featuremaps/dropoutrate see preliminary_experiments_conclusions
+
+
 
 - skript für kombinations-auswertungstabelle (levels 2,3 antizipieren) erstellen
 
@@ -27,9 +16,20 @@ no of 1 labels and of 0 labels for each fold and class => pos,neg,tot=pos+neg pe
 
 - evaluationsplotting zusammen mit changbin machen
 
-- levels 2, 3 starten
+- levels 2, 3 starten, nutze [und prüfe für diesen zweck] loadparams [heiner: lvl2+3 ab 83% oder 84% lvl1 val_wbac]
 
-- finales modell trainieren code machen
+- optionally finally fine tuning featuremaps, droppoutrate, learningrate
+
+- finales modell trainieren und evaluieren
 
 - instant labels starten (gleich alle drei level)
 
+- optionally finally fine tuning featuremaps, droppoutrate, learningrate
+
+- optional: check dependence on output threshold
+
+- finales instant modell trainieren und evaluieren
+
+- blockbased und instant auch mit historysize 500 und 50 laufen lassen
+
+- put final result figs and h5 files (that can be used to replot) -- also incl final models  to github

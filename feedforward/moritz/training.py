@@ -81,7 +81,7 @@ parser.add_argument('--maxepochs', type=int, default=30,
                         help='maximal number of epochs (typically stopped early before reaching this value)')
 parser.add_argument('--noinputstandardization', action='store_true', default=False,
                         help='disables input standardization')
-parser.add_argument('--earlystop', type=int, default=5,
+parser.add_argument('--earlystop', type=int, default=8,
                         help='early stop patience, i.e., number of number of non-improving epochs (not effective when validfold==-1)')
 parser.add_argument('--validfold', type=int, default=3,
                         help='number of validation fold (1, ..., 6); -1 => use all 6 for training with early stoppping '+
@@ -135,14 +135,11 @@ params['dim_features'] = DIM_FEATURES
 params['dim_labels'] = DIM_LABELS
 params['mask_value'] = MASK_VALUE
 
-# TODO: for i) second/third validation folds and ii) final model training we need hyperparam loading from file (overriding all specified param values, cf. resume; and specifically taking care of earlystop)
-
 initial_output = obtain_nextlarger_residuallayers_refining_historysize(params)
 
 # NAME
 
-name_short = 'n{}_dr{}_ks{}_hl{}_lr{}_bs{}'.format(params['featuremaps'], params['dropoutrate'], params['kernelsize'],
-                                              params['historylength'], params['learningrate'], params['batchsize'])
+name_short = 'n{}_dr{:.4f}_bs{}'.format(params['featuremaps'], params['dropoutrate'], params['batchsize'])
 name_long = name_short + '_wn{}_bs{}_bl{}_es{}'.format(params['weightnorm'],
             params['batchsize'], params['batchlength'], params['earlystop'])
 name_short += '_vf{}'.format(args.validfold)
@@ -223,7 +220,14 @@ print(smi)
 # os.environ["CUDA_VISIBLE_DEVICES"] = '0' # cf. nvidia-smi ids
 import tensorflow as tf
 config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
+
+if params['batchsize'] == 64:
+    config.gpu_options.per_process_gpu_memory_fraction = 0.4
+elif params['batchsize'] == 128:
+    config.gpu_options.per_process_gpu_memory_fraction = 0.6
+else:
+    config.gpu_options.allow_growth = True
+
 session = tf.Session(config=config)
 
 
@@ -253,9 +257,10 @@ else:
 
 if params['firstsceneonly']:
     params['scenes_trainvalid'] = [1] # corresponds to nSrc=2, with the master at 112,5 degree and the (weaker, SNR=4) distractor at -112.5
+    if params['validfold'] == -1:
+        params['scenes_test'] = [1]
 else:
     params['scenes_trainvalid'] = list(range(1, NUMBER_SCENES_TRAINING_VALIDATION+1))
-    # TODO: split scenes_trainvalid to scenes_train and scenes_valid [for test set difference req.]
 
 
 params.update(override_params)
@@ -334,7 +339,7 @@ if params['resume'] == 'negative':
     print('model was constructed!')
 
 else:
-    resfile = os.path.join(params['path'], params['name'],'model.h5')
+    resfile = os.path.join(params['path'], params['name'],'model_last.h5')
     model = keras.models.load_model(resfile,
                                     custom_objects={'AdamWithWeightnorm': AdamWithWeightnorm,
                                                     'my_loss': masked_weighted_crossentropy_loss})
@@ -381,8 +386,12 @@ if params['validfold'] != -1:
     print('early stop patience is {}'.format(params['earlystop']))
 
 
-modelcheckpoint = ModelCheckpoint(os.path.join(params['path'], params['name'], 'model.h5'))
-callbacks.append(modelcheckpoint)
+modelcheckpoint_last = ModelCheckpoint(os.path.join(params['path'], params['name'], 'model_last.h5'))
+callbacks.append(modelcheckpoint_last)
+
+modelcheckpoint_best = ModelCheckpoint(os.path.join(params['path'], params['name'], 'model_best.h5'),
+                                       save_best_only=True, monitor='val_wbac', mode='max')
+callbacks.append(modelcheckpoint_best)
 
 
 # start training, after each epoch evaluate loss and metrics on validation set (and training set)
@@ -426,84 +435,4 @@ params['finished'] = True
 
 save_h5(params, os.path.join(params['path'], params['name'], 'params.h5'))
 
-# TODO: final plotting and printing
 plot_train_experiment_from_dicts(results, params)
-
-
-# TODO: experiment before hyper search: time measurements when finally running to see what takes what part (per epoch)
-
-# TODO: experiment before hyper search: classifier value 0.5 vs optimized (valid set/cv or via simply train set because is training?)
-
-# TODO: go through use cases and check for script's feature completeness (go through cmd line arguments again to add initial experiments)
-
-# TODO: check that class weights are correct since I currently have large sens / spec difference for some classes!
-
-## USE CASES:
-
-## debugging via first scene only:
-# python model_run.py --path=blockinterprete_1_pre --validfold=3 --firstsceneonly --maxepochs=10 --featuremaps=10 --dropoutrate=0.0 --kernelsize=5 --historylength=1000 --noweightnorm --learningrate=0.001 batchsize=32
-
-## manual pre hyper exploration: determination of maxepochs, earlystopping, learning rate (default vs bit higher/lower), batchsize, batchlength, neuron/dropout ranges
-## maybe also check following params:
-##      initial weight scale => activation standard dev for each layer ok?
-##      initial biases 0.1 vs. 0 (relu saturation => read about first)
-##      output biases as 1/frequency of each class => correct marginal statistics
-# python model_run.py --path=blockinterprete_1_pre --validfold=3 --maxepochs=10 --featuremaps=10 --dropoutrate=0.0 --kernelsize=5 --historylength=1000 --noweightnorm --learningrate=0.001 batchsize=32
-
-
-## check the chosen values with the other validation folds and set the above values as default to the argparse options
-
-## add weightnorm (i.e., remove --noweightnorm)
-
-
-# TODO: change the following: not random_coarse via --hyper but rather have each arg via cmdline args set through hyperopt usage (within the respective folder)
-# TODO: make hyperopt resumable [check for that feature first with a dummy example]
-# TODO: iterate over filtersize [and vary over 3 history lengths respectively] => random bayesopt search over featuremaps/dropoutrate
-#   later: nested barplot [outer loop filtersize, inner loop historylength]
-### use a python script for exploration of: featuremaps, dropoutrate (both random), kernelsize, historylength (both random or iterated)
-# python model_run.py --path=blockinterprete_2_hyper_main --validfold=3 --hyper=random_coarse
-
-### a few additional runs because of undersampling / indication of an even better optimal hyperparam configuration:
-# python model_run.py --path=blockinterprete_2_hyper_main --maxepochs=10 --featuremaps=50 --dropoutrate=0.1 ...
-
-## use a python script to iterate across all examples that have a sufficiently large BAC on validfold3 (leaving out uninteresting ones)
-# python model_run.py --path=blockinterprete_2_hyper_main --validfold=4 --hyper=XYZfilename
-# python model_run.py --path=blockinterprete_2_hyper_main --validfold=2 --hyper=XYZfilename
-
-### exploration of featuremaps first, then for best learningrate (for largest possible batch size and best parameters from above)
-# python model_run.py --path=blockinterprete_3_hyper_fine --maxepochs=10 --hyper=random_fine
-
-## find best early stopping epoch of best model
-# python model_run.py --path=blockinterprete_2_hyper_fine --validfold=1 --hyper=XYZfilename
-# python model_run.py --path=blockinterprete_2_hyper_fine --validfold=2 --hyper=XYZfilename
-# python model_run.py --path=blockinterprete_2_hyper_fine --validfold=3 --hyper=XYZfilename
-# python model_run.py --path=blockinterprete_2_hyper_fine --validfold=4 --hyper=XYZfilename
-# python model_run.py --path=blockinterprete_2_hyper_fine --validfold=5 --hyper=XYZfilename
-# python model_run.py --path=blockinterprete_2_hyper_fine --validfold=6 --hyper=XYZfilename
-
-# python model_run.py --path=blockinterprete_4_final --validfold=-1 --earlystop=-1 --featuremaps=...
-
-
-
-
-
-
-
-
-# OLD STUFF/DEPRECATED: KEEP UNTIL RUNNING MODEL THEN REMOVE
-# if __name__ == '__main__':
-#
-#     # Tonly continue if combination has not been run (needs manual deletion of folders)
-#
-#     hyperparams = dict(neurons=16, dropoutrate=0.25, kernelsize=3, historylength=96,
-#                        learningrate=0.001, batchsize=128, batchlength=3000, maxepochs=50, earlystop=5)
-#     # earlystop=5 indicates patience of 5, 0: no early stopping; gradient_clip = 0 disables it, too
-#     # alternative: hyper = load_hyperparams_from_file(oldfilename) # while the filename contains all hyperparams (with appropriate significance this is only for readability
-#
-#     model = TemporalConvolutionalNetwork(hyperparams)
-#     model.build()
-#     training = ModelTraining(model, hyperparams, valid_fold=3, name='example_training_validfold3')
-#     # instead of the following in this line use next line via filename [ training.resume(model=oldparams, epoch=oldepoch, bac_valid=oldbac_valid, bac_train=oldbac_train, loss_train=oldloss_train) ]
-#     result = training.start()
-#     result.save(newfilename) # saving should overwrite the file and include hyperparams and the validation fold
-#     result.plot()
