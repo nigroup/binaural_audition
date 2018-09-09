@@ -399,7 +399,6 @@ def plot_hyper_from_folder(folder):
         bestepoch_idx = np.argmax(results['val_wbac'])
         val_bac_current = results['val_wbac'][bestepoch_idx]
         val_wbac_normalized = max(0, (val_bac_current - wbac_min) / (wbac_max - wbac_min))
-        print('val_bac_best {:.3f}, val_wbac_normalized {:.3f}'.format(val_bac_current, val_wbac_normalized))
         color_current = cmap_wbac(val_wbac_normalized)
         plt.plot(params['featuremaps'], params['dropoutrate'],
                  marker='o', markersize=markersize, markerfacecolor=color_current, markeredgecolor=color_current)
