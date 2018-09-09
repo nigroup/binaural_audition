@@ -368,7 +368,7 @@ def plot_hyper_from_folder(folder):
 
                 # only show finished experiments
                 if params['finished']:
-                    print('collecting {}'.format(expname))
+                    # print('collecting {}'.format(expname))
                     hyperparam_combinations.append((results, params))
 
                 else:
