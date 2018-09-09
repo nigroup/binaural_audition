@@ -448,13 +448,13 @@ if __name__ == '__main__':
         # runtime contour
         # triang_feature_droprate = matplotlib.tri.Triangulation(featuremaps, dropoutrates)
         # plt.tricontour(triang_feature_droprate, bestepochs, colors='k') #, levels=[10, 15, 20])
-        cs = plt.tricontour(featuremaps, dropoutrates, np.array(bestepochs, dtype=np.int), 4, colors='lightgray')  # , levels=[10, 15, 20])
-        fmt = matplotlib.ticker.FormatStrFormatter("%d")
-        plt.clabel(cs, cs.levels, fmt=fmt)
+        # cs = plt.tricontour(featuremaps, dropoutrates, np.array(bestepochs, dtype=np.int), 4, colors='lightgray')  # , levels=[10, 15, 20])
+        # fmt = matplotlib.ticker.FormatStrFormatter("%d")
+        # plt.clabel(cs, cs.levels, fmt=fmt)
         # config
         plt.xlim(0, 160)
         plt.xlabel('number of featuremaps', fontsize=mediumfontsize)
-        plt.ylim(-0.05, 0.8)
+        plt.ylim(-0.01, 0.26)
         plt.ylabel('dropout rate', fontsize=mediumfontsize)
         plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
         plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
