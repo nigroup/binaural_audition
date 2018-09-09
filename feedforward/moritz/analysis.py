@@ -329,6 +329,7 @@ def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsce
     # bac per class and scene
     # TODO do after runs already started
 
+
 def plot_train_experiment_from_folder(folder, datalimits, firstsceneonly):
     params = load_h5(os.path.join(folder, 'params.h5'))
     results = load_h5(os.path.join(folder, 'results.h5'))
@@ -342,6 +343,101 @@ def plot_train_experiment_from_folder(folder, datalimits, firstsceneonly):
 
     # do actual plotting
     plot_train_experiment_from_dicts(results, params, datalimits, firstsceneonly)
+
+
+def plot_hyper_from_folder(folder):
+    # remark: hyperparam subset selection by specifying parts of the name, e.g. batchinterprete_2_hyper/n*_dr*_ks3...
+    if '*' not in folder:
+        folders = glob.glob(folder + '/*')
+        savefolder = args.folder
+    else:
+        folders = glob.glob(args.folder)
+        savefolder = os.path.split(folders[0])[0]
+
+    hyperparam_combinations = []
+    for f in folders:
+        if os.path.isdir(f) and '0.0' in f:
+            #print('collecting data from folder {}'.format(f))
+            params = load_h5(os.path.join(f, 'params.h5'))
+
+            resultsfile = os.path.join(f, 'results.h5')
+            if os.path.exists(resultsfile):
+                results = load_h5(resultsfile)
+
+                expname = os.path.basename(f)  # better use the name from directory
+
+                # only show finished experiments
+                if params['finished']:
+                    print('collecting {}'.format(expname))
+                    hyperparam_combinations.append((results, params))
+
+                else:
+                    print('ATTENTION: skipping not yet finished {}'.format(expname))
+
+    # TODO: write csv file
+
+    cmap_wbac = plt.get_cmap('jet')
+
+    wbac_min = 0.81
+    wbac_max = 0.86
+
+    smallfontsize = 6
+    mediumfontsize = 8
+    markersize = 15
+    # summary metrics figure
+    figsize = (8, 9)
+
+    # save data for contour plot
+    dropoutrates = []
+    featuremaps = []
+    bestepochs = []
+
+    plt.figure(figsize=figsize)
+    plt.suptitle('hyperparameter overview of {} (gray: best epoch)'.format(folder), fontsize=mediumfontsize)
+    # scatter plot with big dots and color = wbac2 value [within 0.8 and 0.9] -- size of the dot kind of inverse to trainepochs
+    for (results, params) in hyperparam_combinations:
+        bestepoch_idx = np.argmax(results['val_wbac'])
+        val_bac_current = results['val_wbac'][bestepoch_idx]
+        val_wbac_normalized = max(0, (val_bac_current - wbac_min) / (wbac_max - wbac_min))
+        print('val_bac_best {:.3f}, val_wbac_normalized {:.3f}'.format(val_bac_current, val_wbac_normalized))
+        color_current = cmap_wbac(val_wbac_normalized)
+        plt.plot(params['featuremaps'], params['dropoutrate'],
+                 marker='o', markersize=markersize, markerfacecolor=color_current, markeredgecolor=color_current)
+
+        dropoutrates.append(params['dropoutrate'])
+        featuremaps.append(params['featuremaps'])
+        bestepochs.append(bestepoch_idx + 1)
+    ax_main = plt.gca()
+
+    # colorbar
+    ax_cb = plt.gcf().add_axes([0.2, 0.92, 0.6, 0.02])
+    cb = matplotlib.colorbar.ColorbarBase(ax_cb, cmap=cmap_wbac,
+                                          norm=matplotlib.colors.Normalize(vmin=wbac_min, vmax=wbac_max),
+                                          orientation='horizontal')
+    cb.ax.set_title('val_wbac', size=smallfontsize)
+    # cb.set_label('val_wbac', size=smallfontsize)
+    plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
+    plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
+
+    # main axis again
+    plt.sca(ax_main)
+    # runtime contour
+    # triang_feature_droprate = matplotlib.tri.Triangulation(featuremaps, dropoutrates)
+    # plt.tricontour(triang_feature_droprate, bestepochs, colors='k') #, levels=[10, 15, 20])
+    # cs = plt.tricontour(featuremaps, dropoutrates, np.array(bestepochs, dtype=np.int), 4, colors='lightgray')  # , levels=[10, 15, 20])
+    # fmt = matplotlib.ticker.FormatStrFormatter("%d")
+    # plt.clabel(cs, cs.levels, fmt=fmt)
+    # config
+    plt.xlim(0, 160)
+    plt.xlabel('number of featuremaps', fontsize=mediumfontsize)
+    plt.ylim(-0.01, 0.26)
+    plt.ylabel('dropout rate', fontsize=mediumfontsize)
+    plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
+    plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
+
+    figfilename = 'hyperparams_overview.png'
+    plt.savefig(os.path.join(savefolder, figfilename))
+    print('figure file {} saved into folder {}'.format(figfilename, savefolder))
 
 def plot_test_experiment_from_folder(folder):
     params = load_h5(os.path.join(folder, 'params.h5'))
@@ -379,6 +475,7 @@ def plot_test_experiment_from_folder(folder):
 
     plt.savefig(os.path.join(folder, 'testset_evaluation.png'))
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str, default='trainplot',
@@ -411,96 +508,4 @@ if __name__ == '__main__':
 
 
     if args.mode == 'hyper' and args.folder:
-        # TODO: rename this file to analysis
-        # remark: hyperparam subset selection by specifying parts of the name, e.g. batchinterprete_2_hyper/n*_dr*_ks3...
-        if '*' not in args.folder:
-            folders = glob.glob(args.folder+'/*')
-            savefolder = args.folder
-        else:
-            folders = glob.glob(args.folder)
-            savefolder = os.path.split(folders[0])[0]
-
-        hyperparam_combinations = []
-        for f in folders:
-            if os.path.isdir(f) and '0.0' in f:
-                print('collecting data from folder {}'.format(f))
-                params = load_h5(os.path.join(f, 'params.h5'))
-
-                resultsfile = os.path.join(f, 'results.h5')
-                if os.path.exists(resultsfile):
-                    results = load_h5(resultsfile)
-
-                    expname = os.path.basename(f)  # better use the name from directory
-
-                    # only show finished experiments
-                    if params['finished']:
-                        print('collecting {}'.format(expname))
-                        hyperparam_combinations.append((results, params))
-
-                    else:
-                        print('ATTENTION: skipping not yet finished {}'.format(expname))
-
-        # TODO: write csv file
-
-        cmap_wbac = plt.get_cmap('jet')
-
-        wbac_min = 0.81
-        wbac_max = 0.86
-
-        smallfontsize = 6
-        mediumfontsize = 8
-        markersize = 15
-        # summary metrics figure
-        figsize = (8, 9)
-
-        # save data for contour plot
-        dropoutrates = []
-        featuremaps = []
-        bestepochs = []
-
-        plt.figure(figsize=figsize)
-        plt.suptitle('hyperparameter overview of {} (gray: best epoch)'.format(args.folder), fontsize=mediumfontsize)
-        # scatter plot with big dots and color = wbac2 value [within 0.8 and 0.9] -- size of the dot kind of inverse to trainepochs
-        for (results, params) in hyperparam_combinations:
-            bestepoch_idx = np.argmax(results['val_wbac'])
-            val_bac_current = results['val_wbac'][bestepoch_idx]
-            val_wbac_normalized = max(0, (val_bac_current - wbac_min) / (wbac_max - wbac_min))
-            print('val_bac_best {:.3f}, val_wbac_normalized {:.3f}'.format(val_bac_current, val_wbac_normalized))
-            color_current = cmap_wbac(val_wbac_normalized)
-            plt.plot(params['featuremaps'], params['dropoutrate'],
-                     marker='o', markersize=markersize, markerfacecolor=color_current, markeredgecolor=color_current)
-
-            dropoutrates.append(params['dropoutrate'])
-            featuremaps.append(params['featuremaps'])
-            bestepochs.append(bestepoch_idx+1)
-        ax_main = plt.gca()
-
-        # colorbar
-        ax_cb = plt.gcf().add_axes([0.2, 0.92, 0.6, 0.02])
-        cb = matplotlib.colorbar.ColorbarBase(ax_cb, cmap=cmap_wbac,
-                                                 norm=matplotlib.colors.Normalize(vmin=wbac_min, vmax=wbac_max),
-                                                 orientation='horizontal')
-        cb.ax.set_title('val_wbac', size=smallfontsize)
-        # cb.set_label('val_wbac', size=smallfontsize)
-        plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
-        plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
-
-        # main axis again
-        plt.sca(ax_main)
-        # runtime contour
-        # triang_feature_droprate = matplotlib.tri.Triangulation(featuremaps, dropoutrates)
-        # plt.tricontour(triang_feature_droprate, bestepochs, colors='k') #, levels=[10, 15, 20])
-        # cs = plt.tricontour(featuremaps, dropoutrates, np.array(bestepochs, dtype=np.int), 4, colors='lightgray')  # , levels=[10, 15, 20])
-        # fmt = matplotlib.ticker.FormatStrFormatter("%d")
-        # plt.clabel(cs, cs.levels, fmt=fmt)
-        # config
-        plt.xlim(0, 160)
-        plt.xlabel('number of featuremaps', fontsize=mediumfontsize)
-        plt.ylim(-0.01, 0.26)
-        plt.ylabel('dropout rate', fontsize=mediumfontsize)
-        plt.tick_params(axis='both', which='major', labelsize=smallfontsize)
-        plt.tick_params(axis='both', which='minor', labelsize=smallfontsize)
-
-        figfilename = 'hyperparams_overview.png'
-        plt.savefig(os.path.join(savefolder, figfilename))
-        print('figure file {} saved into folder {}'.format(figfilename, savefolder))
+        plot_hyper_from_folder(args.folder)
