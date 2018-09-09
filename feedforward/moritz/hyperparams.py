@@ -95,6 +95,7 @@ def run_hyperparam_combinations(gpuid, batchsize):
             if lines_inprogress[i] == nexthcomp:
                 print('removing from {} the {} run combination {}'.format(hcombfilename_inprogress, successstr, nexthcomp))
                 del lines_inprogress[i]
+                break
         open(hcombfilename_inprogress, 'w').writelines(lines_inprogress)
 
         # 5) append combination to hcombs_done.txt
