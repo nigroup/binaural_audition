@@ -2,6 +2,8 @@ TODO
 
 1) BEFORE FINISHING CROSS VALIDATION
 
+- run cpu training on sabik too
+
 - evaluationsplotting zusammen mit changbin machen
 
 - skript für kombinations-auswertungstabelle (levels 2,3 antizipieren) erstellen
