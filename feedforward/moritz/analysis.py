@@ -6,6 +6,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from myutils import load_h5
 from constants import *
+from testset_plotting import plot_metric_over_snr_per_nsrc, plot_metric_over_snr_per_class, \
+    plot_metric_over_nsrc_per_class
 
 def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsceneonly=False):
 
@@ -341,6 +343,42 @@ def plot_train_experiment_from_folder(folder, datalimits, firstsceneonly):
     # do actual plotting
     plot_train_experiment_from_dicts(results, params, datalimits, firstsceneonly)
 
+def plot_test_experiment_from_folder(folder):
+    params = load_h5(os.path.join(folder, 'params.h5'))
+    results = load_h5(os.path.join(folder, 'results.h5'))
+
+    sens_per_scene_class = results['val_sens_spec_per_class_scene'][:,:,0]
+    spec_per_scene_class = results['val_sens_spec_per_class_scene'][:, :, 1]
+
+    plt.figure()
+    plt.suptitle('metrics for test data -- {}'.format(params['name']))
+
+    plt.subplot(3,3,1)
+    plt.title('BAC')
+    plot_metric_over_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, 'BAC')
+    plt.subplot(3,3,2)
+    plt.title('sensitivity')
+    plot_metric_over_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, 'sens')
+    plt.subplot(3,3,3)
+    plt.title('specificity')
+    plot_metric_over_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, 'spec')
+
+    plt.subplot(3,3,4)
+    plot_metric_over_snr_per_class(sens_per_scene_class, spec_per_scene_class, 'BAC')
+    plt.subplot(3,3,5)
+    plot_metric_over_snr_per_class(sens_per_scene_class, spec_per_scene_class, 'sens')
+    plt.subplot(3,3,6)
+    plot_metric_over_snr_per_class(sens_per_scene_class, spec_per_scene_class, 'spec')
+
+    plt.subplot(3,3,7)
+    plot_metric_over_nsrc_per_class(sens_per_scene_class, spec_per_scene_class, 'BAC')
+    plt.subplot(3,3,8)
+    plot_metric_over_nsrc_per_class(sens_per_scene_class, spec_per_scene_class, 'sens')
+    plt.subplot(3,3,9)
+    plot_metric_over_nsrc_per_class(sens_per_scene_class, spec_per_scene_class, 'spec')
+
+    plt.savefig(os.path.join(folder, 'testset_evaluation.png'))
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str, default='trainplot',
@@ -355,7 +393,7 @@ if __name__ == '__main__':
                         help='whether to scale the accuracies with 21. to undo wrong normalization in this (debug) case')
     args = parser.parse_args()
 
-    if args.mode == 'trainplot' and args.folder:
+    if args.mode == 'train' and args.folder:
         if '*' not in args.folder:
             folders = [args.folder]
         else:
@@ -367,6 +405,10 @@ if __name__ == '__main__':
                 plot_train_experiment_from_folder(folder=f,
                                                   datalimits=args.datalimits,
                                                   firstsceneonly=args.firstsceneonly)
+
+    if args.mode == 'test' and args.folder:
+        plot_test_experiment_from_folder(args.folder)
+
 
     if args.mode == 'hyper' and args.folder:
         # TODO: rename this file to analysis

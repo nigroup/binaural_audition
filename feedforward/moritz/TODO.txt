@@ -1,34 +1,29 @@
 TODO
 
+1) BEFORE FINISHING CROSS VALIDATION
 
-
-- fix if necessary scene_instance_id error, see bottom (*)
-
-
-- try to put only non-complex models to adhara; add second run to each gpu with bs64 if possible.however it seems that simply the model complexity leads to large memory consumption (e.g. featuremaps 141 full mem while 23 only 6.5 GB (still more than half))
-
-- detect the additional (failed) runs via (error) logfile and move it from inprogress to top
-
-- rerun 64bs experiment gpuid=1 on sabik
-
-- hyperparam_combinations_*.txt sukzessive befüllen (immer genügend auf vorrat) und skript dafür schreiben, welches prozesse startet nacheinander (nur level1?) (=> zwei prozesse können gleichzeitig schreiben=>filelock)
-
-- start experiments: featuremaps/dropoutrate see preliminary_experiments_conclusions
-
-
+- evaluationsplotting zusammen mit changbin machen
 
 - skript für kombinations-auswertungstabelle (levels 2,3 antizipieren) erstellen
 
-- sicherstellen, dass keine fehlenden teile oder doppelte daten test set evaluierung benutzt werden
+- finally: detect (stuck in inprogress txt file) potentially failed runs via (error) logfile and resume them
 
-- evaluationsplotting zusammen mit changbin machen
+
+2) SPEED UP TRAINING (OPTIONAL)
+- try to put only non-complex models to adhara; add second run to each gpu with bs64 if possible.however it seems that simply the model complexity leads to large memory consumption (e.g. featuremaps 141 full mem while 23 only 6.5 GB (still more than half))
+
+
+3) FINISH CROSS VALIDATION
 
 - levels 2, 3 starten, nutze [und prüfe für diesen zweck] loadparams [heiner: lvl2+3 ab 83% oder 84% lvl1 val_wbac]
 
 - optionally finally fine tuning featuremaps, droppoutrate, learningrate
 
+4) FINAL EVALUATION
+
 - finales modell trainieren und evaluieren
 
+5) IN PARALLEL: INSTANT LABELS
 - instant labels starten (gleich alle drei level)
 
 - optionally finally fine tuning featuremaps, droppoutrate, learningrate
@@ -37,11 +32,8 @@ TODO
 
 - finales instant modell trainieren und evaluieren
 
+6) OPTIONALLY MORE VARIANTS
 - blockbased und instant auch mit historysize 500 und 50 laufen lassen
 
+7) FINALLY:
 - put final result figs and h5 files (that can be used to replot) -- also incl final models  to github
-
-
-
-(*)
-  File "/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/feedforward/moritz/generator_extension[322/333199]│·································37, in fit_and_predict_generator_with_sceneinst_metrics                                                             │·································    callbacks.on_epoch_end(epoch, epoch_logs)                                                                       │·································  File "/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py", │·································line 77, in on_epoch_end                                                                                            │·································    callback.on_epoch_end(epoch, logs)                                                                              │·································  File "/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/feedforward/moritz/training_callback.py", line 121│·································, in on_epoch_end                                                                                                   │·································    metrics_training = calculate_metrics(self.model.scene_instance_id_metrics_dict_train)                           │·································  File "/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/feedforward/moritz/myutils.py", line 35, in calcul│·································ate_metrics                                                                                                         │·································    ret=('final', 'per_class', 'per_scene', 'per_class_scene'))                                                     │·································  File "/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/recurrent/models/heiner/accuracy_utils.py", line 4│·································1, in val_accuracy                                                                                                  │·································    calculate_class_accuracies_per_scene_number(scene_instance_id_metrics_dict, mode, metric=metric)                │·································  File "/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/recurrent/models/heiner/accuracy_utils.py", line 1│·································35, in calculate_class_accuracies_per_scene_number                                                                  │·································    scene_number_class_accuracies_metrics[scene_number] += metrics                                                  │·································IndexError: index 89 is out of bounds for axis 0 with size 80
