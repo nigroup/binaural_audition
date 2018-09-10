@@ -367,8 +367,9 @@ def plot_hyper_from_folder(folder):
 
                 expname = os.path.basename(f)  # better use the name from directory
 
-                print('collecting {} ({})'.format(expname, 'finished' if params['finished'] else '===> running on {}'.
-                                                                                    format(socket.gethostname())))
+                print('collecting {} {}'.format(expname, '(finished)' if params['finished'] else '===========> running on {} (gpuid: {})'.
+                                                                                    format(params['server'],
+                                                                                           params['gpuid'])))
                 hyperparam_combinations.append((results, params))
 
     # TODO: write csv file
