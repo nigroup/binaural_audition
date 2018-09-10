@@ -1,5 +1,6 @@
 import argparse
 import os
+import socket
 import glob
 import matplotlib
 matplotlib.use('Agg')
@@ -356,7 +357,7 @@ def plot_hyper_from_folder(folder):
 
     hyperparam_combinations = []
     for f in folders:
-        if os.path.isdir(f) and '0.0' in f:
+        if os.path.isdir(f):
             #print('collecting data from folder {}'.format(f))
             params = load_h5(os.path.join(f, 'params.h5'))
 
@@ -366,7 +367,8 @@ def plot_hyper_from_folder(folder):
 
                 expname = os.path.basename(f)  # better use the name from directory
 
-                print('collecting {} (finished: {})'.format(expname, params['finished']))
+                print('collecting {} ({})'.format(expname, 'finished' if params['finished'] else '===> running on {}'.
+                                                                                    format(socket.gethostname())))
                 hyperparam_combinations.append((results, params))
 
     # TODO: write csv file
@@ -399,10 +401,13 @@ def plot_hyper_from_folder(folder):
                  marker='o', markersize=markersize, markerfacecolor=color_current, markeredgecolor=color_current)
         # mark unfinished runs
         plt.text(params['featuremaps'], params['dropoutrate']-0.0075,
-                 'be: {}{}'.format(bestepoch_idx+1, '' if params['finished'] else ' (running)'),
+                 'wbac: {:.3f}, be: {}'.format(val_bac_current, bestepoch_idx+1),
                  fontsize=smallfontsize, horizontalalignment='center',
                  color='gray')
-
+        plt.text(params['featuremaps'], params['dropoutrate']+0.005,
+                 '' if params['finished'] else ' (running)',
+                 fontsize=smallfontsize, horizontalalignment='center',
+                 color='red')
 
         dropoutrates.append(params['dropoutrate'])
         featuremaps.append(params['featuremaps'])
