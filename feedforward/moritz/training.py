@@ -164,6 +164,7 @@ if params['resume'] != 'negative':
     resumed_params = load_h5(os.path.join(resume_path, resume_name, 'params.h5'))
     del resumed_params['maxepochs'] # use maxepochs and gpuid and earlystop from cmdline or default
     del resumed_params['gpuid']
+    del resumed_params['server']
     del resumed_params['earlystop']
     resume_save = params['resume']
     params.update(resumed_params)
