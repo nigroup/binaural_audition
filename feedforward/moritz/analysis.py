@@ -366,13 +366,8 @@ def plot_hyper_from_folder(folder):
 
                 expname = os.path.basename(f)  # better use the name from directory
 
-                # only show finished experiments
-                if params['finished']:
-                    # print('collecting {}'.format(expname))
-                    hyperparam_combinations.append((results, params))
-
-                else:
-                    print('ATTENTION: skipping not yet finished {}'.format(expname))
+                print('collecting {} (finished: {})'.format(expname, params['finished']))
+                hyperparam_combinations.append((results, params))
 
     # TODO: write csv file
 
@@ -393,7 +388,7 @@ def plot_hyper_from_folder(folder):
     bestepochs = []
 
     plt.figure(figsize=figsize)
-    plt.suptitle('hyperparameter overview of {} (gray: best epoch)'.format(folder), fontsize=mediumfontsize)
+    plt.suptitle('hyperparameter overview of {}'.format(folder), fontsize=mediumfontsize)
     # scatter plot with big dots and color = wbac2 value [within 0.8 and 0.9] -- size of the dot kind of inverse to trainepochs
     for (results, params) in hyperparam_combinations:
         bestepoch_idx = np.argmax(results['val_wbac'])
@@ -402,6 +397,12 @@ def plot_hyper_from_folder(folder):
         color_current = cmap_wbac(val_wbac_normalized)
         plt.plot(params['featuremaps'], params['dropoutrate'],
                  marker='o', markersize=markersize, markerfacecolor=color_current, markeredgecolor=color_current)
+        # mark unfinished runs
+        plt.text(params['featuremaps'], params['dropoutrate']-0.0075,
+                 'be: {}{}'.format(bestepoch_idx+1, '' if params['finished'] else ' (running)'),
+                 fontsize=smallfontsize, horizontalalignment='center',
+                 color='gray')
+
 
         dropoutrates.append(params['dropoutrate'])
         featuremaps.append(params['featuremaps'])

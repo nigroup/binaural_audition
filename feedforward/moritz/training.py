@@ -120,8 +120,8 @@ if args.debug:
     override_params['earlystop'] = 2
     override_params['gpuid'] = 3
     # test set (requires paramloading to retrieve final model params)
-    override_params['validfold'] = -1
-    override_params['loadparams'] = 'playground/n10_dr0.0000_bs128_wnFalse_bs128_bl2500_es2_vf3'
+    # override_params['validfold'] = -1
+    # override_params['loadparams'] = 'playground/n10_dr0.0000_bs128_wnFalse_bs128_bl2500_es2_vf3'
     # resuming
     # override_params['resume'] = 'playground/n10_dr0.0_ks3_hl1025_lr0.002_bs128_vf3'
     # override_params['maxepochs'] = 7
@@ -216,14 +216,17 @@ os.environ["CUDA_VISIBLE_DEVICES"] = str(params['gpuid']) # cf. nvidia-smi ids
 
 print('output of nvidia-smi program (via subprocess): ')
 #os.system('nvidia-smi') # I though need the output to extract process ids but skipped using it (thus not using os.system)
-smi = subprocess.run(['nvidia-smi'], stdout=subprocess.PIPE).stdout.decode('utf-8')
-print(smi)
+try:
+    smi = subprocess.run(['nvidia-smi'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+    print(smi)
+except:
+    pass
 
 # control GPU memory allocation for debugging or running multiple experiments per GPU
 # K.clear_session() # to prevent memory leak
-# import tensorflow as tf
-# config = tf.ConfigProto()
-# config.gpu_options.allow_growth = True
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
 # #config.gpu_options.per_process_gpu_memory_fraction = 0.4999
 # # if params['batchsize'] == 64:
 # #     config.gpu_options.per_process_gpu_memory_fraction = 0.399
@@ -231,7 +234,7 @@ print(smi)
 # #     config.gpu_options.per_process_gpu_memory_fraction = 0.6
 # # else:
 # #     config.gpu_options.allow_growth = True
-# session = tf.Session(config=config)
+session = tf.Session(config=config)
 # K.clear_session() # to prevent memory leak
 
 

@@ -2,7 +2,13 @@ TODO
 
 1) BEFORE FINISHING CROSS VALIDATION
 
-- run cpu training on sabik too
+- once risha uploaded use it to test refined hyperparams (which run on gpu etc...)
+
+- after bug fixing on test set evaluation and rerun that on sabik before
+
+- run cpu training on sabik too hyperparam
+
+- add running experiments with text in hyperparam overview
 
 - evaluationsplotting zusammen mit changbin machen
 
@@ -12,8 +18,7 @@ TODO
 
 
 2) SPEED UP TRAINING (OPTIONAL)
-- try to put only non-complex models to adhara; add second run to each gpu with bs64 if possible.however it seems that simply the model complexity leads to large memory consumption (e.g. featuremaps 141 full mem while 23 only 6.5 GB (still more than half))
-
+- try to put only non-complex models to sabik's cpu
 
 3) FINISH CROSS VALIDATION
 

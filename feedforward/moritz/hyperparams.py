@@ -34,7 +34,7 @@ def obtain_nextlarger_residuallayers_refining_historysize(params):
 
     return output
 
-def run_hyperparam_combinations(gpuid, batchsize):
+def run_hyperparam_combinations(gpuid, batchsize, simulate=False):
     experimentfolder = 'experiments'
     hcombfilename_remaining = os.path.join(experimentfolder, 'hcombs_remaining.txt')
     hcombfilename_inprogress = os.path.join(experimentfolder, 'hcombs_inprogress.txt')
@@ -55,26 +55,35 @@ def run_hyperparam_combinations(gpuid, batchsize):
               format(waiting))
         time.sleep(waiting)
 
+        if (socket.gethostname()=='sabik' and gpuid not in [0,1]) or socket.gethostname() in ['risha','elnath','adhara'] or (socket.gethostname()=='eltanin' and gpuid not in [0,1,2,3]): # merope req old tf: or socket.gethostname()=='merope' and gpuid!=0:
+            old_tf = True
+        else:
+            old_tf = False
+
         # 1) fetch combination from top of hcombs_remaining.txt and remove it from that file
         # read file again, another process could have removed lines in between runs (probable scenario)
         lines_remaining = open(hcombfilename_remaining).readlines()
         nexthcomp = lines_remaining[0]
         del lines_remaining[0]
-        open(hcombfilename_remaining, 'w').writelines(lines_remaining)
+        if not simulate:
+            open(hcombfilename_remaining, 'w').writelines(lines_remaining)
 
         # 2) add combination to bottom of hcombs_inprogress.txt with replacing batchsize/gpuid/host comment
-        nexthcomp = nexthcomp.replace('_GPU_', str(gpuid)).replace('_BS_', str(batchsize)).replace('_PY_', 'export PYTHONPATH=/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/recurrent/models; /mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/bin/python').replace('\n', '')
+        nexthcomp = nexthcomp.replace('_GPU_', str(gpuid)).replace('_BS_', str(batchsize)).replace('_PY_', 'export PYTHONPATH=/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/recurrent/models:/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/common/analysis; /mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda{}/bin/python'.format('_old_tf' if old_tf else '')).replace('\n', '')
         if batchsize==64:
             nexthcomp = nexthcomp + ' --sceneinstancebufsize=750'
         nexthcomp = nexthcomp + ' # on {}\n'.format(socket.gethostname())
-        hcombfile_inprogress = open(hcombfilename_inprogress, 'a')
-        hcombfile_inprogress.write(nexthcomp)
-        hcombfile_inprogress.close()
+        if not simulate:
+            hcombfile_inprogress = open(hcombfilename_inprogress, 'a')
+            hcombfile_inprogress.write(nexthcomp)
+            hcombfile_inprogress.close()
 
         # 3) run experiment
         print('running experiment on {} via os.system(\'{}\')'.format(socket.gethostname(), nexthcomp))
-        returnval = os.system(nexthcomp)
-        # returnval = 0 if random.random() < 0.5 else 1
+        if not simulate:
+            returnval = os.system(nexthcomp)
+        else:
+            returnval = 0 if random.random() < 0.5 else 1
         # ... wait for many hours
         if returnval != 0:
             printerror('on {}: with system() return value {} the combination {} did not succeed'.
@@ -82,9 +91,10 @@ def run_hyperparam_combinations(gpuid, batchsize):
             successstr = 'NOT successfully'
 
             # 4a) append combination to hcombs_problem.txt
-            hcombfile_problem = open(hcombfilename_problem, 'a')
-            hcombfile_problem.write(nexthcomp + '\n')
-            hcombfile_problem.close()
+            if not simulate:
+                hcombfile_problem = open(hcombfilename_problem, 'a')
+                hcombfile_problem.write(nexthcomp + '\n')
+                hcombfile_problem.close()
         else:
             successstr = 'successfully'
 
@@ -96,12 +106,14 @@ def run_hyperparam_combinations(gpuid, batchsize):
                 print('removing from {} the {} run combination {}'.format(hcombfilename_inprogress, successstr, nexthcomp))
                 del lines_inprogress[i]
                 break
-        open(hcombfilename_inprogress, 'w').writelines(lines_inprogress)
+        if not simulate:
+            open(hcombfilename_inprogress, 'w').writelines(lines_inprogress)
 
         # 5) append combination to hcombs_done.txt
-        hcombfile_done = open(hcombfilename_done, 'a')
-        hcombfile_done.write(nexthcomp+'\n')
-        hcombfile_done.close()
+        if not simulate:
+            hcombfile_done = open(hcombfilename_done, 'a')
+            hcombfile_done.write(nexthcomp+'\n')
+            hcombfile_done.close()
 
         print('finished on {} combination {} (removed from {} and added to {})'.
               format(socket.gethostname(), nexthcomp, hcombfilename_inprogress, hcombfilename_done))
@@ -138,6 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('--run', action='store_true')
     parser.add_argument('--gpuid', type=int)
     parser.add_argument('--batchsize', type=int)
+    parser.add_argument('--simulate', action='store_true')
 
     parser.add_argument('--sample', action='store_true')
     parser.add_argument('--path', type=str)
@@ -146,7 +159,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.run:
-        run_hyperparam_combinations(args.gpuid, args.batchsize)
+        run_hyperparam_combinations(args.gpuid, args.batchsize, args.simulate)
 
     elif args.sample:
         sample_hyperparams(args.path, args.number)
