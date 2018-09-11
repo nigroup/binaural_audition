@@ -29,7 +29,7 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
     start = timer()
 
     NUMBER_OF_CLASSES = 13
-    # METRICS
+    # METRICS 
 
     ALL_FOLDS = h.ALL_FOLDS if h.ALL_FOLDS != -1 else list(range(1, 7))
 
@@ -191,6 +191,8 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
 
         stage_was_finished = True
 
+        loss_is_nan = False
+
         for e in range(h.epochs_finished[val_fold - 1], h.MAX_EPOCHS):
 
             # early stopping
@@ -203,6 +205,7 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
             val_loss_is_nan, _ = val_phase.run()
 
             if train_loss_is_nan or val_loss_is_nan:
+                loss_is_nan = True
                 break
 
             tr_utils.update_latest_model_ckp(model_ckp_last, model_save_dir, e, val_phase.accs[-1])
@@ -251,69 +254,75 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
 
             del metrics
 
-        if not stage_was_finished:
+        if not loss_is_nan:
 
-            best_val_class_accuracies_over_folds[val_fold - 1] = val_phase.class_accs[best_epoch - 1]
-            best_val_acc_over_folds[val_fold - 1] = val_phase.accs[best_epoch - 1]
+            if not stage_was_finished:
 
-            best_val_class_accuracies_over_folds_bac2[val_fold - 1] = val_phase.class_accs_bac2[best_epoch - 1]
-            best_val_acc_over_folds_bac2[val_fold - 1] = val_phase.accs_bac2[best_epoch - 1]
+                best_val_class_accuracies_over_folds[val_fold - 1] = val_phase.class_accs[best_epoch - 1]
+                best_val_acc_over_folds[val_fold - 1] = val_phase.accs[best_epoch - 1]
 
-            ################################################# CROSS VALIDATION: MEAN AND VARIANCE
-            best_val_class_accs_over_folds = np.array(best_val_class_accuracies_over_folds)
-            best_val_accs_over_folds = np.array(best_val_acc_over_folds)
+                best_val_class_accuracies_over_folds_bac2[val_fold - 1] = val_phase.class_accs_bac2[best_epoch - 1]
+                best_val_acc_over_folds_bac2[val_fold - 1] = val_phase.accs_bac2[best_epoch - 1]
 
-            best_val_class_accs_over_folds_bac2 = np.array(best_val_class_accuracies_over_folds_bac2)
-            best_val_accs_over_folds_bac2 = np.array(best_val_acc_over_folds_bac2)
+                ################################################# CROSS VALIDATION: MEAN AND VARIANCE
+                best_val_class_accs_over_folds = np.array(best_val_class_accuracies_over_folds)
+                best_val_accs_over_folds = np.array(best_val_acc_over_folds)
 
-            metrics_over_folds = utils.create_metrics_over_folds_dict(best_val_class_accs_over_folds,
-                                                                      best_val_accs_over_folds,
-                                                                      best_val_class_accs_over_folds_bac2,
-                                                                      best_val_accs_over_folds_bac2)
-
-            if h.STAGE > 1:
-                metrics_over_folds_old = utils.load_metrics(model_dir)
-
-                best_val_class_accs_over_folds += metrics_over_folds_old['best_val_class_accs_over_folds']
-                best_val_accs_over_folds += metrics_over_folds_old['best_val_acc_over_folds']
-
-                best_val_class_accs_over_folds_bac2 += metrics_over_folds_old['best_val_class_accs_over_folds_bac2']
-                best_val_accs_over_folds_bac2 += metrics_over_folds_old['best_val_acc_over_folds_bac2']
+                best_val_class_accs_over_folds_bac2 = np.array(best_val_class_accuracies_over_folds_bac2)
+                best_val_accs_over_folds_bac2 = np.array(best_val_acc_over_folds_bac2)
 
                 metrics_over_folds = utils.create_metrics_over_folds_dict(best_val_class_accs_over_folds,
                                                                           best_val_accs_over_folds,
                                                                           best_val_class_accs_over_folds_bac2,
                                                                           best_val_accs_over_folds_bac2)
 
-            utils.pickle_metrics(metrics_over_folds, model_dir)
+                if h.STAGE > 1:
+                    metrics_over_folds_old = utils.load_metrics(model_dir)
 
-            if INTERMEDIATE_PLOTS:
-                plot.plot_metrics(metrics_over_folds, model_dir)
+                    best_val_class_accs_over_folds += metrics_over_folds_old['best_val_class_accs_over_folds']
+                    best_val_accs_over_folds += metrics_over_folds_old['best_val_acc_over_folds']
 
-            hcm.finish_stage(ID, h,
-                             metrics_over_folds['best_val_acc_mean_over_folds'],
-                             metrics_over_folds['best_val_acc_std_over_folds'],
-                             metrics_over_folds['best_val_acc_mean_over_folds_bac2'],
-                             metrics_over_folds['best_val_acc_std_over_folds_bac2'],
-                             timer() - start)
+                    best_val_class_accs_over_folds_bac2 += metrics_over_folds_old['best_val_class_accs_over_folds_bac2']
+                    best_val_accs_over_folds_bac2 += metrics_over_folds_old['best_val_acc_over_folds_bac2']
+
+                    metrics_over_folds = utils.create_metrics_over_folds_dict(best_val_class_accs_over_folds,
+                                                                              best_val_accs_over_folds,
+                                                                              best_val_class_accs_over_folds_bac2,
+                                                                              best_val_accs_over_folds_bac2)
+
+                utils.pickle_metrics(metrics_over_folds, model_dir)
+
+                if INTERMEDIATE_PLOTS:
+                    plot.plot_metrics(metrics_over_folds, model_dir)
+
+                hcm.finish_stage(ID, h,
+                                 metrics_over_folds['best_val_acc_mean_over_folds'],
+                                 metrics_over_folds['best_val_acc_std_over_folds'],
+                                 metrics_over_folds['best_val_acc_mean_over_folds_bac2'],
+                                 metrics_over_folds['best_val_acc_std_over_folds_bac2'],
+                                 timer() - start)
+
+            else:
+                metrics_over_folds = utils.load_metrics(model_dir)
+
+            # STAGE thresholds
+            stage_thresholds = {1: 0.835, 2: 0.835, 3: np.inf}  # 3 is the last stage
+
+            if metrics_over_folds['best_val_acc_mean_over_folds'] >= stage_thresholds[h.STAGE]:
+                go_to_next_stage = True
+
+            if go_to_next_stage:
+                hcm.next_stage(ID, h)
+
+            else:
+                if h.STAGE == 3 or stage_thresholds[h.STAGE] != np.inf:
+                    hcm.finish_hcomb(ID, h)
+
+            return go_to_next_stage
 
         else:
-            metrics_over_folds = utils.load_metrics(model_dir)
-
-        # STAGE thresholds
-        stage_thresholds = {1: 0.835, 2: 0.835, 3: np.inf}  # 3 is the last stage
-
-        if metrics_over_folds['best_val_acc_mean_over_folds'] >= stage_thresholds[h.STAGE]:
-            go_to_next_stage = True
-
-        if go_to_next_stage:
-            hcm.next_stage(ID, h)
-
-        else:
-            if h.STAGE == 3 or stage_thresholds[h.STAGE] != np.inf:
-                hcm.finish_hcomb(ID, h)
-
-        return go_to_next_stage
+            hcm.finish_hcomb(ID, h)
+            return False
 
 
 def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT):
