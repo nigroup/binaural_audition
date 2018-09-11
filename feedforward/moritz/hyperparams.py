@@ -1,6 +1,12 @@
 import math
-
-# TODO: use hyperopt to define the two (main and fine) optimization tracks
+import argparse
+import random
+import sys
+import os
+import time
+import socket
+import heiner.utils as heiner_utils
+from myutils import printerror
 
 # calculates the next larger historysize that corresponds to an integer residuallayers and saves both in params dict
 # the output is not printed directly in order to have it in the logfile that can be created only after the hyperparams are fixed
@@ -28,15 +34,135 @@ def obtain_nextlarger_residuallayers_refining_historysize(params):
 
     return output
 
-def sample_hyperparams_coarse():
-    hyperparams = {}
-    # sample featuremaps, dropout rate, historylength etc.
-    return hyperparams
+def run_hyperparam_combinations(gpuid, batchsize, simulate=False):
+    experimentfolder = 'experiments'
+    hcombfilename_remaining = os.path.join(experimentfolder, 'hcombs_remaining.txt')
+    hcombfilename_inprogress = os.path.join(experimentfolder, 'hcombs_inprogress.txt')
+    hcombfilename_done = os.path.join(experimentfolder, 'hcombs_done.txt')
+    hcombfilename_problem = os.path.join(experimentfolder, 'hcombs_problem.txt')
 
-def sample_hyperparams_fine():
-    hyperparams = {}
-    # sample learning rate, maybe more
-    return hyperparams
+    outfile = os.path.join(experimentfolder, 'hcomps_logfile')
+    errfile = os.path.join(experimentfolder, 'hcomps_errors')
+    sys.stdout = heiner_utils.UnbufferedLogAndPrint(outfile, sys.stdout)
+    sys.stderr = heiner_utils.UnbufferedLogAndPrint(errfile, sys.stderr)
+
+    # run hyperparameter combinations until nothing to be run anymore
+    while (len(open(hcombfilename_remaining).readlines()) > 0):
+
+        # 0) wait a random no of seconds in order to prevent simultaneous writing to a file in case two procs are killed at the same time
+        waiting = random.randint(0,5)
+        print('running next hyperparam combination but waiting for {} seconds to prevent simultaneous file writing'.
+              format(waiting))
+        time.sleep(waiting)
+
+        if (socket.gethostname()=='sabik' and gpuid not in [0,1]) or socket.gethostname() in ['risha','elnath','adhara'] or (socket.gethostname()=='eltanin' and gpuid not in [0,1,2,3]): # merope req old tf: or socket.gethostname()=='merope' and gpuid!=0:
+            old_tf = True
+        else:
+            old_tf = False
+
+        # 1) fetch combination from top of hcombs_remaining.txt and remove it from that file
+        # read file again, another process could have removed lines in between runs (probable scenario)
+        lines_remaining = open(hcombfilename_remaining).readlines()
+        nexthcomp = lines_remaining[0]
+        del lines_remaining[0]
+        if not simulate:
+            open(hcombfilename_remaining, 'w').writelines(lines_remaining)
+
+        # 2) add combination to bottom of hcombs_inprogress.txt with replacing batchsize/gpuid/host comment
+        nexthcomp = nexthcomp.replace('_GPU_', str(gpuid)).replace('_BS_', str(batchsize)).replace('_PY_', 'export PYTHONPATH=/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/recurrent/models:/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/common/analysis; /mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda{}/bin/python'.format('_old_tf' if old_tf else '')).replace('\n', '')
+        if batchsize==64:
+            nexthcomp = nexthcomp + ' --sceneinstancebufsize=750'
+        nexthcomp = nexthcomp + ' # on {}\n'.format(socket.gethostname())
+        if not simulate:
+            hcombfile_inprogress = open(hcombfilename_inprogress, 'a')
+            hcombfile_inprogress.write(nexthcomp)
+            hcombfile_inprogress.close()
+
+        # 3) run experiment
+        print('running experiment on {} via os.system(\'{}\')'.format(socket.gethostname(), nexthcomp))
+        if not simulate:
+            returnval = os.system(nexthcomp)
+        else:
+            returnval = 0 if random.random() < 0.5 else 1
+        # ... wait for many hours
+        if returnval != 0:
+            printerror('on {}: with system() return value {} the combination {} did not succeed'.
+                       format(socket.gethostname(), returnval, nexthcomp))
+            successstr = 'NOT successfully'
+
+            # 4a) append combination to hcombs_problem.txt
+            if not simulate:
+                hcombfile_problem = open(hcombfilename_problem, 'a')
+                hcombfile_problem.write(nexthcomp + '\n')
+                hcombfile_problem.close()
+        else:
+            successstr = 'successfully'
+
+        # 4b) remove combination from hcombs_inprogress.txt
+        # we should lock the file in between but runs should very seldom interact
+        lines_inprogress = open(hcombfilename_inprogress).readlines()
+        for i in range(len(lines_inprogress)):
+            if lines_inprogress[i] == nexthcomp:
+                print('removing from {} the {} run combination {}'.format(hcombfilename_inprogress, successstr, nexthcomp))
+                del lines_inprogress[i]
+                break
+        if not simulate:
+            open(hcombfilename_inprogress, 'w').writelines(lines_inprogress)
+
+        # 5) append combination to hcombs_done.txt
+        if not simulate:
+            hcombfile_done = open(hcombfilename_done, 'a')
+            hcombfile_done.write(nexthcomp+'\n')
+            hcombfile_done.close()
+
+        print('finished on {} combination {} (removed from {} and added to {})'.
+              format(socket.gethostname(), nexthcomp, hcombfilename_inprogress, hcombfilename_done))
+
+
+
+def sample_hyperparams(path, number):
+    featuremaps_lims = (10, 150)
+    dropoutrate_lims = (0., 0.25)
+    print('uniformly sampling {} realizations of the following parameters'.format(number))
+    print('featuremaps_lims = {}'.format(featuremaps_lims))
+    print('dropoutrate_lims = {}'.format(dropoutrate_lims))
+    hcombfilename = os.path.join('experiments', 'hcombs_remaining.txt')
+    hcompfile = open(hcombfilename, 'a')
+    for i in range(number):
+        featuremaps = random.randint(*featuremaps_lims)
+        dropoutrate = (random.random() - dropoutrate_lims[0]) * (dropoutrate_lims[1] - dropoutrate_lims[0])
+
+        # disable in 10% of all cases dropout
+        if random.random() < 0.1:
+            dropoutrate = 0.
+
+        print('sampled featuremaps {}, dropoutrate {:.3f}'.format(featuremaps, dropoutrate))
+        hcompfile.write('_PY_ training.py --gpuid=_GPU_ --batchsize=_BS_ --path={} --featuremaps={} --dropoutrate={}\n'.
+              format(path, featuremaps, dropoutrate))
+
+    hcompfile.close()
+    print('wrote {} hyperparameter combinations into {}'.format(number, hcombfilename))
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--run', action='store_true')
+    parser.add_argument('--gpuid', type=int)
+    parser.add_argument('--batchsize', type=int)
+    parser.add_argument('--simulate', action='store_true')
+
+    parser.add_argument('--sample', action='store_true')
+    parser.add_argument('--path', type=str)
+    parser.add_argument('--number', type=int, default=50)
+
+    args = parser.parse_args()
+
+    if args.run:
+        run_hyperparam_combinations(args.gpuid, args.batchsize, args.simulate)
+
+    elif args.sample:
+        sample_hyperparams(args.path, args.number)
 
 # see initial experiments in training.py => move to separate folder experiments_round0
 

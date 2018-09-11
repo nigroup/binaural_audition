@@ -1,35 +1,46 @@
 TODO
 
-- final model standardization checken + an heiner zurückmelden
+1) BEFORE FINISHING CROSS VALIDATION
 
-- rename manually all experiments: bs64 / bs128 (also fix naming required?)
+- once risha uploaded use it to test refined hyperparams (which run on gpu etc...)
 
-- manually fix results/params: finished to True everywhere and determine kernelsize from name (only relevant for resumed experiments) and set it again
+- after bug fixing on test set evaluation and rerun that on sabik before
 
-- "TODO:"s wegmachen aus code und preliminary study abschließen
-darunter:
-    - add to plot: moving  loss/acc average over say three epochs (to see validation trend)
-    - batchloader => seed & resume check
-    
-- vorläufige experimente abschließen
-    => dropout
-    => featuremaps
-    => kernelsize
+- run cpu training on sabik too hyperparam
 
-- validate loss weights (heiner maybe not uses all data)
-no of 1 labels and of 0 labels for each fold and class => pos,neg,tot=pos+neg per fold+class
-    
-- hyperparam_combinations_*.txt sukzessive befüllen (immer genügend auf vorrat) und skript dafür schreiben, welches prozesse startet nacheinander (nur level1?) (=> zwei prozesse können gleichzeitig schreiben=>filelock)
-
-- skript für kombinations-auswertungstabelle (levels 2,3 antizipieren) erstellen
-
-- sicherstellen, dass keine fehlenden teile oder doppelte daten test set evaluierung benutzt werden
+- add running experiments with text in hyperparam overview
 
 - evaluationsplotting zusammen mit changbin machen
 
-- levels 2, 3 starten
+- skript für kombinations-auswertungstabelle (levels 2,3 antizipieren) erstellen
 
-- finales modell trainieren code machen
+- finally: detect (stuck in inprogress txt file) potentially failed runs via (error) logfile and resume them
 
+
+2) SPEED UP TRAINING (OPTIONAL)
+- try to put only non-complex models to sabik's cpu
+
+3) FINISH CROSS VALIDATION
+
+- levels 2, 3 starten, nutze [und prüfe für diesen zweck] loadparams [heiner: lvl2+3 ab 83% oder 84% lvl1 val_wbac]
+
+- optionally finally fine tuning featuremaps, droppoutrate, learningrate
+
+4) FINAL EVALUATION
+
+- finales modell trainieren und evaluieren
+
+5) IN PARALLEL: INSTANT LABELS
 - instant labels starten (gleich alle drei level)
 
+- optionally finally fine tuning featuremaps, droppoutrate, learningrate
+
+- optional: check dependence on output threshold
+
+- finales instant modell trainieren und evaluieren
+
+6) OPTIONALLY MORE VARIANTS
+- blockbased und instant auch mit historysize 500 und 50 laufen lassen
+
+7) FINALLY:
+- put final result figs and h5 files (that can be used to replot) -- also incl final models  to github

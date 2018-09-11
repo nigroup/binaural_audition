@@ -313,7 +313,8 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                             params,
                             multithreading_metrics,
                             validation_steps,
-                            workers=0)
+                            workers=0,
+                            verbose=1)
                     else:
                         # No need for try/except because
                         # data has already been validated.
