@@ -121,8 +121,8 @@ def run_hyperparam_combinations(gpuid, batchsize, simulate=False):
 
 
 def sample_hyperparams(path, number):
-    featuremaps_lims = (10, 150)
-    dropoutrate_lims = (0., 0.25)
+    featuremaps_lims = (20, 150) # (10, 150)
+    dropoutrate_lims = (0., 0.125) # (0., 0.25)
     print('uniformly sampling {} realizations of the following parameters'.format(number))
     print('featuremaps_lims = {}'.format(featuremaps_lims))
     print('dropoutrate_lims = {}'.format(dropoutrate_lims))

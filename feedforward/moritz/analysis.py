@@ -401,12 +401,14 @@ def plot_hyper_from_folder(folder):
         plt.plot(params['featuremaps'], params['dropoutrate'],
                  marker='o', markersize=markersize, markerfacecolor=color_current, markeredgecolor=color_current)
         # mark unfinished runs
-        plt.text(params['featuremaps'], params['dropoutrate']-0.0075,
-                 'wbac: {:.3f}, be: {}'.format(val_bac_current, bestepoch_idx+1),
+        plt.text(params['featuremaps'], params['dropoutrate']-0.0075, 'wbac(2): {:.3f} ({:.3f}), be: {} ({})'.
+                 format(val_bac_current, results['val_wbac2'][bestepoch_idx], bestepoch_idx+1, len(results['val_wbac'])),
                  fontsize=smallfontsize, horizontalalignment='center',
                  color='gray')
         plt.text(params['featuremaps'], params['dropoutrate']+0.005,
-                 '' if params['finished'] else ' (running)',
+                 '' if params['finished'] else ' (running: {}{})'.
+                 format(params['server'],
+                        '/gpu{}'.format(params['gpuid']) if params['server'] in ['sabik', 'eltanin', 'merope'] else ''),
                  fontsize=smallfontsize, horizontalalignment='center',
                  color='red')
 
