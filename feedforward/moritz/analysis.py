@@ -1,6 +1,7 @@
 import argparse
 import os
 import socket
+import copy
 import glob
 import matplotlib
 matplotlib.use('Agg')
@@ -9,6 +10,8 @@ from myutils import load_h5
 from constants import *
 from testset_plotting import plot_metric_over_snr_per_nsrc, plot_metric_over_snr_per_class, \
     plot_metric_over_nsrc_per_class
+import csv
+import re
 
 def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsceneonly=False):
 
@@ -346,13 +349,13 @@ def plot_train_experiment_from_folder(folder, datalimits, firstsceneonly):
     plot_train_experiment_from_dicts(results, params, datalimits, firstsceneonly)
 
 
-def plot_hyper_from_folder(folder):
+def plot_and_table_hyper_from_folder(folder):
     # remark: hyperparam subset selection by specifying parts of the name, e.g. batchinterprete_2_hyper/n*_dr*_ks3...
     if '*' not in folder:
         folders = glob.glob(folder + '/*')
-        savefolder = args.folder
+        savefolder = folder
     else:
-        folders = glob.glob(args.folder)
+        folders = glob.glob(folder)
         savefolder = os.path.split(folders[0])[0]
 
     hyperparam_combinations = []
@@ -372,8 +375,8 @@ def plot_hyper_from_folder(folder):
                                                                                            params['gpuid'])))
                 hyperparam_combinations.append((results, params))
 
-    # TODO: write csv file
 
+    print('plotting hyper param overview figure...')
     cmap_wbac = plt.get_cmap('jet')
 
     wbac_min = 0.81
@@ -447,6 +450,172 @@ def plot_hyper_from_folder(folder):
     plt.savefig(os.path.join(savefolder, figfilename))
     print('figure file {} saved into folder {}'.format(figfilename, savefolder))
 
+
+    print('generating CSV file...')
+    hcombs_csv = {}       # will be written to csv file
+    hcombs_csv_extra = {} # for statistics only
+    # filling hcombs_csv / hcombs_extra based on previously filled hyperparam_combinations
+    for (results, params) in hyperparam_combinations:
+        # ignore running experiments
+        if params['finished']:
+            # extract name fold from fold-specific name
+            split = params['name'].split('_')
+            fold = split[-1].replace('vf', '')
+            name = params['name'].replace('_vf{}'.format(fold), '')
+
+            # create dict if not existing for the name already
+            if name not in hcombs_csv:
+                hcombs_csv[name] = {}
+                hcombs_csv_extra[name] = {}
+                hcombs_csv_extra[name]['bac'] = []
+                hcombs_csv_extra[name]['bac2'] = []
+                hcombs_csv_extra[name]['bestepoch'] = []
+                hcombs_csv_extra[name]['epochs'] = []
+                hcombs_csv_extra[name]['sens'] = []
+                hcombs_csv_extra[name]['spec'] = []
+                hcombs_csv_extra[name]['stdbacseq'] = []
+            # short cuts
+            row = hcombs_csv[name]
+            stats = hcombs_csv_extra[name]
+
+            bestepoch_idx = np.argmax(results['val_wbac'])
+
+            row['featuremaps'] = params['featuremaps']
+            row['dropoutrate'] = params['dropoutrate']
+            row['level'] = 1 if 'level' not in row else row['level']+1
+            row['bac_v{}'.format(fold)] = results['val_wbac'][bestepoch_idx]
+            row['bac2_v{}'.format(fold)] = results['val_wbac2'][bestepoch_idx]
+            row['bestepoch_v{}'.format(fold)] = bestepoch_idx + 1 # save epoch (not epoch index!)
+            row['epochs_v{}'.format(fold)] = len(results['val_wbac'])
+            row['stdbacseq_v{}'.format(fold)] = np.std(results['val_wbac'][bestepoch_idx:])
+
+            stats['bac'].append(row['bac_v{}'.format(fold)])
+            stats['bac2'].append(row['bac2_v{}'.format(fold)])
+            stats['bestepoch'].append(row['bestepoch_v{}'.format(fold)])
+            stats['epochs'].append(row['epochs_v{}'.format(fold)])
+            stats['sens'].append(np.mean(results['val_sens_spec_per_class'][bestepoch_idx, :, 0]))
+            stats['spec'].append(np.mean(results['val_sens_spec_per_class'][bestepoch_idx, :, 1]))
+            stats['stdbacseq'].append(row['stdbacseq_v{}'.format(fold)])
+
+        else:
+            print('WARNING: IGNORING UNFINISHED EXPERIMENT {} -- check if this is wanted'.format(params['name']))
+
+    # calculating statistics over folds
+    for name in hcombs_csv.keys():
+        print('preparing csv line for {}'.format(name))
+        level_check = [True, True, True]
+        # ensure we have at least the first level
+        assert 'bac_v3' in hcombs_csv[name] and hcombs_csv[name]['bac_v3'] > 0 and 1 <= hcombs_csv[name]['level'] <= 3
+        # inserting non-existing runs with value 0
+        for fold in ['2', '4']:
+            if 'bac_v{}'.format(fold) not in hcombs_csv[name]:
+                hcombs_csv[name]['bac_v{}'.format(fold)] = 0.
+                hcombs_csv[name]['bac2_v{}'.format(fold)] = 0.
+                hcombs_csv[name]['stdbacseq_v{}'.format(fold)] = 0.
+                hcombs_csv[name]['bestepoch_v{}'.format(fold)] = 0
+                hcombs_csv[name]['epochs_v{}'.format(fold)] = 0
+        # ensuring level is set correctly
+        if row['level'] == 3:
+            assert hcombs_csv[name]['bac_v2'] > 0. and hcombs_csv[name]['bac_v4'] > 0.
+        elif row['level'] == 2:
+            assert hcombs_csv[name]['bac_v2'] > 0. and hcombs_csv[name]['bac_v4'] == 0.
+        elif row['level'] == 1:
+            assert hcombs_csv[name]['bac_v2'] == 0. and hcombs_csv[name]['bac_v4'] == 0.
+
+        # statistics from stats dict (here we do not have the additional 0's => simply mean/std)
+        hcombs_csv[name]['bac_avg'] = np.mean(hcombs_csv_extra[name]['bac'])
+        hcombs_csv[name]['bac_std'] = np.std(hcombs_csv_extra[name]['bac'])
+        hcombs_csv[name]['bac2_avg'] = np.mean(hcombs_csv_extra[name]['bac2'])
+        hcombs_csv[name]['bac2_std'] = np.std(hcombs_csv_extra[name]['bac2'])
+        hcombs_csv[name]['sens_avg'] = np.mean(hcombs_csv_extra[name]['sens'])
+        hcombs_csv[name]['sens_std'] = np.std(hcombs_csv_extra[name]['sens'])
+        hcombs_csv[name]['spec_avg'] = np.mean(hcombs_csv_extra[name]['spec'])
+        hcombs_csv[name]['spec_std'] = np.std(hcombs_csv_extra[name]['spec'])
+        hcombs_csv[name]['bestepoch_avg'] = np.mean(hcombs_csv_extra[name]['bestepoch'])
+        hcombs_csv[name]['bestepoch_std'] = np.std(hcombs_csv_extra[name]['bestepoch'])
+        hcombs_csv[name]['epochs_avg'] = np.mean(hcombs_csv_extra[name]['epochs'])
+        hcombs_csv[name]['epochs_std'] = np.std(hcombs_csv_extra[name]['epochs'])
+        hcombs_csv[name]['stdbacseq_avg'] = np.mean(hcombs_csv_extra[name]['stdbacseq'])
+        hcombs_csv[name]['stdbacseq_std'] = np.std(hcombs_csv_extra[name]['stdbacseq'])
+
+
+    # todo_list = [#,
+                 # 'trainbac_avg', 'trainbac_std',
+                 # 'bac2alarm_avg', 'bac2baby_avg', 'bac2femaleSpeech_avg', 'bac2fire_avg', 'bac2crash_avg',
+                 # 'bac2dog_avg', 'bac2engine_avg', 'bac2footsteps_avg', 'bac2knock_avg', 'bac2phone_avg',
+                 # 'bac2piano_avg', 'bac2maleSpeech_avg', 'bac2scream_avg']
+
+
+    remainingfilename = 'remaining_level_experiments_assuminglevel1sofar.txt'
+    remainingfile = open(os.path.join(savefolder, remainingfilename), 'w')
+    remaining_max = 15
+    remaining_prepared = 0
+
+    for csvtype in ['details', 'compact']:
+        csv_filename = 'hyperparams_{}.csv'.format(csvtype)
+        csvfilepath = os.path.join(savefolder, csv_filename)
+        with open(csvfilepath, mode='w') as csv_file:
+            if csvtype == 'details':
+                fieldnames = ['featuremaps', 'dropoutrate', 'level', 'bac_avg', 'bac_std', 'bac_v3', 'bac_v2', 'bac_v4',
+                              'bestepoch_avg', 'bestepoch_std', 'bestepoch_v3', 'bestepoch_v2', 'bestepoch_v4',
+                              'bac2_avg', 'bac2_std', 'bac2_v3', 'bac2_v2', 'bac2_v4',
+                              'sens_avg', 'sens_std', 'spec_avg', 'spec_std',
+                              'stdbacseq_avg', 'stdbacseq_std', 'stdbacseq_v3', 'stdbacseq_v2', 'stdbacseq_v4',
+                              'epochs_avg', 'epochs_std', 'epochs_v3', 'epochs_v2', 'epochs_v4'] #,
+                              # 'trainbac_avg', 'trainbac_std', 'trainbac_v3', 'trainbac_v2', 'trainbac_v4',
+                              # 'bac2alarm_avg', 'bac2baby_avg', 'bac2femaleSpeech_avg', 'bac2fire_avg', 'bac2crash_avg',
+                              # 'bac2dog_avg', 'bac2engine_avg', 'bac2footsteps_avg', 'bac2knock_avg', 'bac2phone_avg',
+                              # 'bac2piano_avg', 'bac2maleSpeech_avg', 'bac2scream_avg']
+                              # 'trainloss_avg', 'trainloss_std', 'trainloss_v3', 'trainloss_v2', 'trainloss_v4',
+                              # 'loss_avg', 'loss_std', 'loss_v3', 'loss_v2', 'loss_v4']
+            elif csvtype == 'compact':
+                fieldnames = ['featuremaps', 'dropoutrate', 'level', 'bac_avg', 'bac_std',
+                              'bestepoch_avg', 'bestepoch_std', 'bac2_avg', 'bac2_std',
+                              'sens_avg', 'sens_std', 'spec_avg', 'spec_std',
+                              'stdbacseq_avg', 'stdbacseq_std']
+
+                hcombs_csv_bak = copy.deepcopy(hcombs_csv)
+                hcombs_csv = {}
+                for name in hcombs_csv_bak.keys():
+                    hcombs_csv[name] = {}
+                    for f in fieldnames:
+                        hcombs_csv[name][f] = hcombs_csv_bak[name][f]
+
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+            writer.writeheader()
+            sortkey = 'bac_avg' # sort csv file by this key
+            sortreverse = True # large values top
+            compactfloat = True
+            for comb in sorted(hcombs_csv.values(), key=lambda row: row[sortkey], reverse=sortreverse):
+                
+                if remaining_prepared < remaining_max:
+                    remainingfile.write(
+                        '_PY_ training.py --gpuid=_GPU_ --batchsize=_BS_ --path={} --featuremaps={} --dropoutrate={} --validfold=2\n'.
+                        format(folder, comb['featuremaps'], comb['dropoutrate']))
+                    remainingfile.write(
+                        '_PY_ training.py --gpuid=_GPU_ --batchsize=_BS_ --path={} --featuremaps={} --dropoutrate={} --validfold=4\n'.
+                        format(folder, comb['featuremaps'], comb['dropoutrate']))
+                    remaining_prepared += 1
+
+
+                if compactfloat:
+                    for k,v in comb.items():
+                        if isinstance(v, float):
+                            v = '{:.4}'.format(v)
+                            comb[k] = v
+                writer.writerow(comb)
+
+            if csvtype == 'compact':
+                hcombs_csv = hcombs_csv_bak
+
+        print('csv file {} written'.format(csvfilepath))
+
+    print('remark: bestepoch numbers refer to bestepochidx+1 (i.e., they can be used as maxepochs in final training)')
+
+    remainingfile.close()
+    print('remaining experiment txt file written')
+
+
 def plot_test_experiment_from_folder(folder):
     params = load_h5(os.path.join(folder, 'params.h5'))
     results = load_h5(os.path.join(folder, 'results.h5'))
@@ -484,15 +653,15 @@ def plot_test_experiment_from_folder(folder):
     plt.savefig(os.path.join(folder, 'testset_evaluation.png'))
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--mode', type=str, default='trainplot',
-                        help='currently only \'trainplot\' is supported')
+    parser.add_argument('--mode', type=str, default='train',
+                        help='currently supported are: \'train\', \'hyper\' and \'test\'')
     parser.add_argument('--folder', type=str,
-                        help='folder in which the params and results reside and into which we should (over)write '+
+                        help='folder in which the params and results reside and into which we should (over)write ' +
                              'the plots. can contain wildcard character *')
     parser.add_argument('--datalimits', action='store_true', default=False,
-                        help='whether to use limits that are specific to the data of the current results'+
+                        help='whether to use limits that are specific to the data of the current results' +
                              ' (i.e., axes not comparable to other experiments)')
     parser.add_argument('--firstsceneonly', action='store_true', default=False,
                         help='whether to scale the accuracies with 21. to undo wrong normalization in this (debug) case')
@@ -505,7 +674,7 @@ if __name__ == '__main__':
             folders = glob.glob(args.folder)
 
         for f in folders:
-            if os.path.isdir(f) and '0.0' in f:
+            if os.path.isdir(f):
                 print('making visualization for folder {}'.format(f))
                 plot_train_experiment_from_folder(folder=f,
                                                   datalimits=args.datalimits,
@@ -514,6 +683,9 @@ if __name__ == '__main__':
     if args.mode == 'test' and args.folder:
         plot_test_experiment_from_folder(args.folder)
 
-
     if args.mode == 'hyper' and args.folder:
-        plot_hyper_from_folder(args.folder)
+        plot_and_table_hyper_from_folder(args.folder)
+
+
+if __name__ == '__main__':
+    main()
