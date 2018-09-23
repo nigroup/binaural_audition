@@ -4,7 +4,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-
+import os
 
 # scene specifications from binAudLSTM_testSceneParameters.txt
 def get_test_scene_params():
@@ -202,13 +202,84 @@ def get_metric(sens_per_scene_class, spec_per_scene_class, metric_name, class_av
     else:
         return metric_per_class_scene
 
+
+# this function should be called 3x in the evaluation: metric_name='BAC' (and ='sens' and ='spec)
 def plot_metric_over_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, metric_name):
-    metric_per_scene = get_metric(sens_per_scene_class, spec_per_scene_class, metric_name, class_avg=True)
+    metric_per_scene = get_metric(sens_per_scene_class, spec_per_scene_class, metric_name)
     test_scenes = get_test_scene_params()
 
-    # TODO: plotting stuff here -- without plt.figure / without plt.savefig
+    # plot metric over SNR for nSrc=1,2,3,4 (4 lines)
+    #   - metric is averaged over all azimuths for the SNR/nSrc combination
+    #   - metric is averaged over classes
+    # wishlist: additionally two standard deviations would be nice :
+    #   - std of metric w.r.t. classes (after averaging over azimuths)
+    #   - std of metric w.r.t azimuths (after averaging over classes)
 
+    colors = {1: 'black', 2: 'green', 3: 'blue', 4: 'red'} # key: nSrc
+    SNRs_all = [-20, -10, 0, 10, 20]
 
+    metric = {}
+    metric_both_mean = {} # avg over azimuth and class
+    metric_class_std = {} # avg over azimuth, std over class
+    metric_azimuth_std = {} # avg over class, std over azimuth
+    no_azimuths = {} # no of azimuths (to indicate std statistics samplesize)
+    for nSrc in [1, 2, 3, 4]:
+        if nSrc == 1:
+            SNRs = [0]
+        else:
+            SNRs = SNRs_all
+
+        for SNR in SNRs:
+            metric[(nSrc,SNR)] = []
+            # append all scenes with nSrc,SNR to the previous list
+            for sceneid, (nSrc_scene, SNR_scene, azimuth_scene) in enumerate(test_scenes):
+                # correction: nSrc 1 => SNR fixed 0; nSrc >1 => second element contains SNR w.r.t master
+                SNR_scene = 0 if nSrc == 1 else SNR_scene[1]
+                if nSrc == nSrc_scene and SNR == SNR_scene:
+                     metric[(nSrc, SNR)].append(metric_per_scene[sceneid, :]) # classes still retained
+
+            metric_class_mean = [np.mean(m) for m in metric[(nSrc, SNR)]] # only temporary needed
+            metric_class_std[(nSrc, SNR)] = np.std(np.mean(metric[(nSrc, SNR)], axis=0))
+            metric_azimuth_std[(nSrc, SNR)] = np.std(metric_class_mean)
+            no_azimuths[(nSrc, SNR)] = len(metric_class_mean)
+            metric_both_mean[(nSrc, SNR)] = np.mean(metric_class_mean)
+
+        metric_both_mean_plot = [metric_both_mean[(nSrc, SNR)] for SNR in SNRs]
+        metric_class_std_plot = [metric_class_std[(nSrc, SNR)] for SNR in SNRs]
+        metric_azimuth_std_plot = [metric_azimuth_std[(nSrc, SNR)] for SNR in SNRs]
+        if nSrc == 1:
+            # extend nSrc 1 plot to cover whole SNR range (alternative: only marker at SNR=0)
+            metric_both_mean_plot = metric_both_mean_plot * len(SNRs_all)
+            metric_class_std_plot = metric_class_std_plot * len(SNRs_all)
+            metric_azimuth_std_plot = metric_azimuth_std_plot * len(SNRs_all)
+
+        metric_both_mean_plot = np.array(metric_both_mean_plot)
+        metric_class_std_plot = np.array(metric_class_std_plot)
+        metric_azimuth_std_plot = np.array(metric_azimuth_std_plot)
+        no_azimuths_str = ' '.join([str(no_azimuths[(nSrc, SNR)] for SNR in SNRs)])
+
+        # plot mean (class and azimuth)
+        plt.plot(SNRs_all, metric_both_mean_plot, color=colors[nSrc],
+                 label='nSrc {}'.format(nSrc))
+
+        # plot std over class (azimuth avg)
+        plt.fill_between(SNRs_all, metric_both_mean_plot+metric_class_std_plot,
+                         metric_both_mean_plot-metric_class_std_plot,
+                         facecolor=colors[0], alpha=0.4,
+                         label=None if nSrc>1 else 'class std (azimuth avg)')
+
+        # plot std over azimuths (class avg)
+        plt.plot(SNRs_all, metric_both_mean_plot+metric_azimuth_std_plot, color=colors[0],
+                 linestyle='dashed', label='azimuth std {} (class avg)'.format(no_azimuths_str))
+        plt.plot(SNRs_all, metric_both_mean_plot-metric_azimuth_std_plot, color=colors[0],
+                 linestyle='dashed')
+
+    plt.title('test set '+metric_name+' over SNR (class/azimuth averaged)')
+    plt.legend(loc='best')
+    plt.ylabel(metric_name)
+    plt.xlabel('SNR')
+
+# this function should be called 3x in the evaluation: metric_name='BAC' (and ='sens' and ='spec)
 def plot_metric_over_snr_per_class(sens_per_scene_class, spec_per_scene_class, metric_name):
     metric_per_class_scene = get_metric(sens_per_scene_class, spec_per_scene_class, metric_name)
     test_scenes = get_test_scene_params()
@@ -216,9 +287,40 @@ def plot_metric_over_snr_per_class(sens_per_scene_class, spec_per_scene_class, m
     # TODO: plotting stuff here -- without plt.figure / without plt.savefig
 
 
-
+# this function should be called 3x in the evaluation: metric_name='BAC' (and ='sens' and ='spec)
 def plot_metric_over_nsrc_per_class(sens_per_scene_class, spec_per_scene_class, metric_name):
     metric_per_class_scene = get_metric(sens_per_scene_class, spec_per_scene_class, metric_name)
     test_scenes = get_test_scene_params()
 
     # TODO: plotting stuff here -- without plt.figure / without plt.savefig
+
+# plot testset evaluation and save csv files
+def evaluate_testset(sens_per_scene_class, spec_per_scene_class, name, folder):
+    plt.figure()
+    plt.suptitle('test set evaluation: {}'.format(name))
+
+    plt.subplot(3, 3, 1)
+    plt.title('BAC')
+    plot_metric_over_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, 'BAC')
+    plt.subplot(3, 3, 2)
+    plt.title('sensitivity')
+    plot_metric_over_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, 'sens')
+    plt.subplot(3, 3, 3)
+    plt.title('specificity')
+    plot_metric_over_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, 'spec')
+
+    plt.subplot(3, 3, 4)
+    plot_metric_over_snr_per_class(sens_per_scene_class, spec_per_scene_class, 'BAC')
+    plt.subplot(3, 3, 5)
+    plot_metric_over_snr_per_class(sens_per_scene_class, spec_per_scene_class, 'sens')
+    plt.subplot(3, 3, 6)
+    plot_metric_over_snr_per_class(sens_per_scene_class, spec_per_scene_class, 'spec')
+
+    plt.subplot(3, 3, 7)
+    plot_metric_over_nsrc_per_class(sens_per_scene_class, spec_per_scene_class, 'BAC')
+    plt.subplot(3, 3, 8)
+    plot_metric_over_nsrc_per_class(sens_per_scene_class, spec_per_scene_class, 'sens')
+    plt.subplot(3, 3, 9)
+    plot_metric_over_nsrc_per_class(sens_per_scene_class, spec_per_scene_class, 'spec')
+
+    plt.savefig(os.path.join(folder, 'testset_evaluation.png'))

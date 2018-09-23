@@ -8,10 +8,9 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from myutils import load_h5
 from constants import *
-from testset_plotting import plot_metric_over_snr_per_nsrc, plot_metric_over_snr_per_class, \
-    plot_metric_over_nsrc_per_class
 import csv
 import re
+from testset_evaluation import evaluate_testset
 
 def plot_train_experiment_from_dicts(results, params, datalimits=False, firstsceneonly=False):
 
@@ -619,38 +618,14 @@ def plot_and_table_hyper_from_folder(folder):
 def plot_test_experiment_from_folder(folder):
     params = load_h5(os.path.join(folder, 'params.h5'))
     results = load_h5(os.path.join(folder, 'results.h5'))
+    assert '_vf-1' in folder # ensure the 'validation' set is the test set
 
     sens_per_scene_class = results['val_sens_spec_per_class_scene'][:,:,0]
     spec_per_scene_class = results['val_sens_spec_per_class_scene'][:, :, 1]
 
-    plt.figure()
-    plt.suptitle('metrics for test data -- {}'.format(params['name']))
+    name = 'tcn:{}'.format(params['name'])
 
-    plt.subplot(3,3,1)
-    plt.title('BAC')
-    plot_metric_over_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, 'BAC')
-    plt.subplot(3,3,2)
-    plt.title('sensitivity')
-    plot_metric_over_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, 'sens')
-    plt.subplot(3,3,3)
-    plt.title('specificity')
-    plot_metric_over_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, 'spec')
-
-    plt.subplot(3,3,4)
-    plot_metric_over_snr_per_class(sens_per_scene_class, spec_per_scene_class, 'BAC')
-    plt.subplot(3,3,5)
-    plot_metric_over_snr_per_class(sens_per_scene_class, spec_per_scene_class, 'sens')
-    plt.subplot(3,3,6)
-    plot_metric_over_snr_per_class(sens_per_scene_class, spec_per_scene_class, 'spec')
-
-    plt.subplot(3,3,7)
-    plot_metric_over_nsrc_per_class(sens_per_scene_class, spec_per_scene_class, 'BAC')
-    plt.subplot(3,3,8)
-    plot_metric_over_nsrc_per_class(sens_per_scene_class, spec_per_scene_class, 'sens')
-    plt.subplot(3,3,9)
-    plot_metric_over_nsrc_per_class(sens_per_scene_class, spec_per_scene_class, 'spec')
-
-    plt.savefig(os.path.join(folder, 'testset_evaluation.png'))
+    evaluate_testset(sens_per_scene_class, spec_per_scene_class, name, folder)
 
 
 def main():
