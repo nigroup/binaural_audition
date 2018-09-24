@@ -1,36 +1,13 @@
 TODO
 
-1) BEFORE FINISHING CROSS VALIDATION
+1) BLOCKBASED
+- evaluationsplotting (ggf. zusammen mit changbin) machen
 
-- once risha uploaded use it to test refined hyperparams (which run on gpu etc...)
-
-- after bug fixing on test set evaluation and rerun that on sabik before
-
-- run cpu training on sabik too hyperparam
-
-- add running experiments with text in hyperparam overview
-
-- evaluationsplotting zusammen mit changbin machen
-
-- skript für kombinations-auswertungstabelle (levels 2,3 antizipieren) erstellen
-
-- finally: detect (stuck in inprogress txt file) potentially failed runs via (error) logfile and resume them
-
-
-2) SPEED UP TRAINING (OPTIONAL)
-- try to put only non-complex models to sabik's cpu
-
-3) FINISH CROSS VALIDATION
-
-- levels 2, 3 starten, nutze [und prüfe für diesen zweck] loadparams [heiner: lvl2+3 ab 83% oder 84% lvl1 val_wbac]
-
-- optionally finally fine tuning featuremaps, droppoutrate, learningrate
-
-4) FINAL EVALUATION
+- finales modell auswählen, ggf. nachtrainieren
 
 - finales modell trainieren und evaluieren
 
-5) IN PARALLEL: INSTANT LABELS
+2) IN PARALLEL: INSTANT LABELS
 - instant labels starten (gleich alle drei level)
 
 - optionally finally fine tuning featuremaps, droppoutrate, learningrate
