@@ -586,7 +586,7 @@ def plot_and_table_hyper_from_folder(folder):
             sortreverse = True # large values top
             compactfloat = True
             for comb in sorted(hcombs_csv.values(), key=lambda row: row[sortkey], reverse=sortreverse):
-                
+
                 if remaining_prepared < remaining_max:
                     remainingfile.write(
                         '_PY_ training.py --gpuid=_GPU_ --batchsize=_BS_ --path={} --featuremaps={} --dropoutrate={} --validfold=2\n'.

@@ -54,7 +54,7 @@ parser.add_argument('--gpuid', type=int, default=0, help='ID (cf. nvidia-smi) of
 
 # architecture
 parser.add_argument('--featuremaps', type=int, default=50,
-                        help='number of feature maps per layer')
+                        help='number of feature maps per layer; remark: with other defaults 140 is too large to fit in 12G GPU mem; 139 should fit but less than 130 is safer')
 parser.add_argument('--dropoutrate', type=float, default=0.0,
                         help='rate of the two spatial dropout layers within each residual block')
 parser.add_argument('--kernelsize', type=int, default=3,
