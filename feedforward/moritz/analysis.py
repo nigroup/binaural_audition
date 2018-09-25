@@ -387,36 +387,29 @@ def plot_and_table_hyper_from_folder(folder):
     # summary metrics figure
     figsize = (8, 9)
 
-    # save data for contour plot
-    dropoutrates = []
-    featuremaps = []
-    bestepochs = []
-
     plt.figure(figsize=figsize)
     plt.suptitle('hyperparameter overview of {}'.format(folder), fontsize=mediumfontsize)
     # scatter plot with big dots and color = wbac2 value [within 0.8 and 0.9] -- size of the dot kind of inverse to trainepochs
     for (results, params) in hyperparam_combinations:
-        bestepoch_idx = np.argmax(results['val_wbac'])
-        val_bac_current = results['val_wbac'][bestepoch_idx]
-        val_wbac_normalized = max(0, (val_bac_current - wbac_min) / (wbac_max - wbac_min))
-        color_current = cmap_wbac(val_wbac_normalized)
-        plt.plot(params['featuremaps'], params['dropoutrate'],
-                 marker='o', markersize=markersize, markerfacecolor=color_current, markeredgecolor=color_current)
-        # mark unfinished runs
-        plt.text(params['featuremaps'], params['dropoutrate']-0.0075, 'wbac(2): {:.3f} ({:.3f}) -- b(m)e: {} ({})'.
-                 format(val_bac_current, results['val_wbac2'][bestepoch_idx], bestepoch_idx+1, len(results['val_wbac'])),
-                 fontsize=smallfontsize, horizontalalignment='center',
-                 color='gray')
-        plt.text(params['featuremaps'], params['dropoutrate']+0.005,
-                 '' if params['finished'] else ' (running: {}{})'.
-                 format(params['server'],
-                        '/gpu{}'.format(params['gpuid']) if params['server'] in ['sabik', 'eltanin', 'merope'] else ''),
-                 fontsize=smallfontsize, horizontalalignment='center',
-                 color='red')
+        if '_vf3' in params['name']: # do not plot other than first level (too busy and overlayed with unfinished experiments)
+            bestepoch_idx = np.argmax(results['val_wbac'])
+            val_bac_current = results['val_wbac'][bestepoch_idx]
+            val_wbac_normalized = max(0, (val_bac_current - wbac_min) / (wbac_max - wbac_min))
+            color_current = cmap_wbac(val_wbac_normalized)
+            plt.plot(params['featuremaps'], params['dropoutrate'],
+                     marker='o', markersize=markersize, markerfacecolor=color_current, markeredgecolor=color_current)
+            # mark unfinished runs
+            plt.text(params['featuremaps'], params['dropoutrate']-0.0075, 'wbac(2): {:.3f} ({:.3f}) -- b(m)e: {} ({})'.
+                     format(val_bac_current, results['val_wbac2'][bestepoch_idx], bestepoch_idx+1, len(results['val_wbac'])),
+                     fontsize=smallfontsize, horizontalalignment='center',
+                     color='gray')
+            plt.text(params['featuremaps'], params['dropoutrate']+0.005,
+                     '' if params['finished'] else ' (running: {}{})'.
+                     format(params['server'],
+                            '/gpu{}'.format(params['gpuid']) if params['server'] in ['sabik', 'eltanin', 'merope'] else ''),
+                     fontsize=smallfontsize, horizontalalignment='center',
+                     color='red')
 
-        dropoutrates.append(params['dropoutrate'])
-        featuremaps.append(params['featuremaps'])
-        bestepochs.append(bestepoch_idx + 1)
     ax_main = plt.gca()
 
     # colorbar
@@ -431,12 +424,6 @@ def plot_and_table_hyper_from_folder(folder):
 
     # main axis again
     plt.sca(ax_main)
-    # runtime contour
-    # triang_feature_droprate = matplotlib.tri.Triangulation(featuremaps, dropoutrates)
-    # plt.tricontour(triang_feature_droprate, bestepochs, colors='k') #, levels=[10, 15, 20])
-    # cs = plt.tricontour(featuremaps, dropoutrates, np.array(bestepochs, dtype=np.int), 4, colors='lightgray')  # , levels=[10, 15, 20])
-    # fmt = matplotlib.ticker.FormatStrFormatter("%d")
-    # plt.clabel(cs, cs.levels, fmt=fmt)
     # config
     plt.xlim(0, 160)
     plt.xlabel('number of featuremaps', fontsize=mediumfontsize)
@@ -456,7 +443,7 @@ def plot_and_table_hyper_from_folder(folder):
     # filling hcombs_csv / hcombs_extra based on previously filled hyperparam_combinations
     for (results, params) in hyperparam_combinations:
         # ignore running experiments
-        if params['finished']:
+        if params['finished']: # or os.path.exists(os.path.join(folder, params['name'], 'results.h5')):
             # extract name fold from fold-specific name
             split = params['name'].split('_')
             fold = split[-1].replace('vf', '')
@@ -514,11 +501,11 @@ def plot_and_table_hyper_from_folder(folder):
                 hcombs_csv[name]['bestepoch_v{}'.format(fold)] = 0
                 hcombs_csv[name]['epochs_v{}'.format(fold)] = 0
         # ensuring level is set correctly
-        if row['level'] == 3:
+        if hcombs_csv[name]['level'] == 3:
             assert hcombs_csv[name]['bac_v2'] > 0. and hcombs_csv[name]['bac_v4'] > 0.
-        elif row['level'] == 2:
+        elif hcombs_csv[name]['level'] == 2:
             assert hcombs_csv[name]['bac_v2'] > 0. and hcombs_csv[name]['bac_v4'] == 0.
-        elif row['level'] == 1:
+        elif hcombs_csv[name]['level'] == 1:
             assert hcombs_csv[name]['bac_v2'] == 0. and hcombs_csv[name]['bac_v4'] == 0.
 
         # statistics from stats dict (here we do not have the additional 0's => simply mean/std)
