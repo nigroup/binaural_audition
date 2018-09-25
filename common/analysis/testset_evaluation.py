@@ -1,6 +1,6 @@
 # this plotting code is shared by heiner/changbin/moritz
-# => input: sensitivity and specificity per scene per class each as array with shape (nscenes, nclasses) = (168, 13)
-# => output: each function creates a plot (that can be put into a figure/subplot as determined by calling code)
+# function that should be used: evaluate_testset (uses the other functions)
+
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -295,9 +295,15 @@ def plot_metric_over_nsrc_per_class(sens_per_scene_class, spec_per_scene_class, 
     # TODO: plotting stuff here -- without plt.figure / without plt.savefig
 
 # plot testset evaluation and save csv files
+# => input: sensitivity and specificity per scene per class each
+#           of the two as array with shape (nscenes, nclasses) = (168, 13)
 def evaluate_testset(sens_per_scene_class, spec_per_scene_class, name, folder):
     plt.figure()
     plt.suptitle('test set evaluation: {}'.format(name))
+
+    # TODO: save all plotted arrays also to a file in folder that can be loaded in python or matlab (e.g. hdf5)
+    # => the functions called below could save these arrays by themselves or return an array
+    #    that is collected and written to disk
 
     plt.subplot(3, 3, 1)
     plt.title('BAC')
