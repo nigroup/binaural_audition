@@ -118,13 +118,13 @@ class MetricsCallback(Callback):
         self.loss_valid.append(logs['val_loss'])
 
         # calculate and extract training metrics
-        metrics_training = calculate_metrics(self.model.scene_instance_id_metrics_dict_train)
+        metrics_training = calculate_metrics(self.model.scene_instance_id_metrics_dict_train, self.myparams)
         for metric, value in metrics_training.items():
             if metric in self.metrics_train:
                 self.metrics_train[metric].append(value)
 
         # calculate and extract validation metrics
-        metrics_validation = calculate_metrics(self.model.scene_instance_id_metrics_dict_eval)
+        metrics_validation = calculate_metrics(self.model.scene_instance_id_metrics_dict_eval, self.myparams)
         for metric, value in metrics_validation.items():
             if metric in self.metrics_valid:
                 self.metrics_valid[metric].append(value)

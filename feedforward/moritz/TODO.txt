@@ -1,6 +1,8 @@
 TODO
 
 1) BLOCKBASED
+- check scene weights (train and test)
+
 - error fixing (test set scene instance numbering):
           File "training.py", line 418, in <module>
             initial_epoch=init_epoch)
