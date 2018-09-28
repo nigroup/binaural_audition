@@ -226,9 +226,14 @@ except:
 
 # control GPU memory allocation for debugging or running multiple experiments per GPU
 # K.clear_session() # to prevent memory leak
-import tensorflow as tf
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
+# import tensorflow as tf
+# config = tf.ConfigProto()
+# config.gpu_options.allow_growth = True
+# session = tf.Session(config=config)
+# K.clear_session() # to prevent memory leak
+# import tensorflow as tf
+# config = tf.ConfigProto()
+# config.gpu_options.allow_growth = True
 # #config.gpu_options.per_process_gpu_memory_fraction = 0.4999
 # # if params['batchsize'] == 64:
 # #     config.gpu_options.per_process_gpu_memory_fraction = 0.399
@@ -236,7 +241,7 @@ config.gpu_options.allow_growth = True
 # #     config.gpu_options.per_process_gpu_memory_fraction = 0.6
 # # else:
 # #     config.gpu_options.allow_growth = True
-session = tf.Session(config=config)
+# session = tf.Session(config=config)
 # K.clear_session() # to prevent memory leak
 
 
