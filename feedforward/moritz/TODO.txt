@@ -1,6 +1,24 @@
 TODO
 
 1) BLOCKBASED
+- error fixing (test set scene instance numbering):
+          File "training.py", line 418, in <module>
+            initial_epoch=init_epoch)
+          File "/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/feedforward/moritz/generator_extension.py", line 338, in fit_and_predict_generator_with_sceneinst_metrics
+            callbacks.on_epoch_end(epoch, epoch_logs)
+          File "/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py",
+        line 77, in on_epoch_end
+            callback.on_epoch_end(epoch, logs)
+          File "/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/feedforward/moritz/training_callback.py", line 127, in on_epoch_end
+            metrics_validation = calculate_metrics(self.model.scene_instance_id_metrics_dict_eval)
+          File "/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/feedforward/moritz/myutils.py", line 35, in calculate_metrics
+            ret=('final', 'per_class', 'per_scene', 'per_class_scene'))
+          File "/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/recurrent/models/heiner/accuracy_utils.py", line 41, in val_accuracy
+            calculate_class_accuracies_per_scene_number(scene_instance_id_metrics_dict, mode, metric=metric)
+          File "/mnt/antares_raid/home/augustin/binaural_audition.gitcopy/recurrent/models/heiner/accuracy_utils.py", line 135, in calculate_class_accuracies_per_scene_number
+            scene_number_class_accuracies_metrics[scene_number] += metrics
+        IndexError: index 80 is out of bounds for axis 0 with size 80
+
 - evaluationsplotting (ggf. zusammen mit changbin) machen
 
 - finales modell auswählen, ggf. nachtrainieren
