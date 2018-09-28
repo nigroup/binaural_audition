@@ -181,6 +181,7 @@ if params['loadparams'] != 'negative':
     del loaded_params['maxepochs']
     del loaded_params['gpuid']
     del loaded_params['validfold']
+    del loaded_params['batchlength']
     # remove further params since we want to generate/fetch them from scratch:
     del loaded_params['name']
     del loaded_params['path']
