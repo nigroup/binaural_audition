@@ -613,13 +613,14 @@ def plot_test_experiment_from_folder(folder):
     results = load_h5(os.path.join(folder, 'results.h5'))
     assert '_vf-1' in folder # ensure the 'validation' set is the test set
 
-    sens_per_scene_class = results['val_sens_spec_per_class_scene'][:,:,0]
-    spec_per_scene_class = results['val_sens_spec_per_class_scene'][:, :, 1]
+    sens_per_scene_class = results['val_sens_spec_per_class_scene'][-1, :, :, 0]
+    spec_per_scene_class = results['val_sens_spec_per_class_scene'][-1, :, :, 1]
 
-    name = 'tcn:{}'.format(params['name'])
+    name = 'TCN (SUBOPTIMAL AND NOT YET FINISHED COMBINATION: {})'.format(params['name'])
 
-    evaluate_testset(sens_per_scene_class, spec_per_scene_class, name, folder)
+    plotconfig = {'class_std': False, 'show_explanation': True}
 
+    evaluate_testset(folder, name, plotconfig, sens_per_scene_class, spec_per_scene_class, collect=True)
 
 def main():
     parser = argparse.ArgumentParser()
