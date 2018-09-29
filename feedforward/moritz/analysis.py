@@ -379,7 +379,7 @@ def plot_and_table_hyper_from_folder(folder):
     cmap_wbac = plt.get_cmap('jet')
 
     wbac_min = 0.81
-    wbac_max = 0.86
+    wbac_max = 0.85
 
     smallfontsize = 6
     mediumfontsize = 8
@@ -617,6 +617,7 @@ def plot_test_experiment_from_folder(folder):
     spec_per_scene_class = results['val_sens_spec_per_class_scene'][-1, :, :, 1]
 
     name = 'TCN (SUBOPTIMAL AND NOT YET FINISHED COMBINATION: {})'.format(params['name'])
+    # TODO: add maxepochs to name, remove early stopping and validation fold, and add some more relevant params
 
     plotconfig = {'class_std': False, 'show_explanation': True}
 
