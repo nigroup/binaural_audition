@@ -480,6 +480,10 @@ class BatchLoader(HeinerDataloader):
 
             runtime_remove_block += time()-t_start
 
+        # handling a case (relevant e.g. for blocklength 2000) that has a single (empty) remaining scene instance
+        if blockid==0: # and remove_buffer
+            raise StopIteration
+
         t_start = time()
         effective_batchsize = blockid # after the while loop blockid corresponds to the no of blocks taken
 
@@ -525,17 +529,17 @@ class BatchLoader(HeinerDataloader):
 if __name__ == '__main__':
 
     # ### train
-    mode = 'train'
-    folds = [1, 2, 3, 4, 5, 6] # final model
+    # mode = 'train'
+    # folds = [1, 2, 3, 4, 5, 6] # final model
     # folds = [1, 2, 4, 5, 6] # lvl1
     # folds = [1, 2, 3, 5, 6] # lvl2
     # folds = [1, 3, 4, 5, 6] # lvl3
-    scenes = list(range(1, 80 + 1))  # -1 # all scenes (80 for train)
+    # scenes = list(range(1, 80 + 1))  # -1 # all scenes (80 for train)
 
     # ### test
-    # mode = 'test'
-    # folds = [7, 8] # test folds
-    # scenes = list(range(1, 168 + 1)) # all 168 test scenes
+    mode = 'test'
+    folds = [7, 8] # test folds
+    scenes = list(range(1, 168 + 1)) # all 168 test scenes
 
     # ### val/toy
     # mode = 'val'
@@ -550,7 +554,7 @@ if __name__ == '__main__':
     params = {'sceneinstancebufsize': 200, #2000,
               'historylength': 1025,
               'batchsize': 128,
-              'batchlength': 2500,
+              'batchlength': 2000, #2500,
               'instantlabels': False,
               'maxepochs': 1,
               'noinputstandardization': not inputstd,
@@ -560,12 +564,12 @@ if __name__ == '__main__':
                                                                                                       folds, scenes))
 
     t_start_allbatches = time()
-    batchloader_training = BatchLoader(params=params, mode=mode, fold_nbs=folds,
-                                       scene_nbs=scenes, batchsize=params['batchsize'],
-                                       seed=1)  # seed for testing
+    batchloader = BatchLoader(params=params, mode=mode, fold_nbs=folds,
+                              scene_nbs=scenes, batchsize=params['batchsize'],
+                              seed=1)  # seed for testing
 
     # for checking input standardization
-    no_batches = batchloader_training.batches_per_epoch * params['maxepochs']
+    no_batches = batchloader.batches_per_epoch * params['maxepochs']
     mean_vec_batches = np.zeros((160, no_batches))
     std_vec_batches = np.zeros_like(mean_vec_batches)
     no_unmasked_features = np.zeros(no_batches, dtype=np.int)
@@ -575,11 +579,11 @@ if __name__ == '__main__':
     batchcount = 0
     t_start_batch = time()
 
-    for batch_x, batch_y in batchloader_training:
+    for batch_x, batch_y in batchloader:
         batchcount += 1
-        print('received batch (size {}) {}/{} in epoch {}/{} in {:.2f} sec'.format(batch_x.shape[0], batchloader_training.batchid % batchloader_training.batches_per_epoch + 1,
-                                                           batchloader_training.batches_per_epoch, batchloader_training.epoch+1, params['maxepochs'],
-                                                                                   time()-t_start_batch))
+        print('received batch (size {}) {}/{} in epoch {}/{} in {:.2f} sec'.format(batch_x.shape[0], batchloader.batchid % batchloader.batches_per_epoch + 1,
+                                                                                   batchloader.batches_per_epoch, batchloader.epoch + 1, params['maxepochs'],
+                                                                                   time() - t_start_batch))
         batch_x_unmasked = batch_x[batch_y[:, :, 0, 1] != params['mask_value']]
         no_unmasked_features[batchcount-1] = len(batch_x_unmasked)
         print('batch has {} unmasked of {} total feature vectors'.
@@ -588,7 +592,7 @@ if __name__ == '__main__':
         mean_vec_batches[:, batchcount-1] = np.mean(batch_x_unmasked, axis=0)
         std_vec_batches[:, batchcount-1] = np.std(batch_x_unmasked, axis=0)
         t_start_batch = time()
-    assert batchcount == batchloader_training.batches_per_epoch*params['maxepochs']
+    assert batchcount == batchloader.batches_per_epoch * params['maxepochs']
     print('...done receiving {} batches of {} epochs in {:.2f} seconds'.format(batchcount, params['maxepochs'],
                                                                                time() - t_start_allbatches))
 
