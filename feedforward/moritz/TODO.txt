@@ -1,7 +1,9 @@
 TODO
 
 1) BLOCKBASED
-- check scene weights (train and test)
+- choose for final training (max) epochs as maximum or mean+1std or median over bestepochs (check for all three folds the accuracy dynamics)
+=> idea: - we do not have very fast overfitting (a few epochs too long seem not too hurt too much) but a few epochs to little do!
+=>       - furthermore the final model uses more data which potentially might take more epochs to catch (but each epoch is larger so dunno)
 
 - evaluate also first instant label and/or historylength 129 runs
 

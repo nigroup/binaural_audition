@@ -504,9 +504,15 @@ def plot_and_table_hyper_from_folder(folder):
         if hcombs_csv[name]['level'] == 3:
             assert hcombs_csv[name]['bac_v2'] > 0. and hcombs_csv[name]['bac_v4'] > 0.
         elif hcombs_csv[name]['level'] == 2:
-            assert hcombs_csv[name]['bac_v2'] > 0. and hcombs_csv[name]['bac_v4'] == 0.
+            # do not hard assert since slow machines with fold3 could be later than fast machines with fold2 or fold4
+            #assert hcombs_csv[name]['bac_v2'] > 0. and hcombs_csv[name]['bac_v4'] == 0.
+            if not (hcombs_csv[name]['bac_v2'] > 0. and hcombs_csv[name]['bac_v4'] == 0.):
+                hcombs_csv[name]['level'] = -1
         elif hcombs_csv[name]['level'] == 1:
-            assert hcombs_csv[name]['bac_v2'] == 0. and hcombs_csv[name]['bac_v4'] == 0.
+            # do not hard assert since slow machines with fold3 could be later than fast machines with fold2 or fold4
+            #assert hcombs_csv[name]['bac_v2'] == 0. and hcombs_csv[name]['bac_v4'] == 0.
+            if not (hcombs_csv[name]['bac_v2'] == 0. and hcombs_csv[name]['bac_v4'] == 0.):
+                hcombs_csv[name]['level'] = -1
 
         # statistics from stats dict (here we do not have the additional 0's => simply mean/std)
         hcombs_csv[name]['bac_avg'] = np.mean(hcombs_csv_extra[name]['bac'])
