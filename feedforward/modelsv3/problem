@@ -1,0 +1,8 @@
+Data:
+- count expected gb
+- count expected timesteps
+
+
+each loader:
+- count gigabytes
+- count timesteps
