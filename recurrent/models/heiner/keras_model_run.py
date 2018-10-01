@@ -582,8 +582,10 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
             return gpu
 
         old_stage = h['STAGE']
+        old_finished = h['finished']
         ID, h, already_contained = hcm.get_hcomb_id(h)
         h.STAGE = old_stage
+        h.finished = old_finished
 
         if h.finished:
             print('Hyperparameter Combination for this model version already evaluated. ABORT.')
