@@ -64,17 +64,16 @@ def _create_weights_array(save_path):
 
 def mask_from(y_true, mask_val):
     mask = K.cast(K.not_equal(y_true, mask_val), 'float32')
-    count_unmasked = K.sum(mask)
-    return mask, count_unmasked
+    return mask
 
 
 def my_loss_builder(mask_val, loss_weights):
     def my_loss(y_true, y_pred):
         entropy = weighted_cross_entropy_with_logits(y_true, y_pred, K.constant(loss_weights, dtype='float32'))
-        mask, count_unmasked = mask_from(y_true, mask_val)
-        masked_entropy = entropy * mask
-        loss = K.sum(masked_entropy) / count_unmasked
-        return loss
+        mask = mask_from(y_true, mask_val)
+        entropy *= mask
+        entropy /= K.mean(mask)
+        return entropy
     return my_loss
 
 

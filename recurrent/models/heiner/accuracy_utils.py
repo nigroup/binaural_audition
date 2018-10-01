@@ -142,9 +142,9 @@ def calculate_class_accuracies_per_scene_number(scene_instance_ids_metrics_dict,
 
     scene_number_class_accuracies_metrics[vs] /= scene_number_count[vs, np.newaxis, np.newaxis]
     sensitivity[vs] = scene_number_class_accuracies_metrics[vs, :, 0] / \
-                  (scene_number_class_accuracies_metrics[vs, :, 0]+scene_number_class_accuracies_metrics[vs, :, 1])
+                      (scene_number_class_accuracies_metrics[vs, :, 0]+scene_number_class_accuracies_metrics[vs, :, 1])
     specificity[vs] = scene_number_class_accuracies_metrics[vs, :, 2] / \
-                  (scene_number_class_accuracies_metrics[vs, :, 2]+scene_number_class_accuracies_metrics[vs, :, 3])
+                      (scene_number_class_accuracies_metrics[vs, :, 2]+scene_number_class_accuracies_metrics[vs, :, 3])
 
     return_list = []
 

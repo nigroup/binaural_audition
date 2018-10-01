@@ -106,7 +106,7 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
         ################################################# COMPILE MODEL
 
         adam = Adam(lr=h.LEARNING_RATE, clipnorm=1.)
-        model.compile(optimizer=adam, loss=my_loss, metrics=None)
+        model.compile(optimizer=adam, loss=my_loss, metrics=None, sample_weight_mode='temporal')
 
         print('\nModel compiled.\n')
 

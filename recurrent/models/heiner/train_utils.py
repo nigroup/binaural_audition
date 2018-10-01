@@ -14,6 +14,20 @@ from heiner import model_extension as m_ext
 from heiner.dataloader import DataLoader
 
 
+def calculate_sample_weights_batch(y_scene_instance_ids, mode):
+    weights_per_scene = acc_u.get_scene_weights(mode)
+    weights_per_scene /= np.mean(weights_per_scene)
+
+    # commented out masking because masked time steps already dealed with in my_loss_builder
+    # here is no class-wise masking possible
+
+    # masked_time_steps = (y_scene_instance_ids != mask_val).astype(np.float32)
+    scenes_in_batch = (y_scene_instance_ids // 1e5).astype(np.int)
+    weights = weights_per_scene[:, 0][scenes_in_batch-1]    # * masked_time_steps
+
+    return weights
+
+
 def create_generator(dloader):
     while True:
         # ret is either b_x, b_y or b_x, b_y, keep_states
@@ -373,8 +387,11 @@ class Phase:
                 elapsed_time_tf_graph_apply_dropout = time.time() - iteration_start_time_tf_graph_apply_dropout
 
                 iteration_start_time_tf_graph_call = time.time()
-                loss, out_logits, gradient_norm = m_ext.train_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0],
-                                                                            calc_global_gradient_norm=self.calc_global_gradient_norm)
+                loss, out_logits, gradient_norm = m_ext.train_and_predict_on_batch(
+                    self.model, b_x, b_y[:, :, :, 0],
+                    sample_weight=calculate_sample_weights_batch(b_y[:, :, 0, 1], 'train'),
+                    calc_global_gradient_norm=self.calc_global_gradient_norm
+                )
 
                 if np.isnan(loss):
                     return True, None
@@ -401,7 +418,10 @@ class Phase:
                         time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph_dropout_load_original))
                 )
             else:
-                loss, out_logits = m_ext.test_and_predict_on_batch(self.model, b_x, b_y[:, :, :, 0])
+                loss, out_logits = m_ext.test_and_predict_on_batch(
+                    self.model, b_x, b_y[:, :, :, 0],
+                    sample_weight=calculate_sample_weights_batch(b_y[:, :, 0, 1], 'val')
+                )
 
                 if np.isnan(loss):
                     return True, None
