@@ -578,7 +578,7 @@ def evaluate_testset(folder, name, plotconfig={}, sens_per_scene_class=None, spe
     suptitle = 'test set evaluation: {}'.format(name)
     if config['show_explanation']:
         suptitle += ('\nfirst row: average w.r.t. azimuth and class, standard dev w.r.t. '+
-                     'class after azimuth-averaging;'+
+                     'azimuth after class-avg / class after azimuth-avg;'+
                      '\nsecond row: average w.r.t. azimuth and weighted nSrc; '+
                      'last row: average w.r.t. azimuth and SNR')
     plt.suptitle(suptitle, horizontalalignment='center', fontsize=config['mediumfontsize'])
