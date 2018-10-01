@@ -26,7 +26,8 @@ def train_accuracy(scene_instance_id_metrics_dict, metric='BAC'):
     return calculate_accuracy_final(class_accuracies), sens_spec_class_scene
 
 
-def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_scene')):
+def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_scene'),
+                 mode='val'): # option to pass mode='test' is required by moritz for using test set as validation set
     available_ret = ('final', 'per_class', 'per_class_scene', 'per_scene', 'per_class_scene_scene_instance')
     for r in ret:
         if r not in available_ret:
@@ -34,7 +35,6 @@ def val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=('f
 
     ret_dict = dict()
 
-    mode = 'val'
     ret_dict['per_class_scene_scene_instance'] = scene_instance_id_metrics_dict
 
     scene_number_class_accuracies, sens_class_scene, spec_class_scene = \

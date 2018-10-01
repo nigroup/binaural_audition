@@ -27,12 +27,13 @@ def metrics_per_batch_thread_handler(label_queue, scene_instance_id_metrics_dict
                                                                               y_pred, y, mask_value)
 
 
-def calculate_metrics(scene_instance_id_metrics_dict):
+def calculate_metrics(scene_instance_id_metrics_dict, params):
 
     wbac, wbac2, wbac_per_class, wbac2_per_class, bac_per_scene, bac2_per_scene, \
     bac_per_class_scene, wbac2_per_class_scene, sens_spec_per_class_scene, sens_spec_per_class = \
             heiner_val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'),
-                        ret=('final', 'per_class', 'per_scene', 'per_class_scene'))
+                        ret=('final', 'per_class', 'per_scene', 'per_class_scene'),
+                        mode='val' if params['validfold'] != -1 else 'test')
 
     # collect into dict and return
     metrics = {'wbac': wbac,                                            # balanced accuracy: scalar (weighted scene avg, class avg)

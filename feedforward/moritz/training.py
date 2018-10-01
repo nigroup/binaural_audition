@@ -54,7 +54,7 @@ parser.add_argument('--gpuid', type=int, default=0, help='ID (cf. nvidia-smi) of
 
 # architecture
 parser.add_argument('--featuremaps', type=int, default=50,
-                        help='number of feature maps per layer')
+                        help='number of feature maps per layer; remark: with other defaults 140 is too large to fit in 12G GPU mem; 139 should fit but less than 130 is safer')
 parser.add_argument('--dropoutrate', type=float, default=0.0,
                         help='rate of the two spatial dropout layers within each residual block')
 parser.add_argument('--kernelsize', type=int, default=3,
@@ -111,6 +111,7 @@ if args.debug:
     print('\n!!!!!!!!!!!!!!!!!!!!! DEBUGING MODE RUNNING !!!!!!!!!!!!!!!\n\n') # remove also following lines
     time.sleep(1.5)
     override_params['featuremaps'] = 10
+    override_params['historylength'] = 100 # for kernelsize 3: 1000 => 1025 (10 layers) ; 100 => 129 (7 layers)
     override_params['scenes_trainvalid'] = [1]
     override_params['scenes_test'] = [1]
     override_params['trainfolds'] = [1]
@@ -180,6 +181,7 @@ if params['loadparams'] != 'negative':
     del loaded_params['maxepochs']
     del loaded_params['gpuid']
     del loaded_params['validfold']
+    del loaded_params['batchlength']
     # remove further params since we want to generate/fetch them from scratch:
     del loaded_params['name']
     del loaded_params['path']
@@ -225,9 +227,14 @@ except:
 
 # control GPU memory allocation for debugging or running multiple experiments per GPU
 # K.clear_session() # to prevent memory leak
-import tensorflow as tf
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
+# import tensorflow as tf
+# config = tf.ConfigProto()
+# config.gpu_options.allow_growth = True
+# session = tf.Session(config=config)
+# K.clear_session() # to prevent memory leak
+# import tensorflow as tf
+# config = tf.ConfigProto()
+# config.gpu_options.allow_growth = True
 # #config.gpu_options.per_process_gpu_memory_fraction = 0.4999
 # # if params['batchsize'] == 64:
 # #     config.gpu_options.per_process_gpu_memory_fraction = 0.399
@@ -235,7 +242,7 @@ config.gpu_options.allow_growth = True
 # #     config.gpu_options.per_process_gpu_memory_fraction = 0.6
 # # else:
 # #     config.gpu_options.allow_growth = True
-session = tf.Session(config=config)
+# session = tf.Session(config=config)
 # K.clear_session() # to prevent memory leak
 
 
