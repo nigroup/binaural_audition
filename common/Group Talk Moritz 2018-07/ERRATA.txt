@@ -1,0 +1,4 @@
+cuDNN compatible LSTM variational dropout
+- forward pass is correct
+- backward pass is not correct but unproblematic since:
+- gradient is correct if mask is finally applied to (otherwise incorrect) gradient
