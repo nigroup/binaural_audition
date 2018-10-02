@@ -313,7 +313,7 @@ def collect_metric_vs_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, m
 def collect_metric_vs_snr_per_class(sens_per_scene_class, spec_per_scene_class, metrics_shelve):
     '''
     extract from the given arrays and test scene params the data allowing
-    to plot a curve as a function of SNR for each class
+    to plot a curve as a function of SNR for each class (ignoring nsrc=1 in the avg)
 
     :param sens_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13)
     :param spec_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13)
@@ -327,7 +327,7 @@ def collect_metric_vs_snr_per_class(sens_per_scene_class, spec_per_scene_class, 
     test_scenes = get_test_scene_params()
 
     SNRs_all = [-20, -10, 0, 10, 20]
-    nSrcs_all = [1, 2, 3, 4]
+    nSrcs_wo_1 = [2, 3, 4]
 
     for metric_name in ['BAC', 'sens', 'spec']:
 
@@ -344,25 +344,21 @@ def collect_metric_vs_snr_per_class(sens_per_scene_class, spec_per_scene_class, 
             no_nSrc = {}
             # append all scenes with nSrc,SNR to the previous list
             for sceneid, (nSrc_scene, SNR_scene, azimuth_scene) in enumerate(test_scenes):
-                # correction: nSrc 1 => SNR fixed 0; nSrc >1 => second element contains SNR w.r.t master
+                # since nSrc 1 is excluded => SNR fixed 0; nSrc >1 => second element contains SNR w.r.t master
                 SNR_scene = 0 if not isinstance(SNR_scene, list) else SNR_scene[1]
                 if SNR == SNR_scene:
                     metric[SNR][(nSrc_scene, sceneid)] = metric_per_scene[sceneid, :]  # classes still retained
 
-            for nSrc in nSrcs_all:
+            for nSrc in nSrcs_wo_1:
                 scenes_here = [(nSrc_here, az_here) for nSrc_here, az_here in metric[SNR].keys() if nSrc_here == nSrc]
                 no_nSrc[nSrc] = len(scenes_here)
-                if no_nSrc[nSrc] > 0:
-                    metric_mean_over_azimuth_per_nSrc[SNR][nSrc] = \
+                metric_mean_over_azimuth_per_nSrc[SNR][nSrc] = \
                         np.mean([metric[SNR][(nSrc, az_here)] for nSrc_here, az_here in scenes_here],
                                 axis=0) # nSrc_here = nSrc by previous line
-                else:
-                    metric_mean_over_azimuth_per_nSrc[SNR][nSrc] = np.zeros(13) # will be multiplied with zero anyway below
 
-
-            sum_no_nSrc = sum([no_nSrc[nSrc] for nSrc in nSrcs_all])
+            sum_no_nSrc = sum([no_nSrc[nSrc] for nSrc in nSrcs_wo_1])
             metric_both_mean[SNR] = np.sum([metric_mean_over_azimuth_per_nSrc[SNR][nSrc]*no_nSrc[nSrc]/float(sum_no_nSrc)
-                                         for nSrc in nSrcs_all],
+                                         for nSrc in nSrcs_wo_1],
                                            axis=0)
 
         metric_both_mean_plot = np.array([metric_both_mean[SNR] for SNR in SNRs_all])
@@ -442,14 +438,18 @@ def plot_metric_vs_snr_per_nsrc(metric_name, metrics_shelve, config):
     SNRs_all = [-20, -10, 0, 10, 20]
     nSrcs_all = [1, 2, 3, 4]
 
+    curves1 = np.zeros((4,5), dtype=np.float) # TODO: remove me
+
     for i, nSrc in enumerate(nSrcs_all):
         metric_both_mean_plot = metrics_shelve['metric_vs_snr_per_nsrc'][metric_name + '_mean'][nSrc]
         metric_class_std_plot = metrics_shelve['metric_vs_snr_per_nsrc'][metric_name + '_std_class'][nSrc]
         metric_azimuth_std_plot = metrics_shelve['metric_vs_snr_per_nsrc'][metric_name + '_std_azimuth'][nSrc]
         metric_no_azimuths = metrics_shelve['metric_vs_snr_per_nsrc'][metric_name + '_no_azimuths'][nSrc]
 
+        curves1[i,:] = metric_both_mean_plot  # TODO: remove me
+
         # plot mean (class and azimuth)
-        plt.plot(SNRs_all, metric_both_mean_plot, marker='o', color=config['colors_nSrc'][nSrc],
+        plt.plot(SNRs_all, metric_both_mean_plot, marker='o' if nSrc > 1 else None, color=config['colors_nSrc'][nSrc],
                  label='nSrc {}'.format(nSrc))
 
         # plot std over class (azimuth avg)
@@ -476,18 +476,28 @@ def plot_metric_vs_snr_per_nsrc(metric_name, metrics_shelve, config):
 
     plt.ylim(config['ylim_'+metric_name])
     yaxis_formatting(config)
+    plt.xticks(SNRs_all)
     plt.xlabel('SNR', fontsize=config['smallfontsize'])
     plt.tick_params(axis='both', which='major', labelsize=config['smallfontsize'])
     plt.tick_params(axis='both', which='minor', labelsize=config['smallfontsize'])
 
     if metric_name == 'BAC':
+        # chance line
+        plt.plot(SNRs_all, [0.5]*len(SNRs_all), '--', color='gray', label='chance level')
+
         if config['show_class_std']:
             handles, labels = plt.gca().get_legend_handles_labels()
-            order = [0, 1, 5, 2, 3, 4]
+            order = [0, 1, 6, 2, 3, 4, 5]
             plt.legend([handles[idx] for idx in order], [labels[idx] for idx in order],
                        loc='lower right', fontsize=config['smallfontsize'])
         else:
-            plt.legend(loc='lower right', fontsize=config['smallfontsize'])
+            #plt.legend(loc='lower right', fontsize=config['smallfontsize'])
+            handles, labels = plt.gca().get_legend_handles_labels()
+            order = [0, 1, 2, 3, 5, 4]
+            plt.legend([handles[idx] for idx in order], [labels[idx] for idx in order],
+                       loc='lower right', fontsize=config['smallfontsize'])
+
+    return curves1
 
 def plot_metric_vs_snr_per_class(metric_name, metrics_shelve, config):
     '''
@@ -500,14 +510,18 @@ def plot_metric_vs_snr_per_class(metric_name, metrics_shelve, config):
     '''
 
     SNRs_all = [-20, -10, 0, 10, 20]
+    curves2 = np.zeros((13,5), dtype=np.float) # TODO: remove me
     for i, class_name in enumerate(get_class_names(short=True)):
         metric_both_mean_plot = metrics_shelve['metric_vs_snr_per_class'][metric_name + '_mean'][:, i]
+
+        curves2[i, :] = metric_both_mean_plot  # TODO: remove me
 
         plt.plot(SNRs_all, metric_both_mean_plot, marker='o', color=config['colors_class'][i],
                  label='{}'.format(class_name))
 
     plt.ylim(config['ylim_' + metric_name])
     yaxis_formatting(config)
+    plt.xticks(SNRs_all)
     plt.xlabel('SNR', fontsize=config['smallfontsize'])
     plt.tick_params(axis='both', which='major', labelsize=config['smallfontsize'])
     plt.tick_params(axis='both', which='minor', labelsize=config['smallfontsize'])
@@ -515,6 +529,7 @@ def plot_metric_vs_snr_per_class(metric_name, metrics_shelve, config):
     if metric_name == 'BAC':
         plt.legend(loc='lower right', ncol=3, fontsize=config['smallfontsize'])
 
+    return curves2
 
 def plot_metric_vs_nsrc_per_class(metric_name, metrics_shelve, config):
     '''
@@ -591,7 +606,7 @@ def evaluate_testset(folder, name, plotconfig={}, sens_per_scene_class=None, spe
 
     plt.subplot(3, 3, 1)
     plt.title('BAC', fontsize=config['mediumfontsize'])
-    plot_metric_vs_snr_per_nsrc('BAC', metrics_shelve, config)
+    curves1 = plot_metric_vs_snr_per_nsrc('BAC', metrics_shelve, config)
     plt.subplot(3, 3, 2)
     plt.title('sensitivity', fontsize=config['mediumfontsize'])
     plot_metric_vs_snr_per_nsrc('sens', metrics_shelve, config)
@@ -600,7 +615,7 @@ def evaluate_testset(folder, name, plotconfig={}, sens_per_scene_class=None, spe
     plot_metric_vs_snr_per_nsrc('spec', metrics_shelve, config)
 
     plt.subplot(3, 3, 4)
-    plot_metric_vs_snr_per_class('BAC', metrics_shelve, config)
+    curves2 = plot_metric_vs_snr_per_class('BAC', metrics_shelve, config)
     plt.subplot(3, 3, 5)
     plot_metric_vs_snr_per_class('sens', metrics_shelve, config)
     plt.subplot(3, 3, 6)
@@ -616,3 +631,19 @@ def evaluate_testset(folder, name, plotconfig={}, sens_per_scene_class=None, spe
     plt.savefig(os.path.join(folder, filename_prefix+'.png'))
 
     metrics_shelve.close()
+
+    # DEBUG: TODO: fix and remove me
+    print('curves1: {}'.format(curves1))
+    print('curves2: {}'.format(curves2))
+
+    # mean_curve1 is the average of the three plotted curves for nSrc=2,3,4 of figure top left
+    mean_curve1 = np.mean(curves1[1:, :], axis=0) # without nsrc=1
+    print('mean_curve1: {}'.format(mean_curve1))
+
+    # mean_curve2 is the average of the 13 plotted class curves of figure middle left
+    mean_curve2 = np.mean(curves2, axis=0) # is already without nsrc=1
+    print('mean_curve2: {}'.format(mean_curve2))
+
+    # they should be identical but differ too much:
+    mean_curve2 = np.mean(curves2, axis=0)  # is already without nsrc=1
+    print('difference (should be zero): \n  mean_curve1 - mean_curve2: {}'.format(mean_curve1-mean_curve2))
