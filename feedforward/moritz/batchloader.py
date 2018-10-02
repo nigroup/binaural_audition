@@ -151,8 +151,8 @@ class BatchLoader(HeinerDataloader):
         assert self.params['sceneinstancebufsize'] > self.params['batchsize']
 
         # calculate or load filename->scene instance id, filename->scene instance length, filename->positions,overlaps dicts
-        self._scene_instance_ids_dict()
-        self._length_dict()
+        self.scene_instance_ids_dict_()
+        self.length_dict_()
         self.block_positions_and_overlaps_dict = None # the above are initialized in HeinerDataloader
         self._block_positions_and_overlaps_dict()
 
@@ -270,7 +270,7 @@ class BatchLoader(HeinerDataloader):
         new_dict = {}
 
         # we need the scene instance lengths for each filename
-        self._length_dict()
+        self.length_dict_()
 
         all_existing_files = glob.glob(self.pickle_path_pattern)
         all_existing_files = sorted(all_existing_files)

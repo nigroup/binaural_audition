@@ -28,6 +28,7 @@ from keras import callbacks as cbks
 from heiner.model_extension import train_and_predict_on_batch as heiner_train_and_predict_on_batch
 from heiner.model_extension import test_and_predict_on_batch as heiner_test_and_predict_on_batch
 from heiner.accuracy_utils import calculate_class_accuracies_metrics_per_scene_instance_in_batch as heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch
+from heiner.train_utils import calculate_sample_weights_batch as heiner_calculate_sample_weights_batch
 from myutils import metrics_per_batch_thread_handler
 
 def fit_and_predict_generator_with_sceneinst_metrics(model,
@@ -254,9 +255,19 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
 
                 # remark on label shape: last (fourth) dimension contains in 0 the true labels, in 1 the corresponding sceneinstid (millioncode)
                 t_start = time()
+                
+                # set sample weights
+                if params['nosceneinstweights']:
+                    sample_weight = None
+                else:
+                    sample_weight = heiner_calculate_sample_weights_batch(
+                        y[:, :, 0, 1],
+                        generator.length_dict,
+                        generator.scene_instance_ids_dict,
+                        'train')
+
                 # run forward and backward pass and do the gradient descent step
-                batch_loss, y_pred_logits, gradient_norm = heiner_train_and_predict_on_batch(model, x, y[:, :, :, 0],
-                                                         calc_global_gradient_norm=not params['nocalcgradientnorm'])
+                batch_loss, y_pred_logits, gradient_norm = heiner_train_and_predict_on_batch(model, x, y[:, :, :, 0], sample_weight=sample_weight, calc_global_gradient_norm=not params['nocalcgradientnorm'])
                 runtime_train_and_predict_on_batch = time()-t_start
                 if batch_index >= skip_runtime_avg:
                     runtime_train_and_predict_on_batch_cumulated += runtime_train_and_predict_on_batch
@@ -314,7 +325,8 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                             multithreading_metrics,
                             validation_steps,
                             workers=0,
-                            verbose=1)
+                            verbose=1,
+                            batchloader_validation=validation_data)
                     else:
                         # No need for try/except because
                         # data has already been validated.
@@ -363,7 +375,8 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
                        max_queue_size=10,
                        workers=1,
                        use_multiprocessing=False,
-                       verbose=0):
+                       verbose=0,
+                       batchloader_validation=None):
     """See docstring for `Model.evaluate_generator`."""
     model._make_test_function()
 
@@ -453,9 +466,19 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
                                  'or (x, y). Found: ' +
                                  str(generator_output))
 
+            # set sample weights
+            if params['nosceneinstweights']:
+                sample_weight = None
+            else:
+                sample_weight = heiner_calculate_sample_weights_batch(
+                    y[:, :, 0, 1],
+                    batchloader_validation.length_dict,
+                    batchloader_validation.scene_instance_ids_dict,
+                    'val')
+            
             # run forward pass
             # remark on label shape: last (fourth) dimension contains in 0 the true labels, in 1 the corresponding sceneinstid (millioncode)
-            batch_loss, y_pred_logits = heiner_test_and_predict_on_batch(model, x, y[:, :, :, 0])
+            batch_loss, y_pred_logits = heiner_test_and_predict_on_batch(model, x, y[:, :, :, 0], sample_weight=sample_weight)
 
             model.val_loss_batch.append(batch_loss)
 

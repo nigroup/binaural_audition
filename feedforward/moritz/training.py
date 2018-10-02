@@ -67,6 +67,8 @@ parser.add_argument('--historylength', type=int, default=1000,
 parser.add_argument('--outputthreshold', type=float, default=0.5,
                         help='threshold for hard classification (above: classify as 1, below classify as 0)')
 
+parser.add_argument('--nosceneinstweights', action='store_true', default=False,
+                        help='disables weighting of each sample by relative inverse scene instance length and nsrc frequency')
 parser.add_argument('--weightnorm', action='store_true', default=False,
                         help='disables the weight norm version of the Adam optimizer, i.e., falls back to regular Adam')
 parser.add_argument('--learningrate', type=float, default=0.002,
@@ -120,6 +122,7 @@ if args.debug:
     override_params['maxepochs'] = 4
     override_params['earlystop'] = 2
     override_params['gpuid'] = 3
+    override_params['nosceneinstweights'] = False
     # test set (requires paramloading to retrieve final model params)
     # override_params['validfold'] = -1
     # override_params['loadparams'] = 'playground/n10_dr0.0000_bs128_wnFalse_bs128_bl2500_es2_vf3'
@@ -142,6 +145,30 @@ params['mask_value'] = MASK_VALUE
 initial_output = obtain_nextlarger_residuallayers_refining_historysize(params)
 
 # NAME
+
+# loading params
+if params['loadparams'] != 'negative':
+    print(('overriding params [except maxepochs, gpuid, validfold, name, path, server, finished, resume] '+
+           'with values from folder {}').format(params['loadparams']))
+    loaded_params = load_h5(os.path.join(params['loadparams'], 'params.h5'))
+    # take the next three params from cmdline or default
+    del loaded_params['maxepochs']
+    del loaded_params['gpuid']
+    del loaded_params['validfold']
+    del loaded_params['batchlength']
+    # remove further params since we want to generate/fetch them from scratch:
+    del loaded_params['name']
+    del loaded_params['path']
+    del loaded_params['server']
+    if 'finished' in loaded_params:
+        del loaded_params['finished']
+    if 'resume' in loaded_params:
+        del loaded_params['resume'] # prevent resuming only because the loaded model was resumed
+    # transform some params to proper types
+    loaded_params['kernelsize'] = loaded_params['kernelsize'].item()
+    # update params
+    params.update(loaded_params)
+
 
 name_short = 'n{}_dr{:.4f}_bs{}'.format(params['featuremaps'], params['dropoutrate'], params['batchsize'])
 name_long = name_short + '_wn{}_bs{}_bl{}_es{}'.format(params['weightnorm'],
@@ -172,28 +199,6 @@ if params['resume'] != 'negative':
     params['resume'] = resume_save
     params['path'] = resume_path
     params['name'] = resume_name
-
-if params['loadparams'] != 'negative':
-    print(('overriding params [except maxepochs, gpuid, validfold, name, path, server, finished, resume] '+
-           'with values from folder {}').format(params['loadparams']))
-    loaded_params = load_h5(os.path.join(params['loadparams'], 'params.h5'))
-    # take the next three params from cmdline or default
-    del loaded_params['maxepochs']
-    del loaded_params['gpuid']
-    del loaded_params['validfold']
-    del loaded_params['batchlength']
-    # remove further params since we want to generate/fetch them from scratch:
-    del loaded_params['name']
-    del loaded_params['path']
-    del loaded_params['server']
-    if 'finished' in loaded_params:
-        del loaded_params['finished']
-    if 'resume' in loaded_params:
-        del loaded_params['resume'] # prevent resuming only because the loaded model was resumed
-    # transform some params to proper types
-    loaded_params['kernelsize'] = loaded_params['kernelsize'].item()
-    # update params
-    params.update(loaded_params)
 
 experimentfolder = os.path.join(params['path'], params['name'])
 if os.path.exists(experimentfolder) and params['resume']=='negative':
@@ -346,10 +351,19 @@ print('constructed loss (masking labels with value {}) using following loss weig
 for i in range(len(CLASS_NAMES)):
     print('{}: {:.2f}'.format(CLASS_NAMES[i], loss_weights[i]))
 
+
 if params['resume'] == 'negative':
+    # create our TCN model
     model = temporal_convolutional_network(params)
+
+    if params['nosceneinstweights']:
+        sample_weight_mode = None
+    else:
+        sample_weight_mode = "temporal"
+
+    # compile model
     model.compile(optimizer(lr=params['learningrate'], clipnorm=params['gradientclip']),
-                  loss=masked_weighted_crossentropy_loss, metrics=None)
+                  loss=masked_weighted_crossentropy_loss, metrics=None, sample_weight_mode=sample_weight_mode)
     init_epoch = 0
     print('model was constructed!')
 
