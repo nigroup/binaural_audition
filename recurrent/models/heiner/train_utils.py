@@ -14,7 +14,7 @@ from heiner import model_extension as m_ext
 from heiner.dataloader import DataLoader
 
 
-def calculate_sample_weights_batch(y_scene_instance_ids, mode):
+def calculate_sample_weights_batch(y_scene_instance_ids, file_lengths_dict, scene_instance_ids_dict, mode):
     weights_per_scene = acc_u.get_scene_weights(mode)
     weights_per_scene /= np.mean(weights_per_scene)
 
@@ -22,8 +22,18 @@ def calculate_sample_weights_batch(y_scene_instance_ids, mode):
     # here is no class-wise masking possible
 
     # masked_time_steps = (y_scene_instance_ids != mask_val).astype(np.float32)
-    scenes_in_batch = (y_scene_instance_ids // 1e5).astype(np.int)
-    weights = weights_per_scene[:, 0][scenes_in_batch-1]    # * masked_time_steps
+    scene_instance_ids_in_batch = y_scene_instance_ids.astype(np.int)
+    weights = weights_per_scene[:, 0][((scene_instance_ids_in_batch//1e5)-1).astype(np.int)]    # * masked_time_steps
+
+    inv_scene_instance_ids_dict = {v: k for k, v in scene_instance_ids_dict.items()}
+    mean_inv_file_lengths = 0.00027947386527248043
+
+    for sid in np.unique(scene_instance_ids_in_batch):
+        if sid == -1.0:
+            continue
+
+        w_length = (1. / file_lengths_dict[inv_scene_instance_ids_dict[sid]]) / mean_inv_file_lengths
+        weights[scene_instance_ids_in_batch == sid] *= w_length
 
     return weights
 
@@ -389,7 +399,11 @@ class Phase:
                 iteration_start_time_tf_graph_call = time.time()
                 loss, out_logits, gradient_norm = m_ext.train_and_predict_on_batch(
                     self.model, b_x, b_y[:, :, :, 0],
-                    sample_weight=calculate_sample_weights_batch(b_y[:, :, 0, 1], 'train'),
+                    sample_weight=calculate_sample_weights_batch(
+                        b_y[:, :, 0, 1],
+                        self.dloader.length_dict_(),
+                        self.dloader.scene_instance_ids_dict_(),
+                        'train'),
                     calc_global_gradient_norm=self.calc_global_gradient_norm
                 )
 
@@ -420,7 +434,11 @@ class Phase:
             else:
                 loss, out_logits = m_ext.test_and_predict_on_batch(
                     self.model, b_x, b_y[:, :, :, 0],
-                    sample_weight=calculate_sample_weights_batch(b_y[:, :, 0, 1], 'val')
+                    sample_weight=calculate_sample_weights_batch(
+                        b_y[:, :, 0, 1],
+                        self.dloader.length_dict_(),
+                        self.dloader.scene_instance_ids_dict_(),
+                        'val')
                 )
 
                 if np.isnan(loss):

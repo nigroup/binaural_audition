@@ -162,7 +162,7 @@ class DataLoader:
                     self.length = self.length * self.epochs
                     self._data_efficiency = self._data_efficiency * self.epochs
 
-                length_tuples = [(self._length_dict()[fn], fn) for fn in self.filenames]
+                length_tuples = [(self.length_dict_()[fn], fn) for fn in self.filenames]
                 self.filenames = [tup[1] for tup in sorted(length_tuples, key=lambda x: x[0], reverse=True)]
                 self.filenames_deque = deque(self.filenames)
 
@@ -278,7 +278,7 @@ class DataLoader:
             used_labels = np.array(self.effective_len())
             used_labels *= self.batchsize * self.timesteps
             available_labels = 0
-            length_dict = self._length_dict()
+            length_dict = self.length_dict_()
             for filename in self.filenames:
                 available_labels += length_dict[filename]
             self._data_efficiency = used_labels / available_labels
@@ -383,7 +383,7 @@ class DataLoader:
                     self.buffer_y[row_ind, start:end, :, 0] = \
                         labels[:, start_in_sequence:start_in_sequence + (end - start)].T
 
-        scene_instance_id = self._scene_instance_ids_dict()[self.filenames[act_file_ind]]
+        scene_instance_id = self.scene_instance_ids_dict_()[self.filenames[act_file_ind]]
         self.buffer_y[row_ind, start:end, :, 1] = scene_instance_id
         self.row_lengths[row_ind] = end
         if self.val_stateful and self.row_lengths[row_ind] < self.buffer_size:
@@ -492,7 +492,7 @@ class DataLoader:
                 sequence = data['x']
                 labels = data['y'] if self.instant_mode else data['y_block']
                 labels = np.stack([labels,
-                                  np.full(labels.shape, self._scene_instance_ids_dict()[filename], dtype=np.float32)],
+                                   np.full(labels.shape, self.scene_instance_ids_dict_()[filename], dtype=np.float32)],
                                   axis=3)
                 return self._input_standardization_if_wanted(sequence), labels
         else:
@@ -504,7 +504,7 @@ class DataLoader:
         Scene instances doesn't overlap -> padding is applied. With this it is possible to reset the state.
         '''
         if len(self.filenames_deque) > 0:
-            max_length = self._length_dict()[self.filenames_deque[0]]
+            max_length = self.length_dict_()[self.filenames_deque[0]]
             b_x = np.zeros((self.batchsize, max_length, self.features), np.float32)
 
             # last dimension: 0 -> labels, 1 -> scene_instance_id (scheme: scene_number * 1e5 + id in scene)
@@ -520,7 +520,7 @@ class DataLoader:
                     b_x[r, :length, :] = sequence[0, :, :]
                     b_y[r, :length, :, 0] = labels[0, :, :]
 
-                scene_instance_id = self._scene_instance_ids_dict()[next_filename]
+                scene_instance_id = self.scene_instance_ids_dict_()[next_filename]
                 b_y[r, :length, :, 1] = scene_instance_id
                 r += 1
             return self._input_standardization_if_wanted(b_x), b_y
@@ -570,7 +570,7 @@ class DataLoader:
 
         self.length = []
         self.effective_length = []
-        length_dict = self._length_dict()
+        length_dict = self.length_dict_()
         for epoch in range(1, self.epochs+1):
             self.reset_filenames()
             if self.k_scenes_to_subsample != -1:
@@ -614,7 +614,7 @@ class DataLoader:
                             if self.priority_queue:
                                 _, row = heapq.heappop(heap)
                             curr_ind = dq.popleft()
-                            l = self._length_dict()[self.filenames[curr_ind]]
+                            l = self.length_dict_()[self.filenames[curr_ind]]
                             if self.val_stateful:
                                 leftover, skipped = add_to_length_until_buffersize(l, row)
                                 skipped_steps += skipped
@@ -646,8 +646,7 @@ class DataLoader:
             self.effective_length.append(effective_length)
             self.length.append(length)
 
-
-    def _length_dict(self):
+    def length_dict_(self):
         if self.length_dict is None:
             pickle_path = path.join(self.pickle_path, 'file_lengths.pickle')
             if not path.exists(pickle_path):
@@ -668,7 +667,7 @@ class DataLoader:
         with open(path.join(self.pickle_path, 'file_lengths.pickle'), 'wb') as handle:
             pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def _scene_instance_ids_dict(self):
+    def scene_instance_ids_dict_(self):
         if self.scene_instance_ids_dict is None:
             pickle_path = path.join(self.pickle_path, 'scene_instances_ids.pickle')
             if not path.exists(pickle_path):
