@@ -474,7 +474,7 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
                     y[:, :, 0, 1],
                     batchloader_validation.length_dict,
                     batchloader_validation.scene_instance_ids_dict,
-                    'val')
+                    'val' if params['validfold'] != -1 else 'test')
             
             # run forward pass
             # remark on label shape: last (fourth) dimension contains in 0 the true labels, in 1 the corresponding sceneinstid (millioncode)
