@@ -325,8 +325,7 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
                             multithreading_metrics,
                             validation_steps,
                             workers=0,
-                            verbose=1,
-                            batchloader_validation=validation_data)
+                            verbose=1)
                     else:
                         # No need for try/except because
                         # data has already been validated.
@@ -375,8 +374,7 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
                        max_queue_size=10,
                        workers=1,
                        use_multiprocessing=False,
-                       verbose=0,
-                       batchloader_validation=None):
+                       verbose=0):
     """See docstring for `Model.evaluate_generator`."""
     model._make_test_function()
 
@@ -466,19 +464,9 @@ def evaluate_and_predict_generator_with_sceneinst_metrics(model,
                                  'or (x, y). Found: ' +
                                  str(generator_output))
 
-            # set sample weights
-            if params['nosceneinstweights']:
-                sample_weight = None
-            else:
-                sample_weight = heiner_calculate_sample_weights_batch(
-                    y[:, :, 0, 1],
-                    batchloader_validation.length_dict,
-                    batchloader_validation.scene_instance_ids_dict,
-                    'val' if params['validfold'] != -1 else 'test')
-            
             # run forward pass
             # remark on label shape: last (fourth) dimension contains in 0 the true labels, in 1 the corresponding sceneinstid (millioncode)
-            batch_loss, y_pred_logits = heiner_test_and_predict_on_batch(model, x, y[:, :, :, 0], sample_weight=sample_weight)
+            batch_loss, y_pred_logits = heiner_test_and_predict_on_batch(model, x, y[:, :, :, 0])
 
             model.val_loss_batch.append(batch_loss)
 
