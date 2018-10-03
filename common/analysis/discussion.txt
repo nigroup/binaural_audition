@@ -1,0 +1,5 @@
+topics
+
+- clarify/decide: should we better include nSrc=1 in the nSrc-averaged as we optimize for the balance between all classes via cross entropy and balanced accuracy? currently only nSrc=2,3,4 are included
+
+- what models to run with what priority?
