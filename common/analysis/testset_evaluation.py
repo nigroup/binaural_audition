@@ -462,7 +462,7 @@ def plot_metric_vs_snr_per_nsrc(metric_name, metrics_shelve, config):
 
         # plot std over azimuths (class avg)
         # azimuth_stdstr = 'azimuth std (of {})'.format(metric_no_azimuths[nSrc]))
-        azimuth_stdstr = 'azimuth std' if i == 0 else None
+        azimuth_stdstr = 'scene std' if i == 0 else None
         if config['show_class_std']:
             plt.plot(SNRs_all, metric_both_mean_plot+metric_azimuth_std_plot, color=config['colors_nSrc'][nSrc],
                      linestyle='dashed', label=azimuth_stdstr)
@@ -483,7 +483,7 @@ def plot_metric_vs_snr_per_nsrc(metric_name, metrics_shelve, config):
 
     if metric_name == 'BAC':
         # chance line
-        plt.plot(SNRs_all, [0.5]*len(SNRs_all), '--', color='gray', label='chance level')
+        plt.plot(SNRs_all, [0.5]*len(SNRs_all), '--', color='gray', label='chance')
 
         if config['show_class_std']:
             handles, labels = plt.gca().get_legend_handles_labels()

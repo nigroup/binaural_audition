@@ -1,0 +1,5 @@
+Von Ivo:
+
+Model: glmnet, ohne Spectral Features ("-sf"), mit nSrcs weighted training ("+wns"), 500ms Blocklength. 
+
+Zusätzlich etwas, was ich bis jetzt immer gemacht habe und zum Vergleich mit euch abstellen muss ( = neu testen): ich habe alle Blöcke aussortiert, bei denen numberOfCurrentlyActiveSources < numerOfSourcesInScene. Das heißt, diese Ergebnisse sind von schwierigeren Daten entstanden als eure. ("nsaEQnss") 
