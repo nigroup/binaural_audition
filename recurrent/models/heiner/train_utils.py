@@ -14,7 +14,11 @@ from heiner import model_extension as m_ext
 from heiner.dataloader import DataLoader
 
 
-def calculate_sample_weights_batch(y_scene_instance_ids, file_lengths_dict, scene_instance_ids_dict, mode):
+def calculate_sample_weights_batch(y_scene_instance_ids, file_lengths_dict, scene_instance_ids_dict, mode,
+                                   no_new_weighting=False):
+    if no_new_weighting:
+        return None
+
     weights_per_scene = acc_u.get_scene_weights(mode)
     weights_per_scene /= np.mean(weights_per_scene)
 
@@ -23,7 +27,7 @@ def calculate_sample_weights_batch(y_scene_instance_ids, file_lengths_dict, scen
 
     # masked_time_steps = (y_scene_instance_ids != mask_val).astype(np.float32)
     scene_instance_ids_in_batch = y_scene_instance_ids.astype(np.int)
-    weights = weights_per_scene[:, 0][((scene_instance_ids_in_batch//1e5)-1).astype(np.int)]    # * masked_time_steps
+    weights = weights_per_scene[:, 0][((scene_instance_ids_in_batch // 1e5) - 1).astype(np.int)]  # * masked_time_steps
 
     inv_scene_instance_ids_dict = {v: k for k, v in scene_instance_ids_dict.items()}
     mean_inv_file_lengths = 0.00027947386527248043
@@ -58,7 +62,8 @@ def create_train_dataloader(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TI
                             BUFFER, use_multithreading=True, input_standardization=True):
     train_loader = DataLoader('train', LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, batchsize=BATCHSIZE,
                               timesteps=TIMESTEPS, epochs=EPOCHS, features=NFEATURES, classes=NCLASSES,
-                              buffer=BUFFER, use_multithreading=use_multithreading, input_standardization=input_standardization)
+                              buffer=BUFFER, use_multithreading=use_multithreading,
+                              input_standardization=input_standardization)
     train_loader_len = train_loader.len()
     print('Number of batches per epoch (training): ' + str(train_loader_len))
 
@@ -71,7 +76,8 @@ def create_val_dataloader(LABEL_MODE, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS
                           VAL_STATEFUL, BUFFER, use_multithreading=True, input_standardization=True):
     val_loader = DataLoader('val', LABEL_MODE, VAL_FOLDS, TRAIN_SCENES, epochs=EPOCHS, batchsize=BATCHSIZE,
                             timesteps=TIMESTEPS, features=NFEATURES, classes=NCLASSES, val_stateful=VAL_STATEFUL,
-                            buffer=BUFFER, use_multithreading=use_multithreading, input_standardization=input_standardization)
+                            buffer=BUFFER, use_multithreading=use_multithreading,
+                            input_standardization=input_standardization)
 
     val_loader_len = val_loader.len()
     print('Number of batches per epoch (validation): ' + str(val_loader_len))
@@ -95,7 +101,6 @@ def create_test_dataloader(LABEL_MODE, input_standardization=True, val_fold3_as_
 
 def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
                        VAL_FOLDS, VAL_STATEFUL, BUFFER, use_multithreading=True):
-
     train_loader = create_train_dataloader(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS,
                                            NFEATURES, NCLASSES, BUFFER, use_multithreading=use_multithreading)
 
@@ -104,15 +109,17 @@ def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTE
 
     return train_loader, val_loader
 
+
 def update_best_model_ckp(best_model_ckp_last, model_save_dir, e, acc):
     best_model_ckp_last.on_epoch_end(e, logs={'val_final_acc': acc})
     created_best_checkpoints = glob.glob(os.path.join(model_save_dir, 'best_model_ckp_epoch*.hdf5'))
-    if len(created_best_checkpoints) > 1:   # new one is better than the old
+    if len(created_best_checkpoints) > 1:  # new one is better than the old
         created_best_checkpoints = sorted(created_best_checkpoints)
         if os.path.exists(created_best_checkpoints[0]):
             os.remove(created_best_checkpoints[0])
         else:
             raise ValueError('Model checkpoint found by glob but is not a file.')
+
 
 def update_latest_model_ckp(model_ckp_last, model_save_dir, e, acc):
     created_checkpoints = glob.glob(os.path.join(model_save_dir, 'model_ckp_epoch*.hdf5'))
@@ -132,7 +139,7 @@ class TestPhase:
 
     def __init__(self, model, dloader, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str, metric='BAC2',
                  ret=('final', 'per_class', 'per_class_scene', 'per_scene'),
-                 code_test_mode = False):
+                 code_test_mode=False):
         self.prefix = 'test'
 
         self.model = model
@@ -213,7 +220,8 @@ class TestPhase:
                 tf_graph_time_spent_str if tf_graph_verbose else '',
                 time.strftime("%H:%M:%S", time.gmtime(elapsed_time_accuracy_metrics))
             )
-            loss_log_str = '{:<20}  {:<20}  {:<20}  {}'.format(self.val_fold_str, self.epoch_str, it_str, time_spent_str)
+            loss_log_str = '{:<20}  {:<20}  {:<20}  {}'.format(self.val_fold_str, self.epoch_str, it_str,
+                                                               time_spent_str)
             print(loss_log_str)
 
         scene_instance_id_metrics_dict_counts = copy.deepcopy(scene_instance_id_metrics_dict) \
@@ -251,7 +259,8 @@ class Phase:
                  calc_global_gradient_norm, recurrent_dropout=0.,
                  metric='BAC',
                  ret=('final', 'per_class', 'per_class_scene', 'per_scene'),
-                 code_test_mode=False):
+                 code_test_mode=False,
+                 no_new_weighting=False):
 
         self.prefix = train_or_val
         if train_or_val == 'train':
@@ -308,6 +317,7 @@ class Phase:
 
         self.code_test_mode = code_test_mode
 
+        self.no_new_weighting = no_new_weighting
 
     def resume_from_epoch(self, resume_epoch):
         if hasattr(self.dloader, 'act_epoch'):
@@ -360,7 +370,8 @@ class Phase:
             if type(layer) is CuDNNLSTM:
                 rk = K.get_value(layer.weights[1])
                 mask = original_weights_and_masks[i][1]
-                original_weights_updated = original_weights_and_masks[i][0] + (rk - (1/(1-self.recurrent_dropout)) * original_weights_and_masks[i][0]) \
+                original_weights_updated = original_weights_and_masks[i][0] + (
+                            rk - (1 / (1 - self.recurrent_dropout)) * original_weights_and_masks[i][0]) \
                                            * mask
                 K.set_value(layer.weights[1], original_weights_updated)
                 i += 1
@@ -403,7 +414,9 @@ class Phase:
                         b_y[:, :, 0, 1],
                         self.dloader.length_dict_(),
                         self.dloader.scene_instance_ids_dict_(),
-                        'train'),
+                        'train',
+                        no_new_weighting=self.no_new_weighting
+                    ),
                     calc_global_gradient_norm=self.calc_global_gradient_norm
                 )
 
@@ -425,11 +438,11 @@ class Phase:
                 elapsed_time_tf_graph_dropout_load_original = time.time() - \
                                                               iteration_start_time_tf_graph_dropout_load_original
 
-                tf_graph_time_spent_str = ' (apply drop: {}, train_predict: {}, drop load original: {})'\
+                tf_graph_time_spent_str = ' (apply drop: {}, train_predict: {}, drop load original: {})' \
                     .format(
-                        time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph_apply_dropout)),
-                        time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph_call)),
-                        time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph_dropout_load_original))
+                    time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph_apply_dropout)),
+                    time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph_call)),
+                    time.strftime("%H:%M:%S", time.gmtime(elapsed_time_tf_graph_dropout_load_original))
                 )
             else:
                 loss, out_logits = m_ext.test_and_predict_on_batch(
@@ -438,7 +451,9 @@ class Phase:
                         b_y[:, :, 0, 1],
                         self.dloader.length_dict_(),
                         self.dloader.scene_instance_ids_dict_(),
-                        'val')
+                        'val',
+                        no_new_weighting=self.no_new_weighting
+                    )
                 )
 
                 if np.isnan(loss):
@@ -464,7 +479,7 @@ class Phase:
             )
             loss_str = 'loss: {}'.format(loss)
             loss_log_str = '{:<20}  {:<20}  {:<20}  {:<26}  {}'.format(self.val_fold_str, self.epoch_str, it_str,
-                                                                      loss_str, time_spent_str)
+                                                                       loss_str, time_spent_str)
             print(loss_log_str)
 
             if not self.train:

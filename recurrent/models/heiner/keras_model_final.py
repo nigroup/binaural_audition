@@ -20,7 +20,8 @@ def my_handler(type, value, tb):
     logger.exception("Uncaught exception: {0}".format(str(value)))
 
 
-def run_final_experiment(tmux, available_gpus, id_to_test, epochs_to_train, model_name='LDNN_final', model_name_old='LDNN_v1'):
+def run_final_experiment(tmux, available_gpus, id_to_test, epochs_to_train,
+                         model_name='LDNN_final', model_name_old='LDNN_v1'):
     use_tmux.set_use_tmux(tmux)
     gpu_str = ''
     if type(available_gpus) is str:
@@ -41,7 +42,7 @@ def run_final_experiment(tmux, available_gpus, id_to_test, epochs_to_train, mode
     os.makedirs(save_path, exist_ok=True)
 
     rs.add_hcombs_to_run_via_id(id_to_test, save_path, save_path_hcomb_list=save_path_hcomb_list,
-                                changes_dict={'MAX_EPOCHS': epochs_to_train, 'STAGE': -1})
+                                changes_dict={'MAX_EPOCHS': epochs_to_train, 'STAGE': -1, 'finished': False})
 
     reset_hcombs = False
 
@@ -117,7 +118,20 @@ if __name__ == "__main__":
                         dest="epochs_to_train",
                         metavar="<epochs to train>",
                         help="Epochs to train the hcomb on.")
-
+    parser.add_argument('-mn', '--model_name',
+                        required=False,
+                        type=str,
+                        default='LDNN_final',
+                        dest='model_name',
+                        metavar='<model name>',
+                        help='The model name for final model.')
+    parser.add_argument('-mno', '--model_name_old',
+                        required=False,
+                        type=str,
+                        default='LDNN_v1',
+                        dest='model_name_old',
+                        metavar='<model name old>',
+                        help='The model name for the model where the id is from.')
 
     args = parser.parse_args()
     run_final_experiment(**vars(args))

@@ -135,10 +135,12 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
                 h.RECURRENT_DROPOUT, h.METRIC]
 
         # training phase
-        train_phase = tr_utils.Phase('train', model, train_loader, BUFFER, *args)
+        train_phase = tr_utils.Phase('train', model, train_loader, BUFFER, *args,
+                                     no_new_weighting=True if 'nnw' in model_save_dir else False)
 
         # validation phase
-        val_phase = tr_utils.Phase('val', model, val_loader, BUFFER, *args)
+        val_phase = tr_utils.Phase('val', model, val_loader, BUFFER, *args,
+                                   no_new_weighting=True if 'nnw' in model_save_dir else False)
 
         # needed for early stopping
         best_val_acc = -1 if not model_is_resumed else best_val_acc_
@@ -396,7 +398,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
     ################################################# COMPILE MODEL
 
     adam = Adam(lr=h.LEARNING_RATE, clipnorm=1.)
-    model.compile(optimizer=adam, loss=my_loss, metrics=None)
+    model.compile(optimizer=adam, loss=my_loss, metrics=None, sample_weight_mode='temporal')
 
     print('\nModel compiled.\n')
 
@@ -418,7 +420,8 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
             h.RECURRENT_DROPOUT, h.METRIC]
 
     # training phase
-    train_phase = tr_utils.Phase('train', model, train_loader, BUFFER, *args)
+    train_phase = tr_utils.Phase('train', model, train_loader, BUFFER, *args,
+                                 no_new_weighting=True if 'nnw' in model_save_dir else False)
 
     if model_is_resumed:
         old_metrics = utils.load_metrics(model_save_dir)
@@ -494,7 +497,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
     y = x
 
     # Input dropout
-    y = Dropout(h.INPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, h.N_FEATURES))(y)
+    y = Dropout(h.INPUT_DROPOUT, noise_shape=(1, 1, h.N_FEATURES))(y)
     for units in h.UNITS_PER_LAYER_LSTM:
         y = CuDNNLSTM(units, return_sequences=True, stateful=True)(y)
 
@@ -617,7 +620,7 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
                                   name='gpu{}_run_hcomb_{}'.format(gpu, ID))
         else:
             p_hcomb = multiprocessing.Process(target=run_hcomb,
-                                        args=(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT,
+                                              args=(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT,
                                               send_end, final_experiment))
 
         print('Running hcomb_{} on GPU {}.'.format(ID, gpu))
