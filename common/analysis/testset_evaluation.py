@@ -1,6 +1,15 @@
 # this plotting code is shared by heiner/changbin/moritz
 # function that should be used: evaluate_testset (uses the other functions)
 
+# remark: the current code is not very well designed.
+#         what would be better (but currently not necessary; at least until Ivo
+#         wants access via Matlab to the data in this form, too) is to get rid of all
+#         except one collect function that does mean and std over all scenes
+#         with given SNR and nSrc to yield a 5 x 4 x 13 array (for mean an std resp.).
+#         here only attention needs to be taken that nSrc=1 is not really associated
+#         with a SNR (or should be infinity), therefore only e.g. SNR=0, should be
+#         filled and Ivo for example takes nan values for the other SNR when nSrc=1
+
 
 import numpy as np
 import matplotlib.pyplot as plt
