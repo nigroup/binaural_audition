@@ -616,7 +616,7 @@ def plot_test_experiment_from_folder(folder):
     sens_per_scene_class = results['val_sens_spec_per_class_scene'][-1, :, :, 0]
     spec_per_scene_class = results['val_sens_spec_per_class_scene'][-1, :, :, 1]
 
-    name = 'TCN (SUBOPTIMAL AND NOT YET FINISHED COMBINATION: {})'.format(params['name'])
+    name = 'TCN_{})'.format(params['name'])
     # TODO: add maxepochs to name, remove early stopping and validation fold, and add some more relevant params
 
     plotconfig = {'class_std': False, 'show_explanation': True}

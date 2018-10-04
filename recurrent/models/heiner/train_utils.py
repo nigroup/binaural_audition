@@ -29,8 +29,10 @@ def calculate_sample_weights_batch(y_scene_instance_ids, file_lengths_dict, scen
     scene_instance_ids_in_batch = y_scene_instance_ids.astype(np.int)
     weights = weights_per_scene[:, 0][((scene_instance_ids_in_batch // 1e5) - 1).astype(np.int)]  # * masked_time_steps
 
+    # remark: performance improvement possible by doing the following dict inversion
+    #         only once and not per call of this function which is done in each batch
     inv_scene_instance_ids_dict = {v: k for k, v in scene_instance_ids_dict.items()}
-    mean_inv_file_lengths = 0.00027947386527248043
+    mean_inv_file_lengths = 0.00027947386527248043 # mean inv filelength (all folds), cf. file_lengths_dict
 
     for sid in np.unique(scene_instance_ids_in_batch):
         if sid == -1.0:

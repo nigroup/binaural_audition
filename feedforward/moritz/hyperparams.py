@@ -55,7 +55,7 @@ def run_hyperparam_combinations(gpuid, batchsize, simulate=False):
               format(waiting))
         time.sleep(waiting)
 
-        if (socket.gethostname()=='sabik' and gpuid not in [0,1]) or socket.gethostname() in ['risha','elnath','adhara'] or (socket.gethostname()=='eltanin' and gpuid not in [0,1,2,3]): # merope req old tf: or socket.gethostname()=='merope' and gpuid!=0:
+        if (socket.gethostname()=='sabik' and gpuid not in [0,1]) or socket.gethostname() in ['elnath','adhara'] or (socket.gethostname()=='eltanin' and gpuid not in [0,1,2,3]) or (socket.gethostname()=='risha' and gpuid != 0): # merope req old tf: or socket.gethostname()=='merope' and gpuid!=0:
             old_tf = True
         else:
             old_tf = False

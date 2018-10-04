@@ -28,6 +28,7 @@ from keras import callbacks as cbks
 from heiner.model_extension import train_and_predict_on_batch as heiner_train_and_predict_on_batch
 from heiner.model_extension import test_and_predict_on_batch as heiner_test_and_predict_on_batch
 from heiner.accuracy_utils import calculate_class_accuracies_metrics_per_scene_instance_in_batch as heiner_calculate_class_accuracies_metrics_per_scene_instance_in_batch
+from heiner.train_utils import calculate_sample_weights_batch as heiner_calculate_sample_weights_batch
 from myutils import metrics_per_batch_thread_handler
 
 def fit_and_predict_generator_with_sceneinst_metrics(model,
@@ -254,9 +255,19 @@ def fit_and_predict_generator_with_sceneinst_metrics(model,
 
                 # remark on label shape: last (fourth) dimension contains in 0 the true labels, in 1 the corresponding sceneinstid (millioncode)
                 t_start = time()
+                
+                # set sample weights
+                if params['nosceneinstweights']:
+                    sample_weight = None
+                else:
+                    sample_weight = heiner_calculate_sample_weights_batch(
+                        y[:, :, 0, 1],
+                        generator.length_dict,
+                        generator.scene_instance_ids_dict,
+                        'train')
+
                 # run forward and backward pass and do the gradient descent step
-                batch_loss, y_pred_logits, gradient_norm = heiner_train_and_predict_on_batch(model, x, y[:, :, :, 0],
-                                                         calc_global_gradient_norm=not params['nocalcgradientnorm'])
+                batch_loss, y_pred_logits, gradient_norm = heiner_train_and_predict_on_batch(model, x, y[:, :, :, 0], sample_weight=sample_weight, calc_global_gradient_norm=not params['nocalcgradientnorm'])
                 runtime_train_and_predict_on_batch = time()-t_start
                 if batch_index >= skip_runtime_avg:
                     runtime_train_and_predict_on_batch_cumulated += runtime_train_and_predict_on_batch
