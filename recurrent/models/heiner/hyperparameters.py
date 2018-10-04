@@ -156,13 +156,14 @@ class HCombManager:
 
         pickle_name = 'hyperparameter_combinations.pickle'
         self.filepath = path.join(self.save_path, pickle_name)
+
+        pickle_name_to_run = 'hyperparameter_combinations_to_run.pickle'
+        self.filepath_to_run = path.join(self.save_path, pickle_name_to_run)
+
         if not path.exists(self.filepath):
             with portalocker.Lock(self.filepath, mode='ab', timeout=self.timeout) as handle:
                 hcomb_list = []
                 self._write_hcomb_list(hcomb_list, handle)
-
-        pickle_name_to_run = 'hyperparameter_combinations_to_run.pickle'
-        self.filepath_to_run = path.join(self.save_path, pickle_name_to_run)
 
     def poll_hcomb(self, timeout=60):
         self.timeout = timeout
