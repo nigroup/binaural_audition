@@ -1,0 +1,144 @@
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.253337). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.272229). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.938696). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.332313). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.411270). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.502404). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.458377). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.475994). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.529867). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.412526). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.349172). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.257519). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.454683). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.031376). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.212050). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.435697). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.525431). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.797396). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.059912). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.220291). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.787946). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.731662). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.188562). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.161926). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.241868). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.456093). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.518217). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.434281). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.220055). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.140452). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.617088). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (3.204942). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.917084). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.368881). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.126606). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.999274). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.190503). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.316275). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.204723). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.887722). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.650152). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.356686). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.132940). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.332079). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.591599). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.053242). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.272758). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.542293). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.746497). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.945535). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (3.275772). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (3.655233). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (4.133489). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (4.838235). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (5.347070). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.382609). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.273155). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.494614). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (2.997420). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (3.547608). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (4.299943). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (5.131693). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (5.234620). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (5.493284). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (5.661539). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (5.630870). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (4.903699). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (3.008581). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/keras/callbacks.py:120: UserWarning: Method on_batch_end() is slow compared to the batch update (1.871946). Check your callbacks.
+  % delta_t_median)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/matplotlib/cbook/deprecation.py:107: MatplotlibDeprecationWarning: Passing one of 'on', 'true', 'off', 'false' as a boolean is deprecated; use an actual boolean (True/False) instead.
+  warnings.warn(message, mplDeprecation, stacklevel=1)
+/mnt/antares_raid/home/spiess/anaconda3/envs/twoears_conda/lib/python3.6/site-packages/matplotlib/axes/_base.py:3124: UserWarning: Attempting to set identical left==right results
+in singular transformations; automatically expanding.
+left=1, right=1
+  'left=%s, right=%s') % (left, right))
