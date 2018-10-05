@@ -139,10 +139,13 @@ def update_latest_model_ckp(model_ckp_last, model_save_dir, e, acc):
 
 class TestPhase:
 
-    def __init__(self, model, dloader, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str, metric='BAC2',
+    def __init__(self, model, dloader, OUTPUT_THRESHOLD, MASK_VAL, EPOCHS, val_fold_str, model_save_dir,
+                 metric='BAC2',
                  ret=('final', 'per_class', 'per_class_scene', 'per_scene'),
                  code_test_mode=False):
         self.prefix = 'test'
+
+        self.model_save_dir = model_save_dir
 
         self.model = model
         self.dloader = dloader
@@ -229,12 +232,16 @@ class TestPhase:
         scene_instance_id_metrics_dict_counts = copy.deepcopy(scene_instance_id_metrics_dict) \
             if self.code_test_mode else None
 
+        with open(os.path.join(self.model_save_dir, 'scene_instance_id_metrics_dict_counts.pickle'), 'wb') as handle:
+            import pickle
+            pickle.dump(scene_instance_id_metrics_dict_counts, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         # TODO: can get a mismatch here, as number of returned values may change depending on parameter 'ret'
         final_acc, final_acc_bac2, class_accuracies, class_accuracies_bac2, \
         class_scene_accuracies, class_scene_accuracies_bac2, \
         scene_accuracies, scene_accuracies_bac2, \
         sens_spec_class_scene, sens_spec_class = \
-            acc_u.val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=self.ret)
+            acc_u.val_accuracy(scene_instance_id_metrics_dict, metric=('BAC', 'BAC2'), ret=self.ret, mode='test')
         self.class_accs.append(class_accuracies)
         self.accs_bac2.append(final_acc_bac2)
         self.class_accs_bac2.append(class_accuracies_bac2)
