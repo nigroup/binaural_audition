@@ -25,7 +25,7 @@ def call_evaluate_testset(id_in_model_name, model_name, use_val=False):
         sens_per_scene_class = metrics['test_sens_spec_class_scene'][-1, :, :, 0]
         spec_per_scene_class = metrics['test_sens_spec_class_scene'][-1, :, :, 1]
 
-    name = 'LDNN_id_{}_in_{})'.format(id_in_model_name, model_name)
+    name = 'LDNN_id_{}_in_{}'.format(id_in_model_name, model_name)
 
     plotconfig = {'class_std': False, 'show_explanation': True}
 
@@ -59,4 +59,4 @@ def main():
 
 if __name__ == '__main__':
     # main()
-    call_evaluate_testset(3, 'LDNN_final_nnw', use_val=True)
+    call_evaluate_testset(0, 'LDNN_final_new_weighting', use_val=False)
