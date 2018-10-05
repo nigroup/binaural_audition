@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import shelve
 import argparse
@@ -7,7 +9,7 @@ import sys
 import datetime
 from collections import OrderedDict
 
-from utils import defaultconfig, get_class_names, yaxis_formatting
+from plot_utils import defaultconfig, get_class_names, yaxis_formatting
 
 def plot_metric_vs_snr_class_averaged(metric_name, model_name, metrics_shelve, config):
     '''

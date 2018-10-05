@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker
 import os
 import shelve
-from utils import defaultconfig, get_class_names, get_test_scene_params, yaxis_formatting
+from plot_utils import defaultconfig, get_class_names, get_test_scene_params, yaxis_formatting
 
 def get_metric(sens_per_scene_class, spec_per_scene_class, metric_name, class_avg=False):
     if metric_name == 'BAC':

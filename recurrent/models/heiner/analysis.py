@@ -1,43 +1,49 @@
 import argparse
 import os
-import socket
-import copy
-import glob
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from myutils import load_h5
-from constants import *
-import csv
-import re
 from testset_evaluation import evaluate_testset
 
 
-def plot_test_experiment_from_folder(folder):
-    params = load_h5(os.path.join(folder, 'params.h5'))
-    results = load_h5(os.path.join(folder, 'results.h5'))
-    assert '_vf-1' in folder # ensure the 'validation' set is the test set
+def call_evaluate_testset(id_in_model_name, model_name, use_val=False):
+    save_path_mn = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name,
+                                'hcomb_' + str(id_in_model_name))
+    save_path_mn_metrics = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name,
+                                        'hcomb_' + str(id_in_model_name), 'final')
 
-    sens_per_scene_class = results['val_sens_spec_per_class_scene'][-1, :, :, 0]
-    spec_per_scene_class = results['val_sens_spec_per_class_scene'][-1, :, :, 1]
+    from heiner import hyperparameters
+    params = hyperparameters.H()
+    params.load_from_dir(save_path_mn)
 
-    name = 'TCN_{})'.format(params['name'])
-    # TODO: add maxepochs to name, remove early stopping and validation fold, and add some more relevant params
+    from heiner import utils
+    metrics = utils.load_metrics(save_path_mn_metrics)
+
+    # 'test_sens_spec_class_scene': np.array(test_phase.sens_spec_class_scene)
+
+    if use_val:
+        sens_per_scene_class = metrics['val_sens_spec_class_scene'][-1, :, :, 0]
+        spec_per_scene_class = metrics['val_sens_spec_class_scene'][-1, :, :, 1]
+    else:
+        sens_per_scene_class = metrics['test_sens_spec_class_scene'][-1, :, :, 0]
+        spec_per_scene_class = metrics['test_sens_spec_class_scene'][-1, :, :, 1]
+
+    name = 'LDNN_id_{}_in_{})'.format(id_in_model_name, model_name)
 
     plotconfig = {'class_std': False, 'show_explanation': True}
+
+    folder = os.path.join(save_path_mn, 'analysis', name)
+    os.makedirs(folder, exist_ok=True)
 
     evaluate_testset(folder, name, plotconfig, sens_per_scene_class, spec_per_scene_class, collect=True)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-id', '--id_to_test',
+    parser.add_argument('-id', '--id_in_mn',
                         required=True,
                         type=int,
                         default=0,
-                        dest="id_to_test",
-                        metavar="<id to test>",
-                        help="The ID of the hcomb that will be trained on all train folds.")
+                        dest="id_in_model_name",
+                        metavar="<id in model directory>",
+                        help="-")
     parser.add_argument('-mn', '--model_name',
                         required=False,
                         type=str,
@@ -45,36 +51,12 @@ def main():
                         dest='model_name',
                         metavar='<model name>',
                         help='The model name for final model.')
-    parser.add_argument('-mno', '--model_name_old',
-                        required=False,
-                        type=str,
-                        default='LDNN_v1',
-                        dest='model_name_old',
-                        metavar='<model name old>',
-                        help='The model name for the model where the id is from.')
 
     args = parser.parse_args()
-    run_final_experiment(**vars(args))
 
-    if args.mode == 'train' and args.folder:
-        if '*' not in args.folder:
-            folders = [args.folder]
-        else:
-            folders = glob.glob(args.folder)
-
-        for f in folders:
-            if os.path.isdir(f):
-                print('making visualization for folder {}'.format(f))
-                plot_train_experiment_from_folder(folder=f,
-                                                  datalimits=args.datalimits,
-                                                  firstsceneonly=args.firstsceneonly)
-
-    if args.mode == 'test' and args.folder:
-        plot_test_experiment_from_folder(args.folder)
-
-    if args.mode == 'hyper' and args.folder:
-        plot_and_table_hyper_from_folder(args.folder)
+    call_evaluate_testset(**vars(args))
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    call_evaluate_testset(3, 'LDNN_final_nnw', use_val=True)
