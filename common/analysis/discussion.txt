@@ -2,4 +2,19 @@ topics
 
 - clarify/decide: should we better include nSrc=1 in the nSrc-averaged as we optimize for the balance between all classes via cross entropy and balanced accuracy? currently only nSrc=2,3,4 are included
 
+- from 3 bestepochs to one final number of epochs => _individual looking at curves_? _median_, max? mean?
+
+- alessandro's project => afterwards shortly?
+
+next steps:
+- final model training of version without weighting
+- validation of best combiantion new weighting (for bestepoch) 
+- final model training & evaluation update
+- reproduction of changbin's results -- 
+    => best combination: first validate then final model training (using bestepoch) 
+    => first block complete
+    => afterwards instant labels
+- hist/batchlength=1s=1000
+- instant labels (both 1s and 10s): first validation of the (for blockbased 10s) best combination for bestepochs
+    
 - what models to run with what priority?
