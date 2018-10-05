@@ -116,6 +116,9 @@ class DataLoader:
                                  'Got: {}'.format(available_ks, self.k_scenes_to_subsample))
             self.subsample_filenames()
 
+        self.features = features
+        self.classes = classes
+
         if self.mode == 'train' or (self.mode == 'val' and val_stateful):
             if self.mode == 'train':
                 self.val_stateful = False
@@ -131,8 +134,6 @@ class DataLoader:
             self.act_epoch = 1
             self._seed()
             self.buffer_size = buffer * timesteps
-            self.features = features
-            self.classes = classes
 
             self.priority_queue = priority_queue
             self._init_buffers()
@@ -151,9 +152,6 @@ class DataLoader:
                 self.batchsize = batchsize
                 self.epochs = epochs
                 self.act_epoch = 1
-
-                self.features = features
-                self.classes = classes
 
                 self.length = [int(np.ceil(len(self.filenames) / self.batchsize))]
                 self._data_efficiency = [1.0]
