@@ -502,7 +502,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
         y = CuDNNLSTM(units, return_sequences=True, stateful=True)(y)
 
         # LSTM Output dropout
-        y = Dropout(h.LSTM_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
+        y = Dropout(h.LSTM_OUTPUT_DROPOUT, noise_shape=(1, 1, units))(y)
     for units in h.UNITS_PER_LAYER_MLP:
         if units != h.N_CLASSES:
             y = Dense(units, activation='relu')(y)
@@ -511,7 +511,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
 
         # MLP Output dropout but not last layer
         if units != h.N_CLASSES:
-            y = Dropout(h.MLP_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
+            y = Dropout(h.MLP_OUTPUT_DROPOUT, noise_shape=(1, 1, units))(y)
     model = Model(x, y)
 
     model.summary()
@@ -523,7 +523,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
 
     print('\nModel compiled.\n')
 
-    test_phase = tr_utils.TestPhase(model, test_loader, h.OUTPUT_THRESHOLD, h.MASK_VAL, 1, val_fold_str,
+    test_phase = tr_utils.TestPhase(model, test_loader, h.OUTPUT_THRESHOLD, h.MASK_VAL, 1, val_fold_str, model_save_dir,
                                     metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_class_scene', 'per_scene'))
 
     test_loss_is_nan, _ = test_phase.run()
