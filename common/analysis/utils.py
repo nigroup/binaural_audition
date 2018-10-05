@@ -22,7 +22,13 @@ def defaultconfig():
     # class colors
     colors_class = np.linspace(0, 1, 13)
     cmap = plt.get_cmap('tab20')
-    config['colors_class'] = [cmap(val) for val in colors_class]
+    config['colors_class'] =        [cmap(val) for val in colors_class]
+
+    # model colors
+    config['model_color'] =         [u'#1f77b4', u'#ff7f0e', u'#2ca02c', u'#d62728',
+                                     u'#9467bd', u'#8c564b', u'#e377c2', u'#7f7f7f',
+                                     u'#bcbd22', u'#17becf'] # matplotlib std
+    config['model_style'] =         ['solid'] * len(config['model_color'])
 
     return config
 

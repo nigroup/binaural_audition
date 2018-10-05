@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import shelve
 import argparse
 import os
+import sys
+import datetime
 from collections import OrderedDict
 
 from utils import defaultconfig, get_class_names, yaxis_formatting
@@ -21,7 +23,8 @@ def plot_metric_vs_snr_class_averaged(metric_name, model_name, metrics_shelve, c
 
     metric_with_classes = metrics_shelve['metric_vs_snr_per_class'][metric_name + '_mean'][:, :]
     metric_class_avg = np.mean(metric_with_classes, axis=1)
-    plt.plot(SNRs_all, metric_class_avg, marker='o', label=model_name)
+    plt.plot(SNRs_all, metric_class_avg, marker='o', label=model_name,
+             color=config['thismodel_color'], linestyle=config['thismodel_style'])
 
     plt.ylim(config['ylim_' + metric_name])
     plt.xticks(SNRs_all)
@@ -49,7 +52,8 @@ def plot_metric_vs_nsrc_with_classavg(metric_name, model_name, metrics_shelve, c
     metric_with_classes = metrics_shelve['metric_vs_nSrc_per_class'][metric_name + '_mean'][:, :]
     metric_class_avg = np.mean(metric_with_classes, axis=1)
 
-    plt.plot(nSrcs_all, metric_class_avg, marker='o', label=model_name)
+    plt.plot(nSrcs_all, metric_class_avg, marker='o', label=model_name,
+             color=config['thismodel_color'], linestyle=config['thismodel_style'])
 
     plt.xlabel('nSrc', fontsize=config['smallfontsize'])
     plt.xticks(nSrcs_all)
@@ -124,19 +128,35 @@ if __name__ == '__main__':
     config = defaultconfig()
     config['show_explanation'] = True
 
-    description = 'Binaural audition model comparison'
+    parser = argparse.ArgumentParser()
 
-    parser = argparse.ArgumentParser(description=description)
-
+    parser.add_argument('--description', default='Binaural audition model comparison',
+                        help='title of the comparison shown as suptitle')
+    parser.add_argument('--suffix', help='suffix to filename modelcomp')
     parser.add_argument('--models', nargs='+',
-                        default=['tcn_n119_dr0.0949_ks3_bs128_hs1025_me15',
-                                 'glmnet_-sf_+wns_500ms_nsaEQnss'],
                         help='list of models each corresponding to one folder name  '+
                              'in models folder; they should be ordered: first best, last worst model')
-
+    parser.add_argument('--color', nargs='+',
+                        help='corresponding color of each line (optional)')
+    parser.add_argument('--style', nargs='+',
+                        help='corresponding linestyle (optional)')
     args = parser.parse_args()
 
+    description = args.description
+
+    filename = 'modelcomp'+'_'+datetime.datetime.now().strftime("%Y-%m-%d")
+
+    if args.suffix:
+        filename = filename + '_' + args.suffix
+
+    fullfilename = os.path.join('models', filename)
+
     models = args.models
+    if args.color:
+        config['model_color'] = args.color
+
+    if args.style:
+        config['model_style'] = args.style
 
     plt.figure(figsize=(16, 12))
     if config['show_explanation']:
@@ -147,6 +167,10 @@ if __name__ == '__main__':
     plt.suptitle(description)
 
     for i, model_name in enumerate(models):
+        # set visualization options
+        config['thismodel_color'] = config['model_color'][i]
+        config['thismodel_style'] = config['model_style'][i]
+
         # open data shelve file
         metrics_shelve = get_shelve(model_name)
 
@@ -195,4 +219,13 @@ if __name__ == '__main__':
     plt.subplot(3, 3, 9)
     plot_metric_vs_model_per_class('spec', models, config)
 
-    plt.savefig(os.path.join('models', 'model_comparison.png'))
+    plt.savefig(fullfilename+'.png')
+    with open(fullfilename+'.txt', 'w') as f:
+        commandstring = 'python3 '
+        for arg in sys.argv:
+            if ' ' in arg:
+                commandstring += '"{}"  '.format(arg)
+            else:
+                commandstring += "{}  ".format(arg)
+        print(commandstring)
+        print(commandstring, file=f)
