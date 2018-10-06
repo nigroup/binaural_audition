@@ -349,7 +349,7 @@ class HCombManager:
         if len(hcomb_list) > 0:
             fp = self.filepath_to_run if to_run else self.filepath
             write_to_csv_from_data(hcomb_list, fp)
-        else:
+        elif to_run:
             os.remove(self.filepath_to_run)
 
 
@@ -504,7 +504,7 @@ class RandomSearch:
                 pickle.dump(hcombs_new, handle, protocol=pickle.HIGHEST_PROTOCOL)
                 write_to_csv_from_data(hcombs_new, filepath)
 
-    def add_hcombs_to_run_via_id(self, ids, save_path, changes_dict=None, save_path_hcomb_list=None):
+    def add_hcombs_to_run_via_id(self, ids, save_path, changes_dict=None, save_path_hcomb_list=None, refresh=False):
         if type(ids) is int:
             ids = [ids]
 
@@ -525,7 +525,17 @@ class RandomSearch:
         if changes_dict is not None:
             for hs in hs_to_run:
                 for key, value in changes_dict.items():
-                    hs[key] = value
+                    if key in hs.keys():
+                        hs[key] = value
+
+        if refresh:
+            hs_to_run_new = []
+            for hs in hs_to_run:
+                h_ = H()
+                h_.__dict__ = hs
+                h_.init_metrics_and_stats()
+                hs_to_run_new.append(h_.__dict__)
+            hs_to_run = hs_to_run_new
 
         if not path.exists(filepath_to_run):
             with open(filepath_to_run, 'wb') as handle:

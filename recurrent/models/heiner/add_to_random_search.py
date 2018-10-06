@@ -17,9 +17,10 @@ def add_new_hcombs(number_of_hcombs, save_path):
     rs.save_hcombs_to_run(save_path, number_of_hcombs)
 
 
-def add_hcombs_from_ids(ids, save_path, changes_dict=None):
+def add_hcombs_from_ids(ids, save_path, save_path_hcomb_list, changes_dict=None, refresh=False):
     rs = RandomSearch()
-    rs.add_hcombs_to_run_via_id(ids, save_path, changes_dict=changes_dict)
+    rs.add_hcombs_to_run_via_id(ids, save_path, save_path_hcomb_list=save_path_hcomb_list, changes_dict=changes_dict,
+                                refresh=refresh)
 
 ################################################# MODEL LOG AND CHECKPOINT SETUP DEPENDENT ON HYPERPARAMETERS
 
@@ -97,7 +98,21 @@ if __name__ == '__main__':
                         default='LDNN_v1',
                         dest="model_name",
                         metavar="<model name>",
-                        help="Model name (path).")
+                        help="Model name (path) where to put the hcomb.")
+    parser.add_argument('-mno', '--model_name_old',
+                        required=False,
+                        type=str,
+                        default='LDNN_v1',
+                        dest="model_name_old",
+                        metavar="<model name old>",
+                        help="Model name (path) where to take the hcomb from.")
+    parser.add_argument('-r', '--refresh',
+                        required=False,
+                        type=bool,
+                        default=False,
+                        dest='refresh',
+                        metavar='<refresh hcomb>',
+                        help="Refresh hcomb means resetting everything expect hyperparams.")
 
     args = parser.parse_args()
     args_dict = vars(args)
@@ -113,10 +128,17 @@ if __name__ == '__main__':
     save_path = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name)
     os.makedirs(save_path, exist_ok=True)
 
+    refresh = args_dict.pop('refresh')
+    if refresh:
+        args_dict['STAGE'] = 1
+
     changes_dict = create_changes_dict(args_dict)
 
+    model_name_old = args_dict.pop('model_name_old')
+    save_path_hcomb_list = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name_old)
+
     if ids != -1:
-        add_hcombs_from_ids(ids, save_path, changes_dict=changes_dict)
+        add_hcombs_from_ids(ids, save_path, save_path_hcomb_list, changes_dict=changes_dict, refresh=refresh)
 
     if no_new_hcombs != -1:
         add_new_hcombs(no_new_hcombs, save_path)
