@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import shelve
+from scipy.io import loadmat
 import argparse
 import os
 import sys
@@ -11,19 +11,15 @@ from collections import OrderedDict
 
 from plot_utils import defaultconfig, get_class_names, yaxis_formatting
 
-def plot_metric_vs_snr_class_averaged(metric_name, model_name, metrics_shelve, config):
+
+def plot_metric_vs_snr_class_averaged(metric_name, model_name, metric_all, config):
     '''
     plots a metric as a function of SNR (avg: azimuth/nSrc-weighted-scene/class)
-
-    :param metric_name:     one of 'BAC', 'sens' or 'spec'
-    :param model_name:      the model name used for legend
-    :param metrics_shelve:  shelve storing the metrics to be plotted
-    :param config:          plotting params
     '''
 
     SNRs_all = [-20, -10, 0, 10, 20]
 
-    metric_with_classes = metrics_shelve['metric_vs_snr_per_class'][metric_name + '_mean'][:, :]
+    metric_with_classes = np.mean(metric_all[metric_name+'_mean'][:, 1:, :], axis=1)
     metric_class_avg = np.mean(metric_with_classes, axis=1)
     plt.plot(SNRs_all, metric_class_avg, marker='o', label=model_name,
              color=config['thismodel_color'], linestyle=config['thismodel_style'])
@@ -38,21 +34,22 @@ def plot_metric_vs_snr_class_averaged(metric_name, model_name, metrics_shelve, c
     if metric_name == 'BAC':
         plt.legend(loc='lower right', fontsize=config['smallfontsize'])
 
-
-def plot_metric_vs_nsrc_with_classavg(metric_name, model_name, metrics_shelve, config):
+def plot_metric_vs_nsrc_with_classavg(metric_name, model_name, metric_all, config):
     '''
     plots a metric as a function of nSrc for (avg: azimuth, SNR, class)
-
-    :param metric_name:     one of 'BAC', 'sens' or 'spec'
-    :param model_name:      the model name used for legend
-    :param metrics_shelve:  shelve storing the metrics to be plotted
-    :param config:          plotting params
     '''
 
     nSrcs_all = [1, 2, 3, 4]
+    ind_SNR0 = 2  # index of SNR = 0 (the only SNR for which nSrc = 1 has values)
+    metric_both_mean_plot = np.zeros((len(nSrcs_all), len(get_class_names())))
+    for j, nSrc in enumerate(nSrcs_all):
+        # following taken from plot_metric_vs_nsrc_per_class in testset_evaluation
+        if nSrc > 1:
+            metric_both_mean_plot[j, :] = np.mean(metric_all[metric_name + '_mean'][:, j, :], axis=0)
+        else:  # nSrc == 1:
+            metric_both_mean_plot[j, :] = metric_all[metric_name + '_mean'][ind_SNR0, j, :]
 
-    metric_with_classes = metrics_shelve['metric_vs_nSrc_per_class'][metric_name + '_mean'][:, :]
-    metric_class_avg = np.mean(metric_with_classes, axis=1)
+    metric_class_avg = np.mean(metric_both_mean_plot, axis=1)
 
     plt.plot(nSrcs_all, metric_class_avg, marker='o', label=model_name,
              color=config['thismodel_color'], linestyle=config['thismodel_style'])
@@ -68,25 +65,17 @@ def plot_metric_vs_nsrc_with_classavg(metric_name, model_name, metrics_shelve, c
 def plot_metric_vs_model_per_class(metric_name, models, config):
     '''
     plots a metric as a function of models for each class (avg: azimuth, SNR, nSrc)
-
-    :param metric_name:     one of 'BAC', 'sens' or 'spec'
-    :param model_name:      the model name used for legend
-    :param metrics_shelve:  shelve storing the metrics to be plotted
-    :param config:          plotting params
     '''
 
     # collect data
     metric_per_class = OrderedDict()
     for j, model_name in enumerate(models):
-        # open data shelve file
-        metrics_shelve = get_shelve(model_name)
+        # open data file
+        metric_all = loadmat(os.path.join('models', model_name, 'testset_evaluation.mat'))
 
-        metric_with_classes = metrics_shelve['metric_vs_nSrc_per_class'][metric_name + '_mean'][:, :]
-
-        metric_with_classes_nSrcAvgWo1 = np.mean(metric_with_classes[1:, ], axis=0)
-        metric_per_class[model_name] = metric_with_classes_nSrcAvgWo1
-
-        metrics_shelve.close()
+        # average w.r.t. SNR and nSrc (excluding nSrc=1)
+        metric_with_classes = np.mean(metric_all[metric_name+'_mean'][:, 1:, :], axis=(0,1))
+        metric_per_class[model_name] = metric_with_classes
 
         # small vertical names starting a bit below axis
         y_text = config['ylim_' + metric_name][0]
@@ -115,16 +104,9 @@ def plot_metric_vs_model_per_class(metric_name, models, config):
     if metric_name == 'BAC':
         plt.legend(loc='lower right', ncol=3, fontsize=config['smallfontsize'], framealpha=0.5)
 
-
-def get_shelve(model_name):
-    shelvepath = os.path.join('models', model_name, 'testset_evaluation.shelve')
-    metrics_shelve = shelve.open(shelvepath)
-    return metrics_shelve
-
-
 if __name__ == '__main__':
 
-    # here we assume that the models have already shelves with the corresponding
+    # here we assume that the models have mat files  with the corresponding
     # data that were created via testset_evaluation's function evaluate_testset
 
     config = defaultconfig()
@@ -175,41 +157,40 @@ if __name__ == '__main__':
         config['thismodel_color'] = config['model_color'][i]
         config['thismodel_style'] = config['model_style'][i]
 
-        # open data shelve file
-        metrics_shelve = get_shelve(model_name)
+        # load mat file
+        metric_all = loadmat(os.path.join('models', model_name, 'testset_evaluation.mat'))
+
+
 
         # model BAC over SNR
         plt.subplot(3, 3, 1)
-        plot_metric_vs_snr_class_averaged('BAC', model_name, metrics_shelve, config)
+        plot_metric_vs_snr_class_averaged('BAC', model_name, metric_all, config)
         if i==0:
             plt.title('BAC', fontsize=config['mediumfontsize'])
 
         # model sens over SNR
         plt.subplot(3, 3, 2)
-        plot_metric_vs_snr_class_averaged('sens', model_name, metrics_shelve, config)
+        plot_metric_vs_snr_class_averaged('sens', model_name, metric_all, config)
         if i==0:
             plt.title('sensitivity', fontsize=config['mediumfontsize'])
 
         # model spec over SNR
         plt.subplot(3, 3, 3)
-        plot_metric_vs_snr_class_averaged('spec', model_name, metrics_shelve, config)
+        plot_metric_vs_snr_class_averaged('spec', model_name, metric_all, config)
         if i==0:
             plt.title('specificity', fontsize=config['mediumfontsize'])
 
         # model BAC over nSrc
         plt.subplot(3, 3, 4)
-        plot_metric_vs_nsrc_with_classavg('BAC', model_name, metrics_shelve, config)
+        plot_metric_vs_nsrc_with_classavg('BAC', model_name, metric_all, config)
 
         # model sens over nSrc
         plt.subplot(3, 3, 5)
-        plot_metric_vs_nsrc_with_classavg('sens', model_name, metrics_shelve, config)
+        plot_metric_vs_nsrc_with_classavg('sens', model_name, metric_all, config)
 
         # model spec over nSrc
         plt.subplot(3, 3, 6)
-        plot_metric_vs_nsrc_with_classavg('spec', model_name, metrics_shelve, config)
-
-        # close shelve file
-        metrics_shelve.close()
+        plot_metric_vs_nsrc_with_classavg('spec', model_name, metric_all, config)
 
     # model class BAC over model (models: ordered)
     plt.subplot(3, 3, 7)

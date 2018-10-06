@@ -1,21 +1,10 @@
 # this plotting code is shared by heiner/changbin/moritz
 # function that should be used: evaluate_testset (uses the other functions)
 
-# remark: the current code is not very well designed.
-#         what would be better (but currently not necessary; at least until Ivo
-#         wants access via Matlab to the data in this form, too) is to get rid of all
-#         except one collect function that does mean and std over all scenes
-#         with given SNR and nSrc to yield a 5 x 4 x 13 array (for mean an std resp.).
-#         here only attention needs to be taken that nSrc=1 is not really associated
-#         with a SNR (or should be infinity), therefore only e.g. SNR=0, should be
-#         filled and Ivo for example takes nan values for the other SNR when nSrc=1
-
-
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.ticker
 import os
-import shelve
+from scipy.io import loadmat, savemat
 from plot_utils import defaultconfig, get_class_names, get_test_scene_params, yaxis_formatting
 
 def get_metric(sens_per_scene_class, spec_per_scene_class, metric_name, class_avg=False):
@@ -34,212 +23,78 @@ def get_metric(sens_per_scene_class, spec_per_scene_class, metric_name, class_av
         return metric_per_class_scene
 
 
-
-def collect_metric_vs_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, metrics_shelve):
+def collect_metric_without_azimuth(sens_per_scene_class, spec_per_scene_class):
     '''
-    extract from the given arrays and test scene params the data allowing
-    to plot a curve as a function of SNR for each nSrc
+        extract from the given arrays and test scene params the metric as an array of size
+        SNR x nSrc x class -- one for mean one for std across scenes with different azimuth)
 
-    :param sens_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13)
-    :param spec_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13)
-    :param metric_name:             one of 'BAC', 'sens' or 'spec'
-    :param metrics_shelve:          shelve storing the metrics for later plotting
-    '''
-
-    result = {}
-
-    # get scene params
-    test_scenes = get_test_scene_params()
-
-    SNRs_all = [-20, -10, 0, 10, 20]
-
-    for metric_name in ['BAC', 'sens', 'spec']:
-
-        metric_per_scene = get_metric(sens_per_scene_class, spec_per_scene_class, metric_name)
-        metric = {}
-        metric_both_mean = {} # avg over azimuth and class
-        metric_class_std = {} # avg over azimuth, std over class
-        metric_azimuth_std = {} # avg over class, std over azimuth
-        no_azimuths = {} # no of azimuths (to indicate statistics samplesize)
-        result[metric_name + '_mean'] = {}
-        result[metric_name + '_std_class'] = {}
-        result[metric_name + '_std_azimuth'] = {}
-        result[metric_name + '_no_azimuths'] = {}
-        result[metric_name + '_SNRs'] = {}
-        for nSrc in [1, 2, 3, 4]:
-            if nSrc == 1:
-                SNRs = [0]
-            else:
-                SNRs = SNRs_all
-
-            for SNR in SNRs:
-                metric[(nSrc,SNR)] = []
-                # append all scenes with nSrc,SNR to the previous list
-                for sceneid, (nSrc_scene, SNR_scene, azimuth_scene) in enumerate(test_scenes):
-                    # correction: nSrc 1 => SNR fixed 0; nSrc >1 => second element contains SNR w.r.t master
-                    SNR_scene = 0 if nSrc_scene == 1 else SNR_scene[1]
-                    if nSrc == nSrc_scene and SNR == SNR_scene:
-                         metric[(nSrc, SNR)].append(metric_per_scene[sceneid, :]) # classes still retained
-
-                metric_class_mean = [np.mean(m) for m in metric[(nSrc, SNR)]] # only temporary needed
-                metric_class_std[(nSrc, SNR)] = np.std(np.mean(metric[(nSrc, SNR)], axis=0))
-                metric_azimuth_std[(nSrc, SNR)] = np.std(metric_class_mean)
-                no_azimuths[(nSrc, SNR)] = len(metric_class_mean)
-                metric_both_mean[(nSrc, SNR)] = np.mean(metric_class_mean)
-
-            metric_both_mean_plot = [metric_both_mean[(nSrc, SNR)] for SNR in SNRs]
-            metric_class_std_plot = [metric_class_std[(nSrc, SNR)] for SNR in SNRs]
-            metric_azimuth_std_plot = [metric_azimuth_std[(nSrc, SNR)] for SNR in SNRs]
-            if nSrc == 1:
-                # extend nSrc 1 plot to cover whole SNR range (alternative: only marker at SNR=0)
-                metric_both_mean_plot = metric_both_mean_plot * len(SNRs_all)
-                metric_class_std_plot = metric_class_std_plot * len(SNRs_all)
-                metric_azimuth_std_plot = metric_azimuth_std_plot * len(SNRs_all)
-
-            metric_both_mean_plot = np.array(metric_both_mean_plot)
-            metric_class_std_plot = np.array(metric_class_std_plot)
-            metric_azimuth_std_plot = np.array(metric_azimuth_std_plot)
-            no_azimuths_legend = {nSrc: no_azimuths[(nSrc, SNR)] for SNR in SNRs}
-
-            result[metric_name + '_mean'][nSrc] = metric_both_mean_plot
-            result[metric_name + '_std_class'][nSrc] = metric_class_std_plot
-            result[metric_name + '_std_azimuth'][nSrc] = metric_azimuth_std_plot
-            result[metric_name + '_no_azimuths'][nSrc] = no_azimuths_legend
-            result[metric_name + '_SNRs'][nSrc] = np.array(SNRs_all) # nSrc could differ e.g. for nSrc=1 if marker plot
-
-    metrics_shelve['metric_vs_snr_per_nsrc'] = result # save result in shelve
-
-
-def collect_metric_vs_snr_per_class(sens_per_scene_class, spec_per_scene_class, metrics_shelve):
-    '''
-    extract from the given arrays and test scene params the data allowing
-    to plot a curve as a function of SNR for each class (ignoring nsrc=1 in the avg)
-
-    :param sens_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13)
-    :param spec_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13)
-    :param metric_name:             one of 'BAC', 'sens' or 'spec'
-    :param metrics_shelve:          shelve storing the metrics for later plotting
-    '''
-
-    result = {}
-
-    # get scene params
-    test_scenes = get_test_scene_params()
-
-    SNRs_all = [-20, -10, 0, 10, 20]
-    nSrcs_wo_1 = [2, 3, 4]
-
-    for metric_name in ['BAC', 'sens', 'spec']:
-
-        metric_per_scene = get_metric(sens_per_scene_class, spec_per_scene_class, metric_name)
-        metric = {}
-        metric_mean_over_azimuth = {}
-        metric_both_mean = {}  # avg over azimuth and class
-        no_scenes = {}
-
-        for SNR in SNRs_all:
-            for nSrc in nSrcs_wo_1:
-
-                metric[(SNR,nSrc)] = []
-                # append all scenes with nSrc,SNR to the previous list
-                for sceneid, (nSrc_scene, SNR_scene, azimuth_scene) in enumerate(test_scenes):
-                    # since nSrc 1 is excluded => SNR fixed 0; nSrc >1 => second element contains SNR w.r.t master
-                    SNR_scene = 0 if not isinstance(SNR_scene, list) else SNR_scene[1]
-                    if SNR == SNR_scene and nSrc == nSrc_scene:
-                        metric[(SNR,nSrc)].append(metric_per_scene[sceneid, :])  # classes still retained via ":"
-
-                # do averaging w.r.t. azimuth
-                metric_mean_over_azimuth[(SNR, nSrc)] = np.mean([m for m in metric[(SNR,nSrc)]], axis=0)
-                no_scenes[(SNR,nSrc)] = len(metric[(SNR,nSrc)])
-
-            metrics_per_SNR = np.array([metric_mean_over_azimuth[(SNR, nSrc)] for nSrc in nSrcs_wo_1])
-            # the following scene weighting turned out to be redundant and is thus turned off (would be incorrect)
-            # weights = np.array([1.0/no_scenes[(SNR,nSrc)] for nSrc in nSrcs_wo_1])
-            # metric_both_mean[SNR] = np.sum(metrics_per_SNR * weights[:,np.newaxis] / np.sum(weights), axis=0)
-            metric_both_mean[SNR] = np.mean(metrics_per_SNR, axis=0)
-
-        metric_both_mean_plot = np.array([metric_both_mean[SNR] for SNR in SNRs_all])
-        result[metric_name + '_mean'] = metric_both_mean_plot
-        result[metric_name + '_SNRs'] = np.array(SNRs_all)  # nSrc could differ e.g. for nSrc=1 if marker plot
-
-    metrics_shelve['metric_vs_snr_per_class'] = result  # save result in shelve
-
-
-def collect_metric_vs_nSrc_per_class(sens_per_scene_class, spec_per_scene_class, metrics_shelve):
-    '''
-    extract from the given arrays and test scene params the data allowing
-    to plot a curve as a function of nSrc for each class
-
-    :param sens_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13)
-    :param spec_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13)
-    :param metric_name:             one of 'BAC', 'sens' or 'spec'
-    :param metrics_shelve:          shelve storing the metrics for later plotting
-    '''
-
-    result = {}
-
-    # get scene params
-    test_scenes = get_test_scene_params()
+        :param sens_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13)
+        :param spec_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13)
+        :param metric_name:             one of 'BAC', 'sens' or 'spec'
+        '''
 
     SNRs_all = [-20, -10, 0, 10, 20]
     nSrcs_all = [1, 2, 3, 4]
 
+    # get scene params
+    test_scenes = get_test_scene_params()
+
+    metric_all = {}
+
     for metric_name in ['BAC', 'sens', 'spec']:
+        metric_mean = np.zeros((len(SNRs_all), len(nSrcs_all), len(get_class_names())))
+        metric_std = np.zeros((len(SNRs_all), len(nSrcs_all)))
 
         metric_per_scene = get_metric(sens_per_scene_class, spec_per_scene_class, metric_name)
-        metric = {}
-        metric_mean_over_azimuth = {}
-        metric_both_mean = {}  # avg over azimuth and class
-        result[metric_name + '_mean'] = {}
-        result[metric_name + '_nSrc'] = {}
+        for i, SNR in enumerate(SNRs_all):
+            for j, nSrc in enumerate(nSrcs_all):
 
-        for nSrc in nSrcs_all:
+                metric_scenes = []
 
-            metric_mean_over_azimuth[nSrc] = {}
-
-            SNRs = [0] if nSrc == 1 else SNRs_all
-
-            for SNR in SNRs:
-                metric[(nSrc, SNR)] = []
-                # append all scenes with nSrc,SNR to the previous list
                 for sceneid, (nSrc_scene, SNR_scene, azimuth_scene) in enumerate(test_scenes):
                     SNR_scene = 0 if nSrc_scene == 1 else SNR_scene[1]
                     if nSrc == nSrc_scene and SNR == SNR_scene:
-                        metric[(nSrc, SNR)].append(metric_per_scene[sceneid, :])  # classes still retained
-
-                metric_mean_over_azimuth[nSrc][SNR] = np.mean(np.array(metric[(nSrc, SNR)]), axis=0)
-
-            metric_both_mean[nSrc] = np.mean(np.array([metric_mean_over_azimuth[nSrc][SNR]
-                                                       for SNR in SNRs]),
-                                             axis=0) # classes still retained
-        metric_both_mean_plot = np.array([metric_both_mean[nSrc] for nSrc in nSrcs_all])
-        result[metric_name + '_mean'] = metric_both_mean_plot
-        result[metric_name + '_nSrcs'] = np.array(nSrcs_all)
-
-    metrics_shelve['metric_vs_nSrc_per_class'] = result  # save result in shelve
+                        metric_scenes.append(metric_per_scene[sceneid, :])  # classes still retained
 
 
+                if not metric_scenes:
+                    metric_mean[i, j, :] = np.nan
+                    metric_std[i, j] = np.nan
 
-def plot_metric_vs_snr_per_nsrc(metric_name, metrics_shelve, config):
+                else:
+                    metric_mean[i, j, :] = np.mean(np.array(metric_scenes), axis=0)
+                    metric_std[i, j] = np.std(np.mean(np.array(metric_scenes), axis=1), axis=0)
+
+        metric_all[metric_name+'_mean'] = metric_mean
+        metric_all[metric_name + '_std'] = metric_std
+
+    return metric_all
+
+
+def plot_metric_vs_snr_per_nsrc(metric_name, metric_all, config):
     '''
     plots a curve as a function of SNR for each nSrc:
         - mean metric (averaged over class and azimuth)
         - class std (averaged over azimuth)
         - azimuth std (averaged over class)
-
-    :param metric_name:     one of 'BAC', 'sens' or 'spec'
-    :param metrics_shelve:  shelve storing the metrics to be plotted
-    :param config:          plotting params
     '''
 
     SNRs_all = [-20, -10, 0, 10, 20]
+    ind_SNR0 = 2
     nSrcs_all = [1, 2, 3, 4]
 
-    for i, nSrc in enumerate(nSrcs_all):
-        metric_both_mean_plot = metrics_shelve['metric_vs_snr_per_nsrc'][metric_name + '_mean'][nSrc]
-        metric_class_std_plot = metrics_shelve['metric_vs_snr_per_nsrc'][metric_name + '_std_class'][nSrc]
-        metric_azimuth_std_plot = metrics_shelve['metric_vs_snr_per_nsrc'][metric_name + '_std_azimuth'][nSrc]
-        metric_no_azimuths = metrics_shelve['metric_vs_snr_per_nsrc'][metric_name + '_no_azimuths'][nSrc]
+    for j, nSrc in enumerate(nSrcs_all):
+        if nSrc > 1:
+            metric_both_mean_plot = np.mean(metric_all[metric_name+'_mean'][:, j, :], axis=1)
+            metric_azimuth_std_plot = metric_all[metric_name+'_std'][:, j]
+            metric_class_std_plot = np.std(metric_all[metric_name+'_mean'][:, j, :], axis=1)
+        else:
+            metric_both_mean_plot = np.mean(metric_all[metric_name+'_mean'][ind_SNR0, j, :], axis=0) \
+                                    * np.ones(len(SNRs_all))
+            metric_azimuth_std_plot = metric_all[metric_name+'_std'][ind_SNR0, j] \
+                                      * np.ones(len(SNRs_all))
+            metric_class_std_plot = np.std(metric_all[metric_name+'_mean'][ind_SNR0, j, :], axis=0) \
+                                    * np.ones(len(SNRs_all))
 
         # plot mean (class and azimuth)
         plt.plot(SNRs_all, metric_both_mean_plot, marker='o' if nSrc > 1 else None, color=config['colors_nSrc'][nSrc],
@@ -255,7 +110,7 @@ def plot_metric_vs_snr_per_nsrc(metric_name, metrics_shelve, config):
 
         # plot std over azimuths (class avg)
         # azimuth_stdstr = 'azimuth std (of {})'.format(metric_no_azimuths[nSrc]))
-        azimuth_stdstr = 'scene std' if i == 0 else None
+        azimuth_stdstr = 'scene std' if j == 0 else None
         if config['show_class_std']:
             plt.plot(SNRs_all, metric_both_mean_plot+metric_azimuth_std_plot, color=config['colors_nSrc'][nSrc],
                      linestyle='dashed', label=azimuth_stdstr)
@@ -290,20 +145,16 @@ def plot_metric_vs_snr_per_nsrc(metric_name, metrics_shelve, config):
             plt.legend([handles[idx] for idx in order], [labels[idx] for idx in order],
                        loc='lower right', fontsize=config['smallfontsize'])
 
-def plot_metric_vs_snr_per_class(metric_name, metrics_shelve, config):
-    '''
-    plots a curve as a function of SNR for each class:
-        - mean metric (first averaged over azimuth and then scene-weighted averaged over nSrc)
 
-    :param metric_name:     one of 'BAC', 'sens' or 'spec'
-    :param metrics_shelve:  shelve storing the metrics to be plotted
-    :param config:          plotting params
+def plot_metric_vs_snr_per_class(metric_name, metric_all, config):
+    '''
+    plots the mean metric as a function of SNR for each class (ignoring nSrc=1 in nSrc avg)
     '''
 
     SNRs_all = [-20, -10, 0, 10, 20]
     for i, class_name in enumerate(get_class_names(short=True)):
-        metric_both_mean_plot = metrics_shelve['metric_vs_snr_per_class'][metric_name + '_mean'][:, i]
-
+        # avg over nSrc ignoring nSrc=1:
+        metric_both_mean_plot = np.mean(metric_all[metric_name+'_mean'][:, 1:, i], axis=1)
         plt.plot(SNRs_all, metric_both_mean_plot, marker='o', color=config['colors_class'][i],
                  label='{}'.format(class_name))
 
@@ -318,10 +169,9 @@ def plot_metric_vs_snr_per_class(metric_name, metrics_shelve, config):
         plt.legend(loc='lower right', ncol=3, fontsize=config['smallfontsize'])
 
 
-def plot_metric_vs_nsrc_per_class(metric_name, metrics_shelve, config):
+def plot_metric_vs_nsrc_per_class(metric_name, metric_all, config):
     '''
-    plots a curve as a function of nSrc for each class:
-        - mean metric (averaged over azimuth and over SNR)
+    plots the mean metric as a function of nSrc for each class
 
     :param metric_name:     one of 'BAC', 'sens' or 'spec'
     :param metrics_shelve:  shelve storing the metrics to be plotted
@@ -329,10 +179,19 @@ def plot_metric_vs_nsrc_per_class(metric_name, metrics_shelve, config):
     '''
 
     nSrcs_all = [1, 2, 3, 4]
-    for i, class_name in enumerate(get_class_names(short=True)):
-        metric_both_mean_plot = metrics_shelve['metric_vs_nSrc_per_class'][metric_name + '_mean'][:, i]
+    ind_SNR0 = 2 # index of SNR = 0 (the only SNR for which nSrc = 1 has values)
+    metric_both_mean_plot = np.zeros((len(nSrcs_all), len(get_class_names())))
+    for j, nSrc in enumerate(nSrcs_all):
+        # the following if/else was also copied to plot_metric_vs_nsrc_with_classavg in model_comparison
+        if nSrc > 1:
+            metric_both_mean_plot[j, :] =  np.mean(metric_all[metric_name+'_mean'][:, j, :], axis=0)
+        else: # nSrc == 1:
+            metric_both_mean_plot[j, :] = metric_all[metric_name+'_mean'][ind_SNR0, j, :]
 
-        plt.plot(nSrcs_all, metric_both_mean_plot, marker='o', color=config['colors_class'][i],
+    for i, class_name in enumerate(get_class_names(short=True)):
+        # averaging over SNR
+
+        plt.plot(nSrcs_all, metric_both_mean_plot[:, i], marker='o', color=config['colors_class'][i],
                  label='{}'.format(class_name))
 
     plt.ylim(config['ylim_' + metric_name])
@@ -354,12 +213,11 @@ def evaluate_testset(folder, name, plotconfig={}, sens_per_scene_class=None, spe
     :param sens_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13) [only req. if collect = True]
     :param spec_per_scene_class:    array with shape (nscenes, nclasses) = (168, 13) [only req. if collect = True]
     :param collect:                 if True: collect the metrics from sens_per_scene_class and
-                                    spec_per_scene_class; if False: load metrics from shelve files
+                                    spec_per_scene_class; if False: load metrics from mat files
     '''
 
-    # shelve to store the data that is plotted
-    filename_prefix = 'testset_evaluation' # remark: this filename is assumed to stay as it is
-    metrics_shelve = shelve.open(os.path.join(folder, filename_prefix+'.shelve'))
+    # filename where to store the data and plots
+    filename_prefix = 'testset_evaluation' # remark: this filename is assumed to stay as it is (use in other scripts)
 
     # plot config
     config = defaultconfig()
@@ -375,35 +233,40 @@ def evaluate_testset(folder, name, plotconfig={}, sens_per_scene_class=None, spe
     plt.suptitle(suptitle, horizontalalignment='center', fontsize=config['mediumfontsize'])
 
     if collect:
-        print('collecting metrics and saving to shelve files which can be used for plotting (now and in the future)')
-        collect_metric_vs_snr_per_nsrc(sens_per_scene_class, spec_per_scene_class, metrics_shelve)
-        collect_metric_vs_snr_per_class(sens_per_scene_class, spec_per_scene_class, metrics_shelve)
-        collect_metric_vs_nSrc_per_class(sens_per_scene_class, spec_per_scene_class, metrics_shelve)
+        metric_all = collect_metric_without_azimuth(sens_per_scene_class, spec_per_scene_class)
+        metric_all['sens_per_scene_class'] = sens_per_scene_class
+        metric_all['spec_per_scene_class'] = spec_per_scene_class
+        metric_all['BAC_per_scene_class'] = (sens_per_scene_class+spec_per_scene_class)/2.0
+        metric_all['SNR'] = np.array([-20, -10, 0, 10, 20])
+        metric_all['nSrc'] = np.array([1, 2, 3, 4])
+        savemat(os.path.join(folder, filename_prefix+'.mat'), metric_all)
+        # save to file
+    else:
+        # load instead from file
+        metric_all = loadmat(os.path.join(folder, filename_prefix + '.mat'))
 
     plt.subplot(3, 3, 1)
     plt.title('BAC', fontsize=config['mediumfontsize'])
-    plot_metric_vs_snr_per_nsrc('BAC', metrics_shelve, config)
+    plot_metric_vs_snr_per_nsrc('BAC', metric_all, config)
     plt.subplot(3, 3, 2)
     plt.title('sensitivity', fontsize=config['mediumfontsize'])
-    plot_metric_vs_snr_per_nsrc('sens', metrics_shelve, config)
+    plot_metric_vs_snr_per_nsrc('sens', metric_all, config)
     plt.subplot(3, 3, 3)
     plt.title('specificity', fontsize=config['mediumfontsize'])
-    plot_metric_vs_snr_per_nsrc('spec', metrics_shelve, config)
+    plot_metric_vs_snr_per_nsrc('spec', metric_all, config)
 
     plt.subplot(3, 3, 4)
-    plot_metric_vs_snr_per_class('BAC', metrics_shelve, config)
+    plot_metric_vs_snr_per_class('BAC',  metric_all, config)
     plt.subplot(3, 3, 5)
-    plot_metric_vs_snr_per_class('sens', metrics_shelve, config)
+    plot_metric_vs_snr_per_class('sens',  metric_all, config)
     plt.subplot(3, 3, 6)
-    plot_metric_vs_snr_per_class('spec', metrics_shelve, config)
+    plot_metric_vs_snr_per_class('spec',  metric_all, config)
 
     plt.subplot(3, 3, 7)
-    plot_metric_vs_nsrc_per_class('BAC', metrics_shelve, config)
+    plot_metric_vs_nsrc_per_class('BAC', metric_all, config)
     plt.subplot(3, 3, 8)
-    plot_metric_vs_nsrc_per_class('sens', metrics_shelve, config)
+    plot_metric_vs_nsrc_per_class('sens', metric_all, config)
     plt.subplot(3, 3, 9)
-    plot_metric_vs_nsrc_per_class('spec', metrics_shelve, config)
+    plot_metric_vs_nsrc_per_class('spec', metric_all, config)
 
     plt.savefig(os.path.join(folder, filename_prefix+'.png'))
-
-    metrics_shelve.close()

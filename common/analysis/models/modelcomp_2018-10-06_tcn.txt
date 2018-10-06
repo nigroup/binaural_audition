@@ -1,0 +1,1 @@
+python3 model_comparison.py  --suffix  tcn  --models  tcn_10s_n119_hs1025_me8_scweights  tcn_10s_n119_hs1025_me15_noscweights  tcn_1s_n119_hs119_me11_scweights  --color  blue  blue  blue  --style  solid  dashed  dotted  
