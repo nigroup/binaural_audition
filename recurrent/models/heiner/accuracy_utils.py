@@ -3,7 +3,7 @@ import numba
 
 
 def get_scene_number_from_scene_instance_id(scene_instance_id):
-    return int(scene_instance_id // 1e5)
+    return int(scene_instance_id // 1e4)
 
 
 @numba.jit
@@ -270,7 +270,7 @@ def test_val_accuracy(with_wrong_predictions=False):
         scene_ids = np.random.choice(range(1, n_scenes+1), (shape[0], shape[1], 1)).astype(np.float32)
         scene_ids = np.tile(scene_ids, shape[2])
         y_true_ids = scene_ids
-        y_true_ids = y_true_ids * 1e5
+        y_true_ids = y_true_ids * 1e4
         scene_instance_ids = np.random.choice(range(1, n_scene_instances_per_scene), (shape[0], shape[1], 1)).astype(np.float32)
         scene_instance_ids = np.tile(scene_instance_ids, shape[2])
         y_true_ids = y_true_ids + scene_instance_ids
@@ -323,8 +323,8 @@ def test_val_accuracy_real_data(with_wrong_predictions=False):
 
                 # test per scene -> passes
 
-                # p_y = np.where(b_y[:, :, :, 1] // 1e5 == 1, np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape)), p_y)
-                # p_y = np.where(b_y[:, :, :, 1] // 1e5 == 2, np.abs(p_y - np.random.choice([0, 1], p_y.shape)), p_y)
+                # p_y = np.where(b_y[:, :, :, 1] // 1e4 == 1, np.abs(p_y - np.random.choice([0, 1, 1], p_y.shape)), p_y)
+                # p_y = np.where(b_y[:, :, :, 1] // 1e4 == 2, np.abs(p_y - np.random.choice([0, 1], p_y.shape)), p_y)
                 #
                 p_y[pad] = mask_val
             else:

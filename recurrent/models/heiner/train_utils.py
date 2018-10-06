@@ -27,7 +27,7 @@ def calculate_sample_weights_batch(y_scene_instance_ids, file_lengths_dict, scen
 
     # masked_time_steps = (y_scene_instance_ids != mask_val).astype(np.float32)
     scene_instance_ids_in_batch = y_scene_instance_ids.astype(np.int)
-    weights = weights_per_scene[:, 0][((scene_instance_ids_in_batch // 1e5) - 1).astype(np.int)]  # * masked_time_steps
+    weights = weights_per_scene[:, 0][((scene_instance_ids_in_batch // 1e4) - 1).astype(np.int)]  # * masked_time_steps
 
     # remark: performance improvement possible by doing the following dict inversion
     #         only once and not per call of this function which is done in each batch
