@@ -128,7 +128,7 @@ if __name__ == '__main__':
     # data that were created via testset_evaluation's function evaluate_testset
 
     config = defaultconfig()
-    config['show_explanation'] = True
+    config['show_explanation'] = False
 
     parser = argparse.ArgumentParser()
 
@@ -161,6 +161,8 @@ if __name__ == '__main__':
         config['model_style'] = args.style
 
     plt.figure(figsize=(16, 12))
+
+    description += ' -- '+args.suffix
     if config['show_explanation']:
         description += ('\nfirst row: average w.r.t. azimuth, nSrc, class'+
                         '\nsecond row: average w.r.t. azimuth, SNR, class'+

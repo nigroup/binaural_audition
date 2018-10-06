@@ -1,0 +1,1 @@
+python3 model_comparison.py  --suffix  blockinterprete  --models  LDNN_id_0_in_LDNN_final_new_weighting  changbin_block  tcn_10s_n119_hs1025_me8_scweights  tcn_1s_n119_hs119_me11_scweights  glmnet_-sf_+wns_1s  glmnet_-sf_+wns_500ms_nsaEQnss  --color  green  pink  blue  blue  red  red  --style  solid  solid  solid  dashed  solid  dashed  
