@@ -83,9 +83,11 @@ def fix_experiment_files(folder):
                 save_h5(params, paramsfile)
 
 def fix_historysize(folder):
-    # script goes recursively through all folders, reads h5 params file,
-    # changes key historysize as follows and saves the params file again
-    # (the folder _names_ I will do manually)
+    # script goes recursively through all folders,
+    # 1) reads h5 params file,
+    #    changes key historysize as follows and saves the params file again
+    # 2) if folder name contains one of hl$SEEBELOW
+    #    rename it to hl$SEERIGHTBELOW
     #   1025 -> 2049
     #   513  -> 1025
     #   129  -> 257
