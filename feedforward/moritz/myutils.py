@@ -82,6 +82,17 @@ def fix_experiment_files(folder):
             if modified:
                 save_h5(params, paramsfile)
 
+def fix_historysize(folder):
+    # script goes recursively through all folders, reads h5 params file,
+    # changes key historysize as follows and saves the params file again
+    # (the folder _names_ I will do manually)
+    #   1025 -> 2049
+    #   513  -> 1025
+    #   129  -> 257
+    #   5    -> 9
+    #   33   -> 65
+    pass
+
 # loads a flat dictionary from a hdf5 file
 def load_h5(filename):
     data = {}
@@ -104,8 +115,12 @@ def printerror(text):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--fixexpfiles', action='store_true')
+    parser.add_argument('--fixhistorysize', action='store_true')
     parser.add_argument('--folder', type=str)
     args = parser.parse_args()
 
     if args.fixexpfiles:
         fix_experiment_files(args.folder)
+
+    if args.fixhistorysize:
+        fix_historysize(args.folder)
