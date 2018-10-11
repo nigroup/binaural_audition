@@ -14,11 +14,11 @@ from myutils import printerror
 #         i.e., input layer is 0 not the first residual layer
 # historylength calculation see assert in this functino
 def obtain_nextlarger_residuallayers_refining_historysize(params):
-    params['residuallayers'] = math.ceil(math.log2((params['historylength'] - 1)/(params['kernelsize']-1))) + 1
+    params['residuallayers'] = math.ceil(math.log2((params['historylength'] - 1)/(params['kernelsize']-1)))
 
     output = ''
 
-    new_historylength = (params['kernelsize'] - 1) * 2 ** (params['residuallayers'] - 1) + 1
+    new_historylength = (params['kernelsize'] - 1) * 2 ** params['residuallayers']  +  1
     if new_historylength != params['historylength']:
         output = output + 'the given historylength {} was modified to {}\n'.format(params['historylength'], new_historylength)
         params['historylength'] = new_historylength
@@ -30,7 +30,7 @@ def obtain_nextlarger_residuallayers_refining_historysize(params):
                                                                                            changestr,
                                                                                            params['residuallayers'])
 
-    assert params['historylength'] == (params['kernelsize'] - 1) * 2 ** (params['residuallayers'] - 1) + 1
+    assert params['historylength'] == (params['kernelsize'] - 1) * 2 ** params['residuallayers']  +  1
 
     return output
 

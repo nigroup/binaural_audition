@@ -82,17 +82,29 @@ def fix_experiment_files(folder):
             if modified:
                 save_h5(params, paramsfile)
 
-def fix_historysize(folder):
-    # script goes recursively through all folders,
-    # 1) reads h5 params file,
-    #    changes key historysize as follows and saves the params file again
-    # 2) if folder name contains one of hl$SEEBELOW
-    #    rename it to hl$SEERIGHTBELOW
-    #   1025 -> 2049
-    #   513  -> 1025
-    #   129  -> 257
-    #   5    -> 9
-    #   33   -> 65
+def fix_historylength():
+
+    # script goes through all folders in:
+    #   experiments/classweights_only/*/*
+    #   experiments/sceneinstweighted/*/*
+    folders = glob.glob('experiments/classweights_only/*/*')
+    folders += glob.glob('experiments/sceneinstweighted/*/*')
+
+
+    for f in folders:
+        if os.path.isdir(f):
+            paramsfile = os.path.join(f, 'params.h5')
+            params = load_h5(paramsfile)
+
+            # modify params[...] to correct for previously wrong calculated historylength
+            newhistsize = (params['historylength'] - 1) * 2 + 1
+            print('changing params[\'historylength\'] from {} to {}'
+                  .format(params['historylength'], newhistsize))
+
+            params['historylength'] = newhistsize
+
+            print('save_h5(params, paramsfile) would be called now for folder '+f+' but is commented out')
+            save_h5(params, paramsfile)
     pass
 
 # loads a flat dictionary from a hdf5 file
@@ -117,12 +129,12 @@ def printerror(text):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--fixexpfiles', action='store_true')
-    parser.add_argument('--fixhistorysize', action='store_true')
+    parser.add_argument('--fixhistorylength', action='store_true')
     parser.add_argument('--folder', type=str)
     args = parser.parse_args()
 
     if args.fixexpfiles:
         fix_experiment_files(args.folder)
 
-    if args.fixhistorysize:
-        fix_historysize(args.folder)
+    if args.fixhistorylength:
+        fix_historylength()

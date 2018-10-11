@@ -113,7 +113,7 @@ if args.debug:
     print('\n!!!!!!!!!!!!!!!!!!!!! DEBUGING MODE RUNNING !!!!!!!!!!!!!!!\n\n') # remove also following lines
     time.sleep(1.5)
     override_params['featuremaps'] = 10
-    override_params['historylength'] = 100 # for kernelsize 3: 1000 => 1025 (10 layers) ; 100 => 129 (7 layers)
+    override_params['historylength'] = 100 # for kernelsize 3: 1000 => 1025 (9 layers) ; 100 => 129 (6 layers)
     override_params['scenes_trainvalid'] = [1]
     override_params['scenes_test'] = [1]
     override_params['trainfolds'] = [1]
