@@ -17,7 +17,10 @@ def add_new_hcombs(number_of_hcombs, save_path):
     rs.save_hcombs_to_run(save_path, number_of_hcombs)
 
 
-def add_hcombs_from_ids(ids, save_path, save_path_hcomb_list, changes_dict=None, refresh=False):
+def add_hcombs_from_ids(ids, save_path, save_path_hcomb_list=None, changes_dict=None, refresh=False):
+    if save_path_hcomb_list is None:
+        save_path_hcomb_list = save_path
+
     rs = RandomSearch()
     rs.add_hcombs_to_run_via_id(ids, save_path, save_path_hcomb_list=save_path_hcomb_list, changes_dict=changes_dict,
                                 refresh=refresh)
@@ -27,7 +30,7 @@ def add_hcombs_from_ids(ids, save_path, save_path_hcomb_list, changes_dict=None,
 def create_changes_dict(args_changes_dict):
     changes_dict = dict()
     for key, value in args_changes_dict.items():
-        if value == -1:
+        if value == -1 or value == '':
             continue
         else:
             changes_dict[key] = value
@@ -92,6 +95,20 @@ if __name__ == '__main__':
                         dest='STAGE',
                         metavar="<changes_dict: STAGE>",
                         help="Parameter STAGE for changes dict.")
+    parser.add_argument('-ts', '--time_steps',
+                        required=False,
+                        type=int,
+                        default=-1,
+                        dest='TIME_STEPS',
+                        metavar="<changes_dict: TIME_STEPS>",
+                        help="Parameter TIME_STEPS for changes dict.")
+    parser.add_argument('-lm', '--label_mode',
+                        required=False,
+                        type=str,
+                        default='',
+                        dest='LABEL_MODE',
+                        metavar="<changes_dict: LABEL_MODE>",
+                        help="Parameter LABEL_MODE for changes dict.")
     parser.add_argument('-mn', '--model_name',
                         required=False,
                         type=str,
