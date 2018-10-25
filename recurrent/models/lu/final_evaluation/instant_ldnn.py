@@ -28,8 +28,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 class HyperParameters:
     def __init__(self, VAL_FOLD, FOLD_NAME,MACRO_PATH):
         # OLD_EPOCH indicates which epoch to restore from storeded model
-        self.MODEL_SAVE = False
-        self.RESTORE = True
+        self.MODEL_SAVE = True
+        self.RESTORE = False
         self.OLD_EPOCH = 0
         if not self.RESTORE:
             # Set up log directory
@@ -42,38 +42,40 @@ class HyperParameters:
                 os.makedirs(self.SESSION_DIR)
         else:
             self.RESTORE_DATE = FOLD_NAME
-            self.OLD_EPOCH = 11
+            self.OLD_EPOCH = 14
             self.LOG_FOLDER = './log/' + self.RESTORE_DATE + '/'
             self.SESSION_DIR = self.LOG_FOLDER + str(VAL_FOLD) + '/'
 
+		# How many scenes include in this model.
         self.SCENES = ['scene'+str(i) for i in range(1,81)]
-        self.TEST_FOLD = 7
-        self.TEST_EPOCH = 11
         self.MACRO_PATH = MACRO_PATH
-        self.LABEL_MODE = 'instant'
+        # early stopping--patient
+        self.PATIENCE = 5
+        self.SO_FAR_BEST = 0
+        self.ACCUMULATOR = 0
         # Parameters for stacked-LSTM layer
-        self.NUM_HIDDEN = 582
-        self.NUM_LSTM = 4
+        self.NUM_HIDDEN = 250
+        self.NUM_LSTM = 3
         # Parameters for MLP
-        self.NUM_NEURON = 210
+        self.NUM_NEURON = 1200
         self.NUM_MLP = 1
 
         # regularization
-        self.LAMBDA_L2 = 0.0000459
-        self.OUTPUT_KEEP_PROB = 0.868368616
+        self.LAMBDA_L2 = 0
+        self.OUTPUT_KEEP_PROB = 0.5
         # Common parameters
         self.OUTPUT_THRESHOLD = 0.5
-        self.BATCH_SIZE = 16
+        self.BATCH_SIZE = 32
         self.VALIDATION_BATCH_SIZE = 32
-        self.EPOCHS = 16
-        self.TIMELENGTH = 3000
+        self.EPOCHS = 32
+        self.TIMELENGTH = 1000
         self.MAX_GRAD_NORM = 1.0
         self.NUM_CLASSES = 13
-        self.LEARNING_RATE = 0.000193061
+        self.LEARNING_RATE = 0.001
         # Pre-processing dataset to get rectangle or paths(for validation)
         self.VAL_FOLD = VAL_FOLD
-        self.TRAIN_SET, self.PATHS = get_train_data(self.VAL_FOLD, self.SCENES, self.EPOCHS, self.TIMELENGTH,MACRO_PATH)
-        self.VALID_SET = get_test_data(folder=self.TEST_FOLD)
+        self.TRAIN_SET, self.PATHS = get_train_data(self.VAL_FOLD, self.SCENES, 1, self.TIMELENGTH,MACRO_PATH)
+        self.VALID_SET = get_validation_data(self.VAL_FOLD,self.SCENES, 1, self.TIMELENGTH,MACRO_PATH)
         self.TOTAL_SAMPLES = len(self.PATHS)
         self.NUM_TRAIN = len(self.TRAIN_SET)
         self.NUM_TEST = len(self.VALID_SET)
@@ -82,20 +84,16 @@ class HyperParameters:
         self.MEAN,self.STD = self.get_scalar()
     def update_attribute(self):
         self.TRAIN_SET, self.PATHS = get_train_data(self.VAL_FOLD, self.SCENES, self.EPOCHS, self.TIMELENGTH,self.MACRO_PATH)
-        self.VALID_SET = get_test_data(folder=self.TEST_FOLD)
+        self.VALID_SET = get_validation_data(self.VAL_FOLD,self.SCENES, 1, self.TIMELENGTH,self.MACRO_PATH)
         self.TOTAL_SAMPLES = len(self.PATHS)
         self.NUM_TRAIN = len(self.TRAIN_SET)
         self.NUM_TEST = len(self.VALID_SET)
         self.SET = {'train': self.TRAIN_SET,
                     'validation': self.VALID_SET}
-    def init_testdata(self):
-        self.VALID_SET = get_test_data(folder=self.TEST_FOLD)
-        self.NUM_TEST = len(self.VALID_SET)
-        self.SET = {'validation': self.VALID_SET}
     def get_scalar(self):
-        pkl_file = open('/homes2/informatik/augustin/changbinlu/ldnn/test_statistics.pickle', 'rb')
+        pkl_file = open('/homes2/informatik/augustin/changbinlu/ldnn/train_statistics.pickle', 'rb')
         data = pickle.load(pkl_file)
-        key = 'test'
+        key = 'cv_' + str(self.VAL_FOLD)
         mean = data[key][:160]
         std = data[key][160:]
         return mean, std
@@ -103,7 +101,7 @@ class HyperParameters:
     def validation(self, batch_size):
         with tf.name_scope('LDNN'):
             with tf.device('/cpu:0'):
-                valid_batch = read_validationset(self.SET['validation'], batch_size,self.MEAN,self.STD,self.LABEL_MODE)
+                valid_batch = read_validationset(self.SET['validation'], batch_size,self.MEAN,self.STD)
                 handle = tf.placeholder(tf.string, shape=[])
                 iterator = tf.data.Iterator.from_string_handle(handle, valid_batch.output_types,
                                                                valid_batch.output_shapes)
@@ -158,7 +156,7 @@ class HyperParameters:
                 # numpy_path = np.array(self.SET['train'])
                 # self.path_placeholder = tf.placeholder(numpy_path.dtype, numpy_path.shape)
                 self.path_placeholder = tf.placeholder(tf.string, len(self.SET['train']))
-                train_batch = read_trainset(self.path_placeholder, self.BATCH_SIZE,self.MEAN,self.STD,self.LABEL_MODE)
+                train_batch = read_trainset(self.path_placeholder, self.BATCH_SIZE,self.MEAN,self.STD)
                 handle = tf.placeholder(tf.string, shape=[])
                 iterator = tf.data.Iterator.from_string_handle(handle, train_batch.output_types,
                                                                train_batch.output_shapes)
@@ -174,7 +172,7 @@ class HyperParameters:
                                          self.NUM_MLP, self.NUM_NEURON, training=True)
 
             # Get weight for weighted cross entory
-            w = get_scenes_weight(self.SCENES, self.VAL_FOLD,self.MACRO_PATH)
+            w = get_scenes_weight(-1, self.VAL_FOLD,self.MACRO_PATH)
 
             # Define loss and optimizer
             with tf.variable_scope('loss'):
@@ -187,12 +185,12 @@ class HyperParameters:
                 # for unreg in [tf_var.name for tf_var in tf.trainable_variables() if
                 #               ("bias" in tf_var.name)]:
                 #     print(unreg)
-                l2 = self.LAMBDA_L2 * sum(
-                    tf.nn.l2_loss(tf_var)
-                    for tf_var in tf.trainable_variables()
-                    if not ("bias" in tf_var.name)
-                )
-                loss_op += l2
+                #l2 = self.LAMBDA_L2 * sum(
+                #    tf.nn.l2_loss(tf_var)
+                #    for tf_var in tf.trainable_variables()
+                #    if not ("bias" in tf_var.name)
+                #)
+                #loss_op += l2
             with tf.variable_scope('optimize'):
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.LEARNING_RATE)
                 # train_op = optimizer.minimize(loss_op)
@@ -256,7 +254,7 @@ class HyperParameters:
                                                                                 TIMELENGTH: {}
                                                                                 Dropout: {}
                                                                                 L2:{}
-                                                                                Label Mode:{}'''.format(
+                                                                                Scenes:{}'''.format(
                     self.VAL_FOLD,
                     self.EPOCHS + self.OLD_EPOCH,
                     self.LEARNING_RATE,
@@ -268,14 +266,14 @@ class HyperParameters:
                     self.TIMELENGTH,
                     self.OUTPUT_KEEP_PROB,
                     self.LAMBDA_L2,
-                    self.LABEL_MODE))
+                    len(self.SCENES)))
                 train_handle = sess.run(train_iterator.string_handle())
                 valid_handle = sess.run(valid_iterator.string_handle())
                 # Run the initializer if restore == False
                 if not self.RESTORE:
                     sess.run(init)
                 else:
-                    saver.restore(sess, self.SESSION_DIR + 'model.ckpt')
+                    saver.restore(sess, self.SESSION_DIR + '13_model.ckpt')
                     print("Model restored.")
                 section = '\n{0:=^40}\n'
                 logger.info(section.format('Run training epoch'))
@@ -293,7 +291,10 @@ class HyperParameters:
                 # Numbers of batch per epoch, to stop the training and do validation
                 batch_per_epoch = int(n_batches / self.EPOCHS)
                 for num in range(1, n_batches + 1):
-                    break
+                    if self.ACCUMULATOR == self.PATIENCE:
+                        logger.info('''Current best performance:{:.3f}'''.format(self.SO_FAR_BEST))
+                        logger.info(section.format('Its time to stop training.'))
+                        break
                     loss, _, se, sp, tempf1,tp,tn,fp,fn, _ = sess.run([loss_op, train_op, sensitivity, specificity, f1,train_tp,train_tn,train_fp,train_fn ,update_op],
                                                           feed_dict={handle: train_handle})
 
@@ -323,70 +324,65 @@ class HyperParameters:
                                         spe,
                                         f / batch_per_epoch,
                                         epoch_duration0))
+
+                        # for validation
+                        sen, spe, f = 0.0, 0.0, 0.0
+                        v_batches_per_epoch = int(self.NUM_TEST / self.VALIDATION_BATCH_SIZE)
+                        epoch_start = time.time()
+                        # After each train epoch, validation set need initilize again
+                        sess.run(valid_iterator.initializer)
+                        # Create a list to collect performence
+                        performence = []
+                        validation_loss = 0.0
+                        for index in range(v_batches_per_epoch):
+                            # Reset the state to zero before feeding input
+                            sess.run([reset_op])
+                            se, sp, tempf1,true_pos,true_neg,false_pos,false_neg,loss_valid, _ = sess.run([valid_sensitivy, valid_specifict, valid_f1,TP,TN,FP,FN,loss_validation,update_op1],
+                                                      feed_dict={handle_valid: valid_handle})
+                            sen = sen + se
+                            spe = spe + sp
+                            f = tempf1 + f
+                            validation_loss += loss_valid
+                            # print(true_pos,true_neg,false_pos,false_neg)
+                            # store performance
+                            current_scene_instances = self.SET['validation'][index*self.VALIDATION_BATCH_SIZE:(index+1)*self.VALIDATION_BATCH_SIZE]
+                            for index1,si_path in enumerate(current_scene_instances):
+                                cut = si_path.split('/')
+                                scene_id, instance_name = cut[len(cut)-2:]
+                                classes_performance = get_performence(true_pos,true_neg,false_pos,false_neg,index1)
+                                # print([scene_id,instance_name]+classes_performance.tolist())
+                                performence.append([scene_id,instance_name]+classes_performance.tolist())
+                        # average each scene instance after validation finish
+                        bac1,bac2,class_sens_spes = average_performance(performence,self.LOG_FOLDER,epoch_number,self.VAL_FOLD)
+                        # handle early stop
+                        # if p <=0.51:
+                        #     break
+                        if self.SO_FAR_BEST > bac1:
+                            self.ACCUMULATOR += 1
+                        else:
+                            self.SO_FAR_BEST = bac1
+                            self.ACCUMULATOR = 0
+                        epoch_duration1 = time.time() - epoch_start
+                        logger.info(
+                            '''Epochs: {},BAC1: {:.3f},BAC2: {:.3f},Validation_loss: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
+                                .format(epoch_number,
+                                        bac1,
+                                        bac2,
+                                        validation_loss/v_batches_per_epoch,
+                                        sen / v_batches_per_epoch,
+                                        spe / v_batches_per_epoch,
+                                        f / v_batches_per_epoch,
+                                        epoch_duration1))
+                        print(epoch_number)
+                        epoch_number += 1
                         train_cost, sen, spe, f = 0.0, 0.0, 0.0, 0.0
                         total_tp, total_tn, total_fp, total_fn = 0.0, 0.0, 0.0, 0.0
-                        epoch_number += 1
-                    if epoch_number == self.TEST_EPOCH:
-                        break
-
-
-                # for testing
-                for folder in [7, 8]:
-                    # evaluate each fold independently
-                    self.TEST_FOLD = folder
-                    self.init_testdata()
-                    print_log = 'Evaluating folder_' + str(folder)
-                    logger.info(section.format(print_log))
-
-                    sen, spe, f = 0.0, 0.0, 0.0
-                    v_batches_per_epoch = int(self.NUM_TEST / self.VALIDATION_BATCH_SIZE)
-                    epoch_start = time.time()
-                    # After each train epoch, validation set need initilize again
-                    sess.run(valid_iterator.initializer)
-                    # Create a list to collect performence
-                    performence = []
-                    validation_loss = 0.0
-                    for index in range(v_batches_per_epoch):
-                        # Reset the state to zero before feeding input
-                        sess.run([reset_op])
-                        se, sp, tempf1, true_pos, true_neg, false_pos, false_neg, loss_valid, _ = sess.run(
-                            [valid_sensitivy, valid_specifict, valid_f1, TP, TN, FP, FN, loss_validation,update_op1],
-                            feed_dict={handle_valid: valid_handle})
-                        sen = sen + se
-                        spe = spe + sp
-                        f = tempf1 + f
-                        validation_loss += loss_valid
-                        # store performance
-                        current_scene_instances = self.SET['validation'][index * self.VALIDATION_BATCH_SIZE:(
-                                                                                                                    index + 1) * self.VALIDATION_BATCH_SIZE]
-                        for index1, si_path in enumerate(current_scene_instances):
-                            cut = si_path.split('/')
-                            scene_id, instance_name = cut[len(cut) - 2:]
-                            classes_performance = get_performence(true_pos, true_neg, false_pos, false_neg,
-                                                                  index1)
-                            # print([scene_id,instance_name]+classes_performance.tolist())
-                            performence.append([scene_id, instance_name] + classes_performance.tolist())
-                    # average each scene instance after validation finish
-                    bac1, bac2, class_sens_spes = average_performance(performence, self.LOG_FOLDER, epoch_number,
-                                                                      self.VAL_FOLD,
-                                                                      mode='test', testfold=self.TEST_FOLD)
-
-                    epoch_duration1 = time.time() - epoch_start
-                    logger.info(
-                        '''Epochs: {},BAC1: {:.3f},BAC2: {:.3f},testing_loss: {:.3f},Sensitivity: {:.3f},Specificity: {:.3f},F1 score: {:.3f},time: {:.2f} sec'''
-                            .format(epoch_number,
-                                    bac1,
-                                    bac2,
-                                    validation_loss / v_batches_per_epoch,
-                                    sen / v_batches_per_epoch,
-                                    spe / v_batches_per_epoch,
-                                    f / v_batches_per_epoch,
-                                    epoch_duration1))
-                    print(epoch_number)
-                    epoch_start = time.time()
-                if self.MODEL_SAVE:
-                    save_path = saver.save(sess, self.SESSION_DIR + 'model.ckpt',write_meta_graph=False)
-                    print("Model saved in path: %s" % save_path)
+                        epoch_start = time.time()
+                        # save model for each epoch.......
+                        saver.save(sess, self.SESSION_DIR + str(epoch_number) +'_model.ckpt', write_meta_graph=False)
+                # if self.MODEL_SAVE:
+                #     save_path = saver.save(sess, self.SESSION_DIR + 'model.ckpt',write_meta_graph=False)
+                #     print("Model saved in path: %s" % save_path)
 
 
 
@@ -395,11 +391,10 @@ class HyperParameters:
 
 if __name__ == "__main__":
     # fname = datetime.datetime.now().strftime("%Y%m%d")
-    fname ='test_instant_10'
-    # 0 means use all folders
-    for i in [0]:
+    fname ='compare_heiner'
+    # use cv_folder3 as first level
+    for i in range(3,4):
         with tf.Graph().as_default():
             hyperparameters = HyperParameters(VAL_FOLD=i, FOLD_NAME= fname)
             hyperparameters.main()
-
 

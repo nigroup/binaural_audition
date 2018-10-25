@@ -61,6 +61,7 @@ def read_trainset(path_set, batchsize,mean,std,mode):
 '''
 def _read_py_function1(filename,mean,std,mode):
     filename = filename.decode(sys.getdefaultencoding())
+    filename = '/net/node560.scratch/mnt/raid/data/ni/twoears/' + filename[19:]
     with np.load(filename) as data:
         x = data['x'][0]
         x = (x - mean) / std
@@ -175,7 +176,7 @@ def get_train_data(cv_id, scenes, epochs, timelengths,MACRO_PATH):
     out = get_filepaths(epochs, timelengths, INDEX_PATH,mode='train')
     return out, paths
 def get_test_data(folder = 7):
-    pkl_file = open('/net/node565.scratch/mnt/binaural/data/scenes2018/test/testdata_path_lcb.pickle', 'rb')
+    pkl_file = open('/homes2/informatik/augustin/changbinlu/ldnn/testdata_path_lcb.pickle', 'rb')
     data = pickle.load(pkl_file)
     paths = data[str(folder)]
     #
@@ -352,13 +353,13 @@ def get_performence(true_pos,true_neg,false_pos,false_neg, index):
     TN = np.array(true_neg[index])
     FP = np.array(false_pos[index])
     FN = np.array(false_neg[index])
-    N = TP[0] + TN[0] + FP[0] + FN[0]
     for i in range(13):
-        result.append(TP[i])
-        result.append(TN[i])
-        result.append(FP[i])
-        result.append(FN[i])
-    return np.array(result)/N
+        N = TP[i] + TN[i] + FP[i] + FN[i]
+        result.append(TP[i]/N)
+        result.append(TN[i]/N)
+        result.append(FP[i]/N)
+        result.append(FN[i]/N)
+    return np.array(result)
 
 def average_performance(list,dir,epoch_num,folder,mode = 'train',testfold=7):
     header = ['sceneID','instance',
