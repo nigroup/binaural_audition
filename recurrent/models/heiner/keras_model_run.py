@@ -595,13 +595,13 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
             continue
 
         if final_experiment:
-            hostname, batch_size = utils.get_hostname_batch_size_wrt_time_steps(h.TIME_STEPS, gpu)
+            hostname, batch_size = utils.get_hostname_batch_size_wrt_time_steps(gpu)
             assert batch_size == h.BATCH_SIZE, """Final Experiment has to be run with same batch_size.
             Hyperparameter search on hostname: {} with batch size: {}. Now hostname: {} with batch size: {}.  
                                                 """.format(h.HOSTNAME, h.BATCH_SIZE, hostname, batch_size)
 
         else:
-            hcm.set_hostname_and_batch_size(ID, h, *utils.get_hostname_batch_size_wrt_time_steps(h.TIME_STEPS, gpu))
+            hcm.set_hostname_and_batch_size(ID, h, *utils.get_hostname_batch_size_wrt_time_steps(gpu))
 
         model_dir = os.path.join(save_path, 'hcomb_' + str(ID))
 
