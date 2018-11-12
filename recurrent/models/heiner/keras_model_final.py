@@ -41,8 +41,9 @@ def run_final_experiment(tmux, available_gpus, id_to_test, epochs_to_train,
     save_path_hcomb_list = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name_old)
     os.makedirs(save_path, exist_ok=True)
 
-    rs.add_hcombs_to_run_via_id(id_to_test, save_path, save_path_hcomb_list=save_path_hcomb_list,
-                                changes_dict={'MAX_EPOCHS': epochs_to_train, 'STAGE': -1, 'finished': False})
+    if id_to_test != -1:
+        rs.add_hcombs_to_run_via_id(id_to_test, save_path, save_path_hcomb_list=save_path_hcomb_list,
+                                    changes_dict={'MAX_EPOCHS': epochs_to_train, 'STAGE': -1, 'finished': False})
 
     reset_hcombs = False
 
@@ -107,7 +108,7 @@ if __name__ == "__main__":
     parser.add_argument('-id', '--id_to_test',
                         required=True,
                         type=int,
-                        default=0,
+                        default=-1,
                         dest="id_to_test",
                         metavar="<id to test>",
                         help="The ID of the hcomb that will be trained on all train folds.")
