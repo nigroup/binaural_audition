@@ -106,14 +106,14 @@ if __name__ == "__main__":
                         metavar="<available gpus>",
                         help="GPUs for random search.")
     parser.add_argument('-id', '--id_to_test',
-                        required=True,
+                        required=False,
                         type=int,
                         default=-1,
                         dest="id_to_test",
                         metavar="<id to test>",
                         help="The ID of the hcomb that will be trained on all train folds.")
     parser.add_argument('-epochs', '--epochs_to_train',
-                        required=True,
+                        required=False,
                         type=int,
                         default=0,
                         dest="epochs_to_train",
