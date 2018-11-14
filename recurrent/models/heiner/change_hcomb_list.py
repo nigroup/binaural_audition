@@ -302,7 +302,7 @@ def recalced_metrics_to_metric_dict(metrics):
 if __name__ == '__main__':
 
     path_ = '/mnt/antares_raid/home/spiess/twoears_proj/models/heiner/model_directories/' \
-                'LDNN_v1/hyperparameter_combinations.pickle'
+                'LDNN_final/hyperparameter_combinations.pickle'
 
     hcomb_list = load_hcomb_list(path_)
     print()

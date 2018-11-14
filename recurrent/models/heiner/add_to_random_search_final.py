@@ -6,11 +6,13 @@ import argparse
 
 ################################################# ADD NEW HCOMBS
 
-def add_hcombs_from_final_ids(ids, save_path, save_path_hcomb_list, epochs_to_train):
+def add_hcombs_from_final_ids(ids, save_path, save_path_hcomb_list, epochs_to_train, changes_dict=None):
     rs = RandomSearch()
-
+    cd = {'MAX_EPOCHS': epochs_to_train, 'STAGE': -1, 'finished': False}
+    if changes_dict is not None:
+        cd = {**cd, **changes_dict}
     rs.add_hcombs_to_run_via_id(ids, save_path, save_path_hcomb_list=save_path_hcomb_list,
-                                changes_dict={'MAX_EPOCHS': epochs_to_train, 'STAGE': -1, 'finished': False})
+                                changes_dict=cd)
 
 ################################################# MODEL LOG AND CHECKPOINT SETUP DEPENDENT ON HYPERPARAMETERS
 
@@ -46,9 +48,21 @@ if __name__ == '__main__':
                         dest="epochs_to_train",
                         metavar="<epochs to train>",
                         help="Epochs to train the hcomb on.")
+    parser.add_argument('-bs', '--batch_size',
+                        required=False,
+                        type=int,
+                        default=-1,
+                        dest="batch_size",
+                        metavar="<batch size>",
+                        help="Batch size to train the hcomb with.")
 
     args = parser.parse_args()
     args_dict = vars(args)
+
+    bs = args_dict.pop('batch_size')
+    changes_dict = None
+    if bs != -1:
+        changes_dict = {'BATCH_SIZE': bs}
 
     ids = args_dict.pop('ids')
     if ids == -1:
@@ -65,7 +79,7 @@ if __name__ == '__main__':
     epochs_to_train = args_dict.pop('epochs_to_train')
 
     if ids != -1:
-        add_hcombs_from_final_ids(ids, save_path, save_path_hcomb_list, epochs_to_train)
+        add_hcombs_from_final_ids(ids, save_path, save_path_hcomb_list, epochs_to_train, changes_dict=changes_dict)
 
 
 
