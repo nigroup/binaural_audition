@@ -345,18 +345,23 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
     x = Input(batch_shape=(h.BATCH_SIZE, h.TIME_STEPS, h.N_FEATURES), name='Input', dtype='float32')
     y = x
 
+    reg = None
+    if 'changbin' in model_dir:
+        from keras import regularizers
+        reg = regularizers.l2(0.0000459)
+
     # Input dropout
     y = Dropout(h.INPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, h.N_FEATURES))(y)
     for units in h.UNITS_PER_LAYER_LSTM:
-        y = CuDNNLSTM(units, return_sequences=True, stateful=True)(y)
+        y = CuDNNLSTM(units, return_sequences=True, stateful=True, kernel_regularizer=reg, recurrent_regularizer=reg)(y)
 
         # LSTM Output dropout
         y = Dropout(h.LSTM_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
     for units in h.UNITS_PER_LAYER_MLP:
         if units != h.N_CLASSES:
-            y = Dense(units, activation='relu')(y)
+            y = Dense(units, activation='relu', kernel_regularizer=reg)(y)
         else:
-            y = Dense(units, activation='linear')(y)
+            y = Dense(units, activation='linear', kernel_regularizer=reg)(y)
 
         # MLP Output dropout but not last layer
         if units != h.N_CLASSES:
@@ -424,26 +429,29 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
                                  no_new_weighting=True if 'nnw' in model_save_dir else False)
 
     if model_is_resumed:
-        old_metrics = utils.load_metrics(model_save_dir)
+        try:
+            old_metrics = utils.load_metrics(model_save_dir, name="metrics_train")
 
-        # merge metrics
-        h.METRIC = old_metrics['metric']
-        train_phase.metric = h.METRIC
+            # merge metrics
+            h.METRIC = old_metrics['metric']
+            train_phase.metric = h.METRIC
 
-        train_iterations_done = old_metrics['train_losses'].shape[0]
-        epochs_done = old_metrics['train_accs'].shape[0]
-        if epochs_finished_old is not None:
-            epochs_done_old = epochs_done
-            epochs_done = epochs_done if epochs_finished > epochs_done else epochs_finished
-            train_iterations_done = int(train_iterations_done / epochs_done_old) * epochs_done
+            train_iterations_done = old_metrics['train_losses'].shape[0]
+            epochs_done = old_metrics['train_accs'].shape[0]
+            if epochs_finished_old is not None:
+                epochs_done_old = epochs_done
+                epochs_done = epochs_done if epochs_finished > epochs_done else epochs_finished
+                train_iterations_done = int(train_iterations_done / epochs_done_old) * epochs_done
 
-        train_phase.losses = old_metrics['train_losses'].tolist()[:train_iterations_done]
-        train_phase.accs = old_metrics['train_accs'].tolist()[:epochs_done]
-        train_phase.sens_spec_class_scene = old_metrics['train_sens_spec_class_scene'].tolist()[:epochs_done]
+            train_phase.losses = old_metrics['train_losses'].tolist()[:train_iterations_done]
+            train_phase.accs = old_metrics['train_accs'].tolist()[:epochs_done]
+            train_phase.sens_spec_class_scene = old_metrics['train_sens_spec_class_scene'].tolist()[:epochs_done]
 
-        if 'global_gradient_norm' in old_metrics:
-            train_phase.global_gradient_norms = old_metrics['global_gradient_norm'].tolist()[
-                                                :train_iterations_done]
+            if 'global_gradient_norm' in old_metrics:
+                train_phase.global_gradient_norms = old_metrics['global_gradient_norm'].tolist()[
+                                                    :train_iterations_done]
+        except:
+            pass
 
         train_phase.resume_from_epoch(h.epochs_finished[val_fold - 1] + 1)
 
@@ -466,8 +474,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
         if GLOBAL_GRADIENT_NORM_PLOT:
             metrics['global_gradient_norm'] = np.array(train_phase.global_gradient_norms)
 
-        utils.pickle_metrics(metrics, model_save_dir)
-
+        utils.pickle_metrics(metrics, model_save_dir, name="metrics_train")
 
         hcm.finish_epoch(ID, h, 0.0, 0.0, 0.0, 0.0, val_fold - 1, e + 1, e + 1, (timer() - start) / 60)
 
@@ -477,8 +484,6 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
         if GLOBAL_GRADIENT_NORM_PLOT:
             plot.plot_global_gradient_norm(np.array(train_phase.global_gradient_norms), model_save_dir,
                                            epochs_done=e + 1)
-
-
 
     del model
     K.clear_session()

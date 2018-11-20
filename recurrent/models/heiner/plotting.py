@@ -7,6 +7,7 @@ import pandas as pd
 
 from os import path
 
+
 def plot_metrics(metrics, save_dir):
     if 'best_val_class_accs_over_folds' in metrics.keys():
         _plot_acc_over_folds(metrics, save_dir)

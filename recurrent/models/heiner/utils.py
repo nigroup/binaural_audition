@@ -60,12 +60,13 @@ def unique_dict(ds):
     return ds_unique
 
 
-def pickle_metrics(metrics_dict, folder_path):
-    with open(path.join(folder_path, 'metrics.pickle'), 'wb') as handle:
+def pickle_metrics(metrics_dict, folder_path, name="metrics"):
+    with open(path.join(folder_path, name+'.pickle'), 'wb') as handle:
         pickle.dump(metrics_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-def load_metrics(folder_path):
-    with open(path.join(folder_path, 'metrics.pickle'), 'rb') as handle:
+
+def load_metrics(folder_path, name="metrics"):
+    with open(path.join(folder_path, name+'.pickle'), 'rb') as handle:
         return pickle.load(handle)
 
 

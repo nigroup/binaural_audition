@@ -72,7 +72,6 @@ class H:
         self.LSTM_OUTPUT_DROPOUT = LSTM_OUTPUT_DROPOUT
         self.MLP_OUTPUT_DROPOUT = MLP_OUTPUT_DROPOUT
 
-
         self.METRIC = METRIC
 
         self.HOSTNAME = HOSTNAME
