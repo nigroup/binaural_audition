@@ -426,7 +426,8 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
 
     # training phase
     train_phase = tr_utils.Phase('train', model, train_loader, BUFFER, *args,
-                                 no_new_weighting=True if 'nnw' in model_save_dir else False)
+                                 no_new_weighting=True if 'nnw' in model_save_dir else False,
+                                 changbin_recurrent_dropout=True if 'changbin' in model_dir else False)
 
     if model_is_resumed:
         try:

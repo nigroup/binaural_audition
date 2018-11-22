@@ -269,7 +269,7 @@ class Phase:
                  metric='BAC',
                  ret=('final', 'per_class', 'per_class_scene', 'per_scene'),
                  code_test_mode=False,
-                 no_new_weighting=False):
+                 no_new_weighting=False, changbin_recurrent_dropout = False):
 
         self.prefix = train_or_val
         if train_or_val == 'train':
@@ -328,6 +328,9 @@ class Phase:
 
         self.no_new_weighting = no_new_weighting
 
+        self.changbin_recurrent_dropout = changbin_recurrent_dropout
+        self.dropout_applied_once = False
+
     def resume_from_epoch(self, resume_epoch):
         if hasattr(self.dloader, 'act_epoch'):
             for _ in range(self.e, resume_epoch - 1):
@@ -340,6 +343,36 @@ class Phase:
     @property
     def epoch_str(self):
         return 'epoch: {:{prec}} / {:{prec}}'.format(self.e + 1, self.EPOCHS, prec=len(str(self.EPOCHS)))
+
+    def _changbin_recurrent_dropout(self):
+        def _drop_in_recurrent_kernel(rk):
+            # print('Zeros in weight matrix before dropout: {}'.format(np.sum(rk == 0)))
+
+            # rk_s = rk.shape
+            # mask = np.random.binomial(1., 1-self.recurrent_dropout, (rk_s[0], 1))
+            # mask = np.tile(mask, rk_s[0]*4)
+            # rk = rk * mask * (1./(1-self.recurrent_dropout))
+
+            ########################## NEW (like in https://arxiv.org/pdf/1708.02182.pdf)
+
+            rk_s = rk.shape
+            mask = np.random.binomial(1., 1 - self.recurrent_dropout, rk_s)
+            rk *= mask
+            rk *= (1. / (1 - self.recurrent_dropout))
+
+            # print('Zeros in weight matrix after dropout: {}'.format(np.sum(rk == 0)))
+            # print('Weight matrix norm after dropout: {}'.format(np.linalg.norm(rk)))
+
+            return rk
+
+        for layer in self.model.layers:
+            if type(layer) is CuDNNLSTM:
+                rk0 = _drop_in_recurrent_kernel(K.get_value(layer.weights[0]))
+                rk1 = _drop_in_recurrent_kernel(K.get_value(layer.weights[1]))
+                rk2 = _drop_in_recurrent_kernel(K.get_value(layer.weights[2]))
+                K.set_value(layer.weights[0], rk0)
+                K.set_value(layer.weights[1], rk1)
+                K.set_value(layer.weights[2], rk2)
 
     def _recurrent_dropout(self):
         def _drop_in_recurrent_kernel(rk):
@@ -413,7 +446,13 @@ class Phase:
 
                 iteration_start_time_tf_graph_apply_dropout = time.time()
                 if self.apply_recurrent_dropout:
-                    original_weights_and_masks = self._recurrent_dropout()
+                    if self.changbin_recurrent_dropout:
+                        # changbin applies dropout just once in the beginning
+                        if not self.dropout_applied_once:
+                            self._changbin_recurrent_dropout()
+                            self.dropout_applied_once = True
+                    else:
+                        original_weights_and_masks = self._recurrent_dropout()
                 elapsed_time_tf_graph_apply_dropout = time.time() - iteration_start_time_tf_graph_apply_dropout
 
                 iteration_start_time_tf_graph_call = time.time()
@@ -441,7 +480,7 @@ class Phase:
                     self.global_gradient_norms.append(gradient_norm)
 
                 iteration_start_time_tf_graph_dropout_load_original = time.time()
-                if self.apply_recurrent_dropout:
+                if self.apply_recurrent_dropout and not self.changbin_recurrent_dropout:
                     self._load_original_weights_updated(original_weights_and_masks)
                     del original_weights_and_masks
                 elapsed_time_tf_graph_dropout_load_original = time.time() - \
