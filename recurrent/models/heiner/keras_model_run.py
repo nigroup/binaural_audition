@@ -602,7 +602,7 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
 
         if final_experiment:
             hostname, batch_size = utils.get_hostname_batch_size_wrt_time_steps(gpu)
-            assert batch_size == h.BATCH_SIZE, """Final Experiment has to be run with same batch_size.
+            assert batch_size >= h.BATCH_SIZE, """Final Experiment has to be run with at most the same batch_size.
             Hyperparameter search on hostname: {} with batch size: {}. Now hostname: {} with batch size: {}.  
                                                 """.format(h.HOSTNAME, h.BATCH_SIZE, hostname, batch_size)
 
