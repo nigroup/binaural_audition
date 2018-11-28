@@ -1,0 +1,1 @@
+python3 model_comparison.py  --suffix  tcn_block_vs_inst  --models  tcn_20.49s  tcn_inst_20.49s  tcn_0.65s  tcn_inst_0.65s  tcn_0.33s  tcn_inst_0.33s  tcn_0.17s  tcn_inst_0.17s  tcn_0.09s  tcn_inst_0.09s  --color  red  red  green  green  blue  blue  gray  gray  orange  orange  --style  solid  dashed  solid  dashed  solid  dashed  solid  dashed  solid  dashed  solid  dashed  

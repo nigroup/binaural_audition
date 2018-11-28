@@ -1,0 +1,1 @@
+python3 model_comparison.py  --suffix  tcn  --models  tcn_20.49s  tcn_10.25s  tcn_2.57s  tcn_650ms  

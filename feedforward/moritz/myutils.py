@@ -107,6 +107,24 @@ def fix_historylength():
             save_h5(params, paramsfile)
     pass
 
+def fix_maxepochs_final_model(folder, maxepochs):
+    paramsfile = os.path.join(folder, 'params.h5')
+    params = load_h5(paramsfile)
+    resultsfile = os.path.join(folder, 'results.h5')
+    results = load_h5(resultsfile)
+    params['maxepochs']  = maxepochs
+
+    print('shape of results[val_sens_spec_per_class_scene] before change: {}'
+          .format(results['val_sens_spec_per_class_scene'].shape))
+    results['val_sens_spec_per_class_scene'] = results['val_sens_spec_per_class_scene'][:maxepochs, :, :, :]
+    print('shape of results[val_sens_spec_per_class_scene] after change: {}'
+          .format(results['val_sens_spec_per_class_scene'].shape))
+
+    print('save_h5(params, paramsfile) would be called now for folder ' + folder + ' but is commented out')
+    print('save_h5(results, resultsfile) would be called now for folder ' + folder + ' but is commented out')
+    # save_h5(params, paramsfile)
+    # save_h5(results, resultsfile)
+
 # loads a flat dictionary from a hdf5 file
 def load_h5(filename):
     data = {}
@@ -130,6 +148,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--fixexpfiles', action='store_true')
     parser.add_argument('--fixhistorylength', action='store_true')
+    parser.add_argument('--fixmaxepochs', action='store_true')
     parser.add_argument('--folder', type=str)
     args = parser.parse_args()
 
@@ -138,3 +157,6 @@ if __name__ == '__main__':
 
     if args.fixhistorylength:
         fix_historylength()
+
+    if args.fixmaxepochs:
+        fix_maxepochs_final_model('experiments/sceneinstweighted/blockinterprete_hl17/n119_dr0.0949_bs128_me22_wnFalse_bl2500_es10_vf-1', 22)
