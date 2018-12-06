@@ -1,0 +1,1 @@
+python3 model_comparison.py  --suffix  instant  --models  LDNN_inst_10.0s  LDNN_inst_1.0s  tcn_inst_20.49s  tcn_inst_10.25s  tcn_inst_5.13s  tcn_inst_1.29s  tcn_inst_0.09s  --color  red  blue  green  pink  brown  grey  orange  orange  --style  solid  solid  solid  solid  solid  solid  solid  
