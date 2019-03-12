@@ -109,6 +109,20 @@ if __name__ == '__main__':
                         dest='LABEL_MODE',
                         metavar="<changes_dict: LABEL_MODE>",
                         help="Parameter LABEL_MODE for changes dict.")
+    parser.add_argument('-me', '--max_epochs',
+                        required=False,
+                        type=int,
+                        default=-1,
+                        dest='MAX_EPOCHS',
+                        metavar="<changes_dict: MAX_EPOCHS>",
+                        help="Parameter MAX_EPOCHS for changes dict.")
+    parser.add_argument('-bs', '--batch_size',
+                        required=False,
+                        type=int,
+                        default=-1,
+                        dest='BATCH_SIZE',
+                        metavar="<changes_dict: BATCH_SIZE>",
+                        help="Parameter BATCH_SIZE for changes dict.")
     parser.add_argument('-mn', '--model_name',
                         required=False,
                         type=str,

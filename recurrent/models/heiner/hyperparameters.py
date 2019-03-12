@@ -223,8 +223,9 @@ class HCombManager:
 
             h = h.__dict__
 
-            h['HOSTNAME'] = hostname
-            h['BATCH_SIZE'] = batch_size
+            if h['HOSTNAME'] != hostname:
+                h['HOSTNAME'] = hostname
+                h['BATCH_SIZE'] = batch_size
 
             self._replace_at_id(hcomb_list, id_, h)
 
