@@ -461,6 +461,9 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
         train_loss_is_nan, _ = train_phase.run()
 
         if train_loss_is_nan:
+            print('\n\n\n---------------------------------------\n\n\n')
+            print("ERROR: Training loss is NaN.")
+            print('\n\n\n---------------------------------------\n\n\n')
             break
 
         tr_utils.update_latest_model_ckp(model_ckp_last, model_save_dir, e, 0.0)
@@ -523,32 +526,40 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
     model.summary()
 
     latest_weights_path, _, _, _, _, _ = tensorflow_utils.latest_training_state(model_save_dir)
-    model.load_weights(latest_weights_path)
 
-    model.compile(optimizer=adam, loss=my_loss, metrics=None)
+    if latest_weights_path is not None:
 
-    print('\nModel compiled.\n')
+        model.load_weights(latest_weights_path)
 
-    test_phase = tr_utils.TestPhase(model, test_loader, h.OUTPUT_THRESHOLD, h.MASK_VAL, 1, val_fold_str, model_save_dir,
-                                    metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_class_scene', 'per_scene'))
+        model.compile(optimizer=adam, loss=my_loss, metrics=None)
 
-    test_loss_is_nan, _ = test_phase.run()
+        print('\nModel compiled.\n')
 
-    metrics_test = {
-        'metric': h.METRIC,
-        'test_accs': np.array(test_phase.accs),
-        'test_accs_bac2': np.array(test_phase.accs_bac2),
-        'test_class_accs': np.array(test_phase.class_accs),
-        'test_class_accs_bac2': np.array(test_phase.class_accs_bac2),
-        'test_class_scene_accs': np.array(test_phase.class_scene_accs),
-        'test_class_scene_accs_bac2': np.array(test_phase.class_scene_accs_bac2),
-        'test_scene_accs': np.array(test_phase.scene_accs),
-        'test_scene_accs_bac2': np.array(test_phase.scene_accs_bac2),
-        'test_sens_spec_class_scene': np.array(test_phase.sens_spec_class_scene),
-        'test_sens_spec_class': np.array(test_phase.sens_spec_class)
-    }
+        test_phase = tr_utils.TestPhase(model, test_loader, h.OUTPUT_THRESHOLD, h.MASK_VAL, 1, val_fold_str, model_save_dir,
+                                        metric=('BAC', 'BAC2'), ret=('final', 'per_class', 'per_class_scene', 'per_scene'))
 
-    utils.pickle_metrics(metrics_test, model_save_dir)
+        test_loss_is_nan, _ = test_phase.run()
+
+        metrics_test = {
+            'metric': h.METRIC,
+            'test_accs': np.array(test_phase.accs),
+            'test_accs_bac2': np.array(test_phase.accs_bac2),
+            'test_class_accs': np.array(test_phase.class_accs),
+            'test_class_accs_bac2': np.array(test_phase.class_accs_bac2),
+            'test_class_scene_accs': np.array(test_phase.class_scene_accs),
+            'test_class_scene_accs_bac2': np.array(test_phase.class_scene_accs_bac2),
+            'test_scene_accs': np.array(test_phase.scene_accs),
+            'test_scene_accs_bac2': np.array(test_phase.scene_accs_bac2),
+            'test_sens_spec_class_scene': np.array(test_phase.sens_spec_class_scene),
+            'test_sens_spec_class': np.array(test_phase.sens_spec_class)
+        }
+
+        utils.pickle_metrics(metrics_test, model_save_dir)
+
+    else:
+        print('\n\n\n---------------------------------------\n\n\n')
+        print("ERROR: No testing possible, because no trained model saved.")
+        print('\n\n\n---------------------------------------\n\n\n')
 
     go_to_next_stage = False
     return go_to_next_stage
