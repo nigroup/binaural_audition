@@ -224,6 +224,7 @@ class HCombManager:
             h = h.__dict__
 
             if h['HOSTNAME'] != hostname:
+                print(f'{h["HOSTNAME"]} != {hostname}')
                 h['HOSTNAME'] = hostname
                 h['BATCH_SIZE'] = batch_size
 
