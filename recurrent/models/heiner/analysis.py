@@ -60,7 +60,7 @@ def main():
 if __name__ == '__main__':
     # main()
     # call_evaluate_testset(0, 'LDNN_changbin', use_val=False)
-    call_evaluate_testset(0, 'LDNN_final', use_val=False)
-    call_evaluate_testset(1, 'LDNN_final', use_val=False)
     call_evaluate_testset(2, 'LDNN_final', use_val=False)
     call_evaluate_testset(3, 'LDNN_final', use_val=False)
+    call_evaluate_testset(4, 'LDNN_final', use_val=False)
+    # call_evaluate_testset(3, 'LDNN_final', use_val=False)

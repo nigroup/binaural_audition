@@ -346,9 +346,16 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
     y = x
 
     reg = None
+    adam_kwargs = {'clipnorm': 1.0}
+    kernel_initializer_dense = 'glorot_uniform'
     if 'changbin' in model_dir:
         from keras import regularizers
         reg = regularizers.l2(0.0000459)
+    if h.TIME_STEPS >= 2000:
+        from keras import regularizers
+        reg = regularizers.l2(0.00005)
+        adam_kwargs['clipvalue'] = 0.5
+        kernel_initializer_dense = 'he_uniform'     # should prevent exploding grads for ReLU
 
     # Input dropout
     y = Dropout(h.INPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, h.N_FEATURES))(y)
@@ -359,7 +366,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
         y = Dropout(h.LSTM_OUTPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, units))(y)
     for units in h.UNITS_PER_LAYER_MLP:
         if units != h.N_CLASSES:
-            y = Dense(units, activation='relu', kernel_regularizer=reg)(y)
+            y = Dense(units, activation='relu', kernel_regularizer=reg, kernel_initializer=kernel_initializer_dense)(y)
         else:
             y = Dense(units, activation='linear', kernel_regularizer=reg)(y)
 
@@ -402,7 +409,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
 
     ################################################# COMPILE MODEL
 
-    adam = Adam(lr=h.LEARNING_RATE, clipnorm=1.)
+    adam = Adam(lr=h.LEARNING_RATE, **adam_kwargs)
     model.compile(optimizer=adam, loss=my_loss, metrics=None, sample_weight_mode='temporal')
 
     print('\nModel compiled.\n')
@@ -508,15 +515,15 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
     # Input dropout
     y = Dropout(h.INPUT_DROPOUT, noise_shape=(1, 1, h.N_FEATURES))(y)
     for units in h.UNITS_PER_LAYER_LSTM:
-        y = CuDNNLSTM(units, return_sequences=True, stateful=True)(y)
+        y = CuDNNLSTM(units, return_sequences=True, stateful=True, kernel_regularizer=reg, recurrent_regularizer=reg)(y)
 
         # LSTM Output dropout
         y = Dropout(h.LSTM_OUTPUT_DROPOUT, noise_shape=(1, 1, units))(y)
     for units in h.UNITS_PER_LAYER_MLP:
         if units != h.N_CLASSES:
-            y = Dense(units, activation='relu')(y)
+            y = Dense(units, activation='relu', kernel_regularizer=reg, kernel_initializer=kernel_initializer_dense)(y)
         else:
-            y = Dense(units, activation='linear')(y)
+            y = Dense(units, activation='linear', kernel_regularizer=reg)(y)
 
         # MLP Output dropout but not last layer
         if units != h.N_CLASSES:
