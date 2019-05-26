@@ -61,7 +61,7 @@ parser.add_argument('--kernelsize', type=int, default=3,
                         help='size of the temporal kernels')
 parser.add_argument('--historylength', type=int, default=1000,
                         help='effective receptive field of the model; historylength is increased to next multiple of '+
-                             '(filtersize-1) * 2^(resblocks - 1) + 1 => the no of resblocks is determined via this formula. '+
+                             '(filtersize-1) * 2^resblocks + 1 => the no of resblocks is determined via this formula. '+
                              'recommendation: ensure that batchlength is significantly larger (i.e., at least threefold) '+
                              'for efficiency')
 parser.add_argument('--outputthreshold', type=float, default=0.5,
