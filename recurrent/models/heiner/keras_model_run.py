@@ -353,8 +353,9 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
         reg = regularizers.l2(0.0000459)
     if h.TIME_STEPS >= 2000:
         from keras import regularizers
-        reg = regularizers.l2(0.00005)
-        adam_kwargs['clipvalue'] = 0.5
+        reg = regularizers.l2(0.001)
+        adam_kwargs['clipvalue'] = 0.3
+        adam_kwargs['clipnorm'] = 0.7
         kernel_initializer_dense = 'he_uniform'     # should prevent exploding grads for ReLU
 
     # Input dropout

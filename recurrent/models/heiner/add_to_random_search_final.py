@@ -55,6 +55,21 @@ if __name__ == '__main__':
                         dest="batch_size",
                         metavar="<batch size>",
                         help="Batch size to train the hcomb with.")
+    parser.add_argument('-ts', '--time_steps',
+                        required=False,
+                        type=int,
+                        default=-1,
+                        dest='time_steps',
+                        metavar='<time steps>',
+                        help='TIME_STEPS to train on.')
+    parser.add_argument('-rdr', '--recurrent_dropout_rate',
+                        required=False,
+                        type=float,
+                        default=-1,
+                        dest='recurrent_dropout_rate',
+                        metavar='<recurrent dropout rate>',
+                        help='recurrent_dropout_rate.'
+                        )
 
     args = parser.parse_args()
     args_dict = vars(args)
@@ -63,6 +78,20 @@ if __name__ == '__main__':
     changes_dict = None
     if bs != -1:
         changes_dict = {'BATCH_SIZE': bs}
+
+    ts = args_dict.pop('time_steps')
+    if ts != -1:
+        if changes_dict is None:
+            changes_dict = {'TIME_STEPS': ts}
+        else:
+            changes_dict['TIME_STEPS'] = ts
+
+    rdr = args_dict.pop('recurrent_dropout_rate')
+    if rdr != -1:
+        if changes_dict is None:
+            changes_dict = {'RECURRENT_DROPOUT': rdr}
+        else:
+            changes_dict['RECURRENT_DROPOUT'] = rdr
 
     ids = args_dict.pop('ids')
     if ids == -1:
