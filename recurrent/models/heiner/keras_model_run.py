@@ -1,4 +1,5 @@
 import datetime
+import multiprocessing
 import os
 import shutil
 import sys
@@ -12,16 +13,14 @@ from keras.layers import Dense, Input, Dropout, CuDNNLSTM
 from keras.models import Model
 from keras.optimizers import Adam
 
-from heiner import hyperparameters as hp
-from heiner import plotting as plot
-from heiner import train_utils as tr_utils
-from heiner import use_tmux as use_tmux
-from heiner import tensorflow_utils
-from heiner import utils
-from heiner.my_tmuxprocess import TmuxProcess
-
-import multiprocessing
-import heiner.add_to_random_search as add_to_random_search
+import add_to_random_search
+import hyperparameters as hp
+import plotting as plot
+import tensorflow_utils
+import train_utils as tr_utils
+import use_tmux as use_tmux
+import utils
+from my_tmuxprocess import TmuxProcess
 
 
 def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PLOT):
@@ -41,6 +40,10 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
 
     go_to_next_stage = False
 
+    subsample_time_steps = False
+    if h.TIME_STEPS >= 2000:
+        subsample_time_steps = True
+
     print(5 * '\n' + 'Starting Cross Validation STAGE {}...\n'.format(h.STAGE))
 
     for i_val_fold, val_fold in enumerate(h.VAL_FOLDS):
@@ -55,7 +58,8 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
 
         print('\nBuild model...\n')
 
-        x = Input(batch_shape=(h.BATCH_SIZE, h.TIME_STEPS, h.N_FEATURES), name='Input', dtype='float32')
+        time_steps = h.TIME_STEPS if not subsample_time_steps else h.TIME_STEPS // 2
+        x = Input(batch_shape=(h.BATCH_SIZE, time_steps, h.N_FEATURES), name='Input', dtype='float32')
         y = x
 
         # Input dropout
@@ -119,7 +123,8 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
                                                                h.TIME_STEPS, h.MAX_EPOCHS, h.N_FEATURES,
                                                                h.N_CLASSES,
                                                                [val_fold], h.VAL_STATEFUL,
-                                                               BUFFER=BUFFER, use_multithreading=use_multithreading)
+                                                               BUFFER=BUFFER, use_multithreading=use_multithreading,
+                                                               subsample_time_steps=subsample_time_steps)
 
         ################################################# CALLBACKS
         model_ckp_last = ModelCheckpoint(os.path.join(model_save_dir,
@@ -136,7 +141,8 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
 
         # training phase
         train_phase = tr_utils.Phase('train', model, train_loader, BUFFER, *args,
-                                     no_new_weighting=True if 'nnw' in model_save_dir else False)
+                                     no_new_weighting=True if 'nnw' in model_save_dir else False,
+                                     subsample_time_steps=subsample_time_steps)
 
         # validation phase
         val_phase = tr_utils.Phase('val', model, val_loader, BUFFER, *args,
@@ -208,6 +214,9 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
 
             if train_loss_is_nan or val_loss_is_nan:
                 loss_is_nan = True
+                print('\n\n\n---------------------------------------\n\n\n')
+                print("ERROR: Training loss is NaN.")
+                print('\n\n\n---------------------------------------\n\n\n')
                 break
 
             tr_utils.update_latest_model_ckp(model_ckp_last, model_save_dir, e, val_phase.accs[-1])
@@ -308,7 +317,7 @@ def run_hcomb_cv(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM
                 metrics_over_folds = utils.load_metrics(model_dir)
 
             # STAGE thresholds
-            stage_thresholds = {1: 0.835, 2: 0.835, 3: np.inf}  # 3 is the last stage
+            stage_thresholds = {1: 0.81, 2: 0.81, 3: np.inf}  # 3 is the last stage
 
             if metrics_over_folds['best_val_acc_mean_over_folds'] >= stage_thresholds[h.STAGE]:
                 go_to_next_stage = True
@@ -340,23 +349,29 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
 
     ################################################# MODEL DEFINITION
 
-    print('\nBuild model...\n')
-
-    x = Input(batch_shape=(h.BATCH_SIZE, h.TIME_STEPS, h.N_FEATURES), name='Input', dtype='float32')
-    y = x
-
     reg = None
     adam_kwargs = {'clipnorm': 1.0}
     kernel_initializer_dense = 'glorot_uniform'
     if 'changbin' in model_dir:
         from keras import regularizers
         reg = regularizers.l2(0.0000459)
+
+    subsample_time_steps = False
+    if h.TIME_STEPS >= 2000:
+        subsample_time_steps = True
+
     if h.TIME_STEPS >= 2000:
         from keras import regularizers
         reg = regularizers.l2(0.001)
         adam_kwargs['clipvalue'] = 0.3
         adam_kwargs['clipnorm'] = 0.7
-        kernel_initializer_dense = 'he_uniform'     # should prevent exploding grads for ReLU
+        kernel_initializer_dense = 'he_uniform'  # should prevent exploding grads for ReLU
+
+    print('\nBuild model...\n')
+
+    time_steps = h.TIME_STEPS if not subsample_time_steps else h.TIME_STEPS // 2
+    x = Input(batch_shape=(h.BATCH_SIZE, time_steps, h.N_FEATURES), name='Input', dtype='float32')
+    y = x
 
     # Input dropout
     y = Dropout(h.INPUT_DROPOUT, noise_shape=(h.BATCH_SIZE, 1, h.N_FEATURES))(y)
@@ -435,7 +450,8 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
     # training phase
     train_phase = tr_utils.Phase('train', model, train_loader, BUFFER, *args,
                                  no_new_weighting=True if 'nnw' in model_save_dir else False,
-                                 changbin_recurrent_dropout=True if 'changbin' in model_dir else False)
+                                 changbin_recurrent_dropout=True if 'changbin' in model_dir else False,
+                                 subsample_time_steps=subsample_time_steps)
 
     if model_is_resumed:
         try:
@@ -578,6 +594,9 @@ def run_hcomb(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_NORM_PL
     # Memory leak fix
     cfg = K.tf.ConfigProto()
     cfg.gpu_options.allow_growth = True
+    n_cores_to_use = 3
+    cfg.intra_op_parallelism_threads = n_cores_to_use
+    cfg.inter_op_parallelism_threads = n_cores_to_use
     K.set_session(K.tf.Session(config=cfg))
 
 
@@ -603,6 +622,8 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
     hcm = hp.HCombManager(save_path)
 
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
+    # K.set_session(K.tf.Session(config=K.tf.ConfigProto(intra_op_parallelism_threads=n_cores_to_use,
+    #                                                    inter_op_parallelism_threads=n_cores_to_use)))
 
     while True:
         h = hcm.poll_hcomb()
@@ -620,13 +641,13 @@ def run_gpu(gpu, save_path, reset_hcombs, INTERMEDIATE_PLOTS=True, GLOBAL_GRADIE
             continue
 
         if final_experiment:
-            hostname, batch_size = utils.get_hostname_batch_size_wrt_time_steps(gpu)
+            hostname, batch_size = utils.get_hostname_batch_size_wrt_time_steps(h.TIME_STEPS, gpu)
             assert batch_size >= h.BATCH_SIZE, """Final Experiment has to be run with at most the same batch_size.
             Hyperparameter search on hostname: {} with batch size: {}. Now hostname: {} with batch size: {}.  
                                                 """.format(h.HOSTNAME, h.BATCH_SIZE, hostname, batch_size)
 
         else:
-            hcm.set_hostname_and_batch_size(ID, h, *utils.get_hostname_batch_size_wrt_time_steps(gpu))
+            hcm.set_hostname_and_batch_size(ID, h, *utils.get_hostname_batch_size_wrt_time_steps(h.TIME_STEPS, gpu))
 
         model_dir = os.path.join(save_path, 'hcomb_' + str(ID))
 

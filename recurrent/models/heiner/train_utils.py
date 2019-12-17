@@ -7,11 +7,12 @@ import numpy as np
 from keras import backend as K
 from keras.layers import CuDNNLSTM
 from keras.utils.data_utils import GeneratorEnqueuer
+from skimage.util.shape import view_as_blocks
 from scipy.special import expit as sigmoid
 
-from heiner import accuracy_utils as acc_u
-from heiner import model_extension as m_ext
-from heiner.dataloader import DataLoader
+import accuracy_utils as acc_u
+import model_extension as m_ext
+from dataloader import DataLoader
 
 
 def calculate_sample_weights_batch(y_scene_instance_ids, file_lengths_dict, scene_instance_ids_dict, mode,
@@ -102,11 +103,12 @@ def create_test_dataloader(LABEL_MODE, input_standardization=True, val_fold3_as_
 
 
 def create_dataloaders(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
-                       VAL_FOLDS, VAL_STATEFUL, BUFFER, use_multithreading=True):
+                       VAL_FOLDS, VAL_STATEFUL, BUFFER, use_multithreading=True, subsample_time_steps=False):
     train_loader = create_train_dataloader(LABEL_MODE, TRAIN_FOLDS, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS,
                                            NFEATURES, NCLASSES, BUFFER, use_multithreading=use_multithreading)
 
-    val_loader = create_val_dataloader(LABEL_MODE, TRAIN_SCENES, BATCHSIZE, TIMESTEPS, EPOCHS, NFEATURES, NCLASSES,
+    time_steps = TIMESTEPS if not subsample_time_steps else TIMESTEPS // 2
+    val_loader = create_val_dataloader(LABEL_MODE, TRAIN_SCENES, BATCHSIZE, time_steps, EPOCHS, NFEATURES, NCLASSES,
                                        VAL_FOLDS, VAL_STATEFUL, BUFFER, use_multithreading=use_multithreading)
 
     return train_loader, val_loader
@@ -269,11 +271,15 @@ class Phase:
                  metric='BAC',
                  ret=('final', 'per_class', 'per_class_scene', 'per_scene'),
                  code_test_mode=False,
-                 no_new_weighting=False, changbin_recurrent_dropout = False):
+                 no_new_weighting=False, changbin_recurrent_dropout=False,
+                 subsample_time_steps=False):
+
+        self.subsample_time_steps = False
 
         self.prefix = train_or_val
         if train_or_val == 'train':
             self.train = True
+            self.subsample_time_steps = subsample_time_steps
         elif train_or_val == 'val':
             self.train = False
         else:
@@ -436,6 +442,54 @@ class Phase:
                 b_x, b_y, keep_states = next(self.gen)
             else:
                 b_x, b_y = next(self.gen)
+            if self.subsample_time_steps:
+                b_x_old_shape = b_x.shape
+
+                b_x_block_shape = (b_x.shape[0],) + (2,) + b_x.shape[2:]
+                # after squeezing: n_block x batch_size x size_block_time_steps (2) * feats
+                # swapping: batch_size x n_block x size_block_time_steps (2) * feats
+                # n_block should remain, because these are the subsampled time steps
+                b_x_blocks = view_as_blocks(b_x, block_shape=b_x_block_shape).squeeze().swapaxes(0, 1)
+                b_x = b_x_blocks.mean(axis=2)
+
+                b_x_new_shape = (b_x_old_shape[0], b_x_old_shape[1]//2, b_x_old_shape[2])
+                assert b_x_new_shape == b_x.shape, 'Shapes are not matching after subsampling.'
+
+                b_y_labels = b_y[:, :, :, 0]
+                b_y_scene_ind = b_y[:, :, :, 1]
+                b_y_labels_old_shape = b_y_labels.shape
+
+                assert b_y_scene_ind.shape == b_y_labels_old_shape, 'Shapes of labels and scene indices do not match.'
+
+                b_y_labels_block_shape = (b_y_labels.shape[0],) + (2,) + b_y_labels.shape[2:]
+                # after squeezing: n_block x batch_size x size_block_time_steps (2) * labels
+                # swapping: batch_size x n_block x size_block_time_steps (2) * labels
+                # n_block should remain, because these are the subsampled time steps
+                b_y_labels_blocks = view_as_blocks(b_y_labels,
+                                                  block_shape=b_y_labels_block_shape).squeeze().swapaxes(0,1)
+                b_y_scene_ind_blocks = view_as_blocks(b_y_scene_ind,
+                                                     block_shape=b_y_labels_block_shape).squeeze().swapaxes(0,1)
+
+                b_y_labels = b_y_labels_blocks.max(axis=2)
+                b_y_max_indices = b_y_labels_blocks.swapaxes(2, -1).argmax(axis=-1)
+
+                def reshape_based(x, m):
+                    shp = x.shape[:-1]
+                    n_ele = np.prod(shp)
+                    return x.reshape(n_ele, -1)[np.arange(n_ele), m.ravel()].reshape(shp)
+
+                b_y_scene_ind = reshape_based(b_y_scene_ind_blocks.swapaxes(2, -1), b_y_max_indices).swapaxes(2, -1)
+
+                b_y_labels_new_shape = (b_y_labels_old_shape[0], b_y_labels_old_shape[1] // 2, b_y_labels_old_shape[2])
+                assert b_y_labels_new_shape == b_y_labels.shape, 'Shapes are not matching after subsampling (labels).'
+                assert b_y_labels_new_shape == b_y_scene_ind.shape, \
+                    'Shapes are not matching after subsampling (scene ind).'
+
+                b_y = np.stack((b_y_labels, b_y_scene_ind), axis=-1)
+
+            if not (b_x != 0).any() or not (b_y[:, :, :, 0] != -1).any():
+                break
+
             elapsed_time_data_loading = time.time() - iteration_start_time_data_loading
 
             iteration_start_time_tf_graph = time.time()

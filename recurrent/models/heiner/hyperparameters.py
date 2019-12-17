@@ -3,7 +3,7 @@ from copy import deepcopy
 import os
 from os import path
 
-from heiner.utils import unique_dict
+from utils import unique_dict
 
 import numpy as np
 import portalocker
@@ -356,7 +356,7 @@ class HCombManager:
 
 class RandomSearch:
 
-    def __init__(self, metric_used='BAC', STAGE=1, time_steps=1000):
+    def __init__(self, metric_used='BAC', STAGE=1, time_steps=1000, label_mode='blockbased'):
 
         # random search stage
         self.STAGE = STAGE
@@ -423,7 +423,7 @@ class RandomSearch:
 
 
         # Data characteristics
-        self.RANGE_TIME_STEPS = [1000, 500, 50]  # one frame = 10ms = 0.01 s
+        self.RANGE_TIME_STEPS = [2000, 1000, 500, 200, 50]  # one frame = 10ms = 0.01 s
         if time_steps in self.RANGE_TIME_STEPS:
             self.TIME_STEPS = time_steps
         else:
@@ -431,6 +431,8 @@ class RandomSearch:
                   .format(time_steps, self.RANGE_TIME_STEPS, time_steps))
             self.TIME_STEPS = time_steps
         self.BATCH_SIZE = 128
+
+        self.LABEL_MODE = label_mode
 
         self.metric_used = metric_used
 
@@ -460,7 +462,7 @@ class RandomSearch:
                  BATCH_SIZE=self.BATCH_SIZE, TIME_STEPS=self.TIME_STEPS,
                  INPUT_DROPOUT=input_dropout, RECURRENT_DROPOUT=recurrent_dropout,
                  LSTM_OUTPUT_DROPOUT=lstm_output_dropout, MLP_OUTPUT_DROPOUT=mlp_output_dropout,
-                 METRIC=self.metric_used, STAGE=self.STAGE).__dict__
+                 METRIC=self.metric_used, STAGE=self.STAGE, LABEL_MODE=self.LABEL_MODE).__dict__
 
     def _get_hcombs_to_run(self, number_of_hcombs):
 
@@ -480,7 +482,7 @@ class RandomSearch:
         hcombs = [self._sample_hcomb(*architecture_params) for architecture_params in architecture_params_list[:number_of_hcombs]]
         return unique_dict(hcombs)
 
-    def save_hcombs_to_run(self, save_path, number_of_hcombs):
+    def save_hcombs_to_run(self, save_path, number_of_hcombs, prepend=False):
         # name has to be same as in HCombManager
         pickle_name = 'hyperparameter_combinations_to_run.pickle'
 
@@ -496,7 +498,10 @@ class RandomSearch:
         else:
             with open(filepath, 'rb') as handle:
                 hcombs_old = pickle.load(handle)
-            hcombs_old += self._get_hcombs_to_run(number_of_hcombs)
+            if not prepend:
+                hcombs_old += self._get_hcombs_to_run(number_of_hcombs)
+            else:
+                hcombs_old = self._get_hcombs_to_run(number_of_hcombs) + hcombs_old
             if len(hcombs_old) > 1:
                 hcombs_new = unique_dict(hcombs_old)
             else:

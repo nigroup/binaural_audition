@@ -34,13 +34,19 @@ def get_buffer_size_wrt_time_steps(time_steps):
     return int(buffer_dict[hostname]*ref_time_steps // time_steps)
 
 
-def get_hostname_batch_size_wrt_time_steps(gpu=None):
+def get_hostname_batch_size_wrt_time_steps(time_steps, gpu=None):
     hostname = platform.node()
+    ref_time_steps = 1000
     batch_size_dict = {'eltanin': 128, 'sabik': 128, 'elnath': 32, 'merope': 64}
     bs = batch_size_dict[hostname]
 
     if hostname == 'eltanin' and gpu == '0':
         bs = int(bs / 2)
+
+    if ref_time_steps < 1000:
+        bs = min(int(bs*2), int(bs*ref_time_steps // time_steps))
+    if time_steps >= 1999:
+        bs = 20
 
     return hostname, bs
 

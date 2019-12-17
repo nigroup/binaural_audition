@@ -6,10 +6,10 @@ import platform
 import sys
 from functools import partial
 
-from heiner import hyperparameters as hp
-from heiner import keras_model_run as run
-from heiner import use_tmux as use_tmux
-from heiner.my_tmuxprocess import TmuxProcess
+import hyperparameters as hp
+import keras_model_run as run
+import use_tmux as use_tmux
+from my_tmuxprocess import TmuxProcess
 
 logger = logging.getLogger('exceptions_logger')
 # Configure logger to write to a file...

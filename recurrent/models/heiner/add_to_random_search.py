@@ -1,4 +1,4 @@
-from heiner.hyperparameters import RandomSearch
+from hyperparameters import RandomSearch
 import os
 
 import argparse
@@ -7,14 +7,12 @@ import argparse
 ################################################# ADD NEW HCOMBS
 
 
-def add_new_hcombs(number_of_hcombs, save_path):
+def add_new_hcombs(number_of_hcombs, save_path, time_steps=1000, label_mode='blockbased', prepend=False):
     metric_used = 'BAC'
     STAGE = 1
-    time_steps = 1000
-
-    rs = RandomSearch(metric_used=metric_used, STAGE=STAGE, time_steps=time_steps)
+    rs = RandomSearch(metric_used=metric_used, STAGE=STAGE, time_steps=time_steps, label_mode=label_mode)
     h = rs._get_hcombs_to_run(number_of_hcombs)
-    rs.save_hcombs_to_run(save_path, number_of_hcombs)
+    rs.save_hcombs_to_run(save_path, number_of_hcombs, prepend=prepend)
 
 
 def add_hcombs_from_ids(ids, save_path, save_path_hcomb_list=None, changes_dict=None, refresh=False):
@@ -144,10 +142,16 @@ if __name__ == '__main__':
                         dest='refresh',
                         metavar='<refresh hcomb>',
                         help="Refresh hcomb means resetting everything expect hyperparams.")
+    parser.add_argument('-p', '--prepend',
+                        required=False,
+                        type=bool,
+                        default=False,
+                        dest='prepend',
+                        metavar='<prepend>',
+                        help="Prepend at hcombs to run list if TRUE.")
 
     args = parser.parse_args()
     args_dict = vars(args)
-
 
     ids = args_dict.pop('ids')
     no_new_hcombs = args_dict.pop('no_new_hcombs')
@@ -172,7 +176,11 @@ if __name__ == '__main__':
         add_hcombs_from_ids(ids, save_path, save_path_hcomb_list, changes_dict=changes_dict, refresh=refresh)
 
     if no_new_hcombs != -1:
-        add_new_hcombs(no_new_hcombs, save_path)
+        kwargs = {}
+        for param in ('TIME_STEPS', 'LABEL_MODE', 'prepend'):
+            if param in args_dict:
+                kwargs[param.lower()] = args_dict[param]
+        add_new_hcombs(no_new_hcombs, save_path, **kwargs)
 
 
 
