@@ -45,7 +45,7 @@ def get_hostname_batch_size_wrt_time_steps(time_steps, gpu=None):
 
     if ref_time_steps < 1000:
         bs = min(int(bs*2), int(bs*ref_time_steps // time_steps))
-    if time_steps >= 1999:
+    if time_steps > 1999:
         bs = 20
 
     return hostname, bs

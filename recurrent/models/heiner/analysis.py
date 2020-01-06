@@ -1,5 +1,8 @@
 import argparse
 import os
+
+import sys
+sys.path.append("/home/spiess/twoears_proj/common/analysis")
 from testset_evaluation import evaluate_testset
 
 
@@ -9,11 +12,11 @@ def call_evaluate_testset(id_in_model_name, model_name, use_val=False):
     save_path_mn_metrics = os.path.join('/home/spiess/twoears_proj/models/heiner/model_directories', model_name,
                                         'hcomb_' + str(id_in_model_name), 'final')
 
-    from heiner import hyperparameters
+    import hyperparameters
     params = hyperparameters.H()
     params.load_from_dir(save_path_mn)
 
-    from heiner import utils
+    import utils
     metrics = utils.load_metrics(save_path_mn_metrics)
 
     # 'test_sens_spec_class_scene': np.array(test_phase.sens_spec_class_scene)
@@ -60,7 +63,10 @@ def main():
 if __name__ == '__main__':
     # main()
     # call_evaluate_testset(0, 'LDNN_changbin', use_val=False)
+    call_evaluate_testset(1, 'LDNN_final', use_val=False)
+    call_evaluate_testset(2, 'LDNN_final', use_val=False)
+    call_evaluate_testset(3, 'LDNN_final', use_val=False)
+    call_evaluate_testset(4, 'LDNN_final', use_val=False)
     call_evaluate_testset(5, 'LDNN_final', use_val=False)
-    # call_evaluate_testset(3, 'LDNN_final', use_val=False)
-    # call_evaluate_testset(4, 'LDNN_final', use_val=False)
-    # call_evaluate_testset(3, 'LDNN_final', use_val=False)
+    call_evaluate_testset(6, 'LDNN_final', use_val=False)
+    call_evaluate_testset(7, 'LDNN_final', use_val=False)

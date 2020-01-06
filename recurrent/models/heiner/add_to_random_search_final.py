@@ -1,4 +1,4 @@
-from heiner.hyperparameters import RandomSearch
+from hyperparameters import RandomSearch
 import os
 
 import argparse

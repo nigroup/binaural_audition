@@ -396,7 +396,7 @@ def run_hcomb_final(h, ID, hcm, model_dir, INTERMEDIATE_PLOTS, GLOBAL_GRADIENT_N
 
     my_loss = tensorflow_utils.my_loss_builder(h.MASK_VAL,
                                                tensorflow_utils.get_loss_weights(ALL_FOLDS, h.TRAIN_SCENES,
-                                                                                 h.LABEL_MODE))
+                                                                                  h.LABEL_MODE))
 
     ################################################# LOAD CHECKPOINTED MODEL
 
