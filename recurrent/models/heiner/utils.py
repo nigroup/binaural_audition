@@ -30,14 +30,14 @@ class UnbufferedLogAndPrint:
 def get_buffer_size_wrt_time_steps(time_steps):
     hostname = platform.node()
     ref_time_steps = 1000
-    buffer_dict = {'eltanin' : 100, 'sabik' : 60, 'elnath' : 200, 'merope' : 20}
+    buffer_dict = {'risha' : 200, 'eltanin' : 100, 'sabik' : 60, 'elnath' : 200, 'merope' : 20}
     return int(buffer_dict[hostname]*ref_time_steps // time_steps)
 
 
 def get_hostname_batch_size_wrt_time_steps(time_steps, gpu=None):
     hostname = platform.node()
     ref_time_steps = 1000
-    batch_size_dict = {'eltanin': 128, 'sabik': 128, 'elnath': 32, 'merope': 64}
+    batch_size_dict = {'risha': 128, 'eltanin': 128, 'sabik': 128, 'elnath': 32, 'merope': 64}
     bs = batch_size_dict[hostname]
 
     if hostname == 'eltanin' and gpu == '0':
